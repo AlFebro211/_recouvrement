@@ -1,0 +1,24 @@
+{% load static %}
+
+<div class="navbar">
+  {% if personnel_list or cours_attribution or modules_user_list or inscriptions or classe_active_list or classes_cycle_actif or form_crs_cycle or emprunt_list_retour  %}
+  <div class="search">
+    <i class="fas fa-search"></i>
+    <input id="searchInput" type="text" placeholder="Rechercher...">
+  </div>
+  {% else %}
+  <div style="background-color: white;" class="search">
+  </div>
+  {% endif %}
+  <div class="profile">
+    <span style="font-family: 'Brush Script MT', cursive;
+        font-size: 2rem;
+        color: #0f1a13;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);" >{{ last_name }}</span>
+    {% if photo_profil %}
+    <img src="{{ photo_profil }}" alt="Photo" class="profile-pic">
+    {% else %}
+    <i class="fa fa-user-circle" style="font-size: 40px;"></i>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,152 @@
+<div class="sidebar">
+    {% include 'partials/title_logo.html' %}
+    <div class="menu">
+        <!-- Item 1 -->
+        <div class="menu-item">
+            <a href="#" class="menu-link">
+                <span class="icon-wrapper">📂</span>
+                <span class="menu-text">Categorie des variable</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
+            </a>
+            <div class="submenu">
+                <div class="menu-item">
+                    <a href="{% url 'categorie_variable' %}" class="submenu-link">
+                        <span class="icon-wrapper">🧩</span>
+                        <span class="menu-text">Variable/Catégorie</span>
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a href="{% url 'create_variable_frais' %}" class="submenu-link">
+                        <span class="icon-wrapper">🧩</span>
+                        <span class="menu-text">Création des variables</span>
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a href="{% url 'create_variable_prix' %}" class="submenu-link">
+                        <span class="icon-wrapper">🧩</span>
+                        <span class="menu-text">Prix/variable</span>
+                    </a>
+                </div>
+                <!--  -->
+                <div class="menu-item">
+                    <a href="{% url 'create_banque' %}" class="submenu-link">
+                        <span class="icon-wrapper">🏢</span>
+                        <span class="menu-text">Configuration bancaire</span>
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a href="{% url 'create_compte' %}" class="submenu-link">
+                        <span class="icon-wrapper">🏢</span>
+                        <span class="menu-text">Comptes bancaires</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Item 2 -->
+        <div class="menu-item">
+            <a href="#" class="menu-link">
+                <span class="icon-wrapper">📦</span>
+                <span class="menu-text">Gestion des réductions</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
+            </a>
+            <div class="submenu">
+                <div class="menu-item">
+                    <a href="{% url 'create_variable_reduction' %}" class="submenu-link">
+                        <span class="icon-wrapper">👨‍💼</span>
+                        <span class="menu-text">Élèves avec réduction</span>
+                    </a>
+                </div>
+
+                <!--  -->
+                <div class="menu-item">
+                    <a href="{% url 'create_derogation_classe' %}" class="submenu-link">
+                        <span class="icon-wrapper">👨‍🏫</span>
+                        <span class="menu-text">Élèves avec dérogation</span>
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a href="{% url 'ajouter_date_butoire' %}" class="submenu-link">
+                        <span class="icon-wrapper">👨‍🏫</span>
+                        <span class="menu-text">Fixer les dates butoires</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Item 3 -->
+        <div class="menu-item">
+            <a href="#" class="menu-link">
+                <span class="icon-wrapper">💰</span>
+                <span class="menu-text">Gestion des paiements</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
+            </a>
+            <div class="submenu">
+                <div class="menu-item">
+                    <a href="{% url 'ajouter_paiement' %}" class="submenu-link">
+                        <span class="icon-wrapper">➕</span>
+                        <span class="menu-text">Ajouter un paiement</span>
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a href="{% url 'afficher_paiement_submitted' %}" class="submenu-link">
+                        <span class="icon-wrapper">✔️</span>
+                        <span class="menu-text">Valider des paiements</span>
+                    </a>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Item 4 -->
+        <div class="menu-item">
+            <a href="#" class="menu-link">
+                <span class="icon-wrapper">📊</span>
+                <span class="menu-text">Situation financière</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
+            </a>
+            <div class="submenu">
+                <div class="menu-item">
+                    <a href="{% url 'paiement_valider' %}" class="submenu-link">
+                        <span class="icon-wrapper">🧾</span>
+                        <span class="menu-text">Situation détaillée</span>
+                    </a>
+                </div>
+                <div style="display: none;" class="menu-item">
+                    <a href="#" class="submenu-link">
+                        <span class="icon-wrapper">✅</span>
+                        <span class="menu-text">Paiements effectués</span>
+                    </a>
+                </div>
+                <div style="display: none;" class="menu-item">
+                    <a href="#" class="submenu-link">
+                        <span class="icon-wrapper">🗓️</span>
+                        <span class="menu-text">Paiements par période</span>
+                    </a>
+                </div>
+                <div style="display: none;" class="menu-item">
+                    <a href="#" class="submenu-link">
+                        <span class="icon-wrapper">🔄</span>
+                        <span class="menu-text">Situation par cycle</span>
+                    </a>
+                </div>
+                <div style="display: none;" class="menu-item">
+                    <a href="#" class="submenu-link">
+                        <span class="icon-wrapper">👥</span>
+                        <span class="menu-text">Situation par classe</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Item 5 -->
+        <div class="menu-item">
+            <a style="display: none;" href="#" class="menu-link">
+                <span class="icon-wrapper">🔄</span>
+                <span class="menu-text">Changer vers</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
+            </a>
+        </div>
+    </div>
+   
+</div>

@@ -1,0 +1,33 @@
+
+
+
+# Fichiers Python
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Environnement virtuel
+venv/
+env/
+
+
+# Fichiers Django
+db.sqlite3
+*.log
+media/
+staticfiles/
+
+# Clés et configurations sensibles
+.env
+config/settings_local.py
+
+# Fichiers de dépendances
+*.egg-info/
+*.pot
+
+# Cache et fichiers temporaires
+*.swp
+.DS_Store
+.idea/
+.vscode/
