@@ -105,6 +105,6 @@ class Compte(models.Model):
         db_table = "recouvrment_compte"
     
     def __str__(self):
-        return self.compte
+        return f'{self.id_banque.banque} - {self.compte}'
     
     

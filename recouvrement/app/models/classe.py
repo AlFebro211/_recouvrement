@@ -53,7 +53,7 @@ class Classe_active(models.Model):
         # verbose_name_plural = "Classes Actives"
 
     def __str__(self):
-        return f"{self.classe_id}"
+        return f"{self.id_campus}-{self.classe_id}"
 
 class Classe_cycle_actif(models.Model):
     id_cycle_actif = models.AutoField(primary_key=True) 

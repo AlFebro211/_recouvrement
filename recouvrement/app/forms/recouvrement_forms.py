@@ -197,7 +197,7 @@ class PaiementForm(forms.ModelForm):
             'id_classe_active',
             'id_eleve',
             'id_variable',
-            'id_banque',
+            # 'id_banque',
             'id_compte',
             'montant',
             'bordereau',

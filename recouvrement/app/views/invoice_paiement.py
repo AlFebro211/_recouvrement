@@ -37,7 +37,7 @@ def generate_invoice(request, id_paiement):
         montant = f"{paiement.montant} Fbu"
         eleve = f"{paiement.id_eleve.nom} {paiement.id_eleve.prenom}"
         date_generation = datetime.now().strftime("%d/%m/%Y %H:%M")
-        encaisseur = request.user.get_full_name() or request.user.username
+        # encaisseur = request.user.get_full_name() or request.user.username
 
      
         page_width = 100 * mm
@@ -121,9 +121,9 @@ def generate_invoice(request, id_paiement):
         elements.append(Spacer(1, 10*mm))
         elements.append(table)
 
-        encaisseur_text = Paragraph(f"Encaissé par: {encaisseur}", ParagraphStyle(name='Encaisseur', fontSize=8, alignment=2))
+        # encaisseur_text = Paragraph(f"Encaissé par: {encaisseur}", ParagraphStyle(name='Encaisseur', fontSize=8, alignment=2))
         elements.append(Spacer(1, 10*mm))
-        elements.append(encaisseur_text)
+        # elements.append(encaisseur_text)
         elements.append(Spacer(1, 5*mm))
         elements.append(Paragraph("Signature: ____________________", ParagraphStyle(name='Signature', fontSize=8, alignment=2)))
 

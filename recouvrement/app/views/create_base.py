@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render,redirect
 from django.contrib import messages
+from app import models
 from app.forms.recouvrement_forms import (VariableCategorieForm,VariableCategorie,Variable,
                                 VariableForm,BanqueForm,CompteForm,Compte,Banque,
                                 VariablePrixForm,VariablePrix,VariableDerogationForm,
@@ -12,6 +13,9 @@ from django.shortcuts import get_object_or_404
 from app.models import Classe_active,Annee
 
 import logging
+import datetime
+from django.db.models import Sum
+
 
 logger = logging.getLogger(__name__)
 import os
@@ -127,7 +131,30 @@ def add_paiement_for_anyclass(request):
     if request.method == "POST":
         form = PaiementForm(request.POST)
         if form.is_valid():
-            form.save()
+            print("Formulaire valide ✅")
+            print("Champs nettoyés (cleaned_data) :")
+            for key, value in form.cleaned_data.items():
+                print(f"{key} = {value}")
+
+            paiement = form.save(commit=False) 
+
+            compte = paiement.id_compte
+            if not compte:
+                messages.error(request, "Veuillez sélectionner un compte.")
+                return redirect('create_compte')
+
+            paiement.id_banque = compte.id_banque
+            classe_active = paiement.id_classe_active
+            if not classe_active:
+                messages.error(request, "Classe active manquante.")
+                return redirect('create_compte')
+
+            paiement.id_campus = classe_active.id_campus  
+            paiement.id_cycle_actif = classe_active.cycle_id
+
+
+            paiement.save() 
+            # form.save()
             messages.success(request,"Le paiement a été enregistré avec succès")
             return redirect('create_compte')
     else:
@@ -195,39 +222,126 @@ def save_paiement(request):
     if request.method == 'POST':
         try:
             logger.info(f"Données reçues : {request.POST}, Fichiers : {request.FILES}")
+            print("POST brut :", request.POST)
             form = PaiementForm(request.POST, request.FILES)
             if form.is_valid():
+                print("Formulaire valide ✅")
+                print("Champs nettoyés (cleaned_data) :")
+                for key, value in form.cleaned_data.items():
+                    print(f"{key} = {value}")
+
                 logger.info(f"Données validées : {form.cleaned_data}")
                 id_annee = form.cleaned_data['id_annee'].id_annee
                 id_classe_active = form.cleaned_data['id_classe_active'].id_classe_active
                 id_eleve = form.cleaned_data['id_eleve'].id_eleve
                 id_variable = form.cleaned_data['id_variable'].id_variable
-                id_banque = form.cleaned_data['id_banque'].id_banque
+                # id_banque = form.cleaned_data['id_banque'].id_banque
                 id_compte = form.cleaned_data['id_compte'].id_compte
                 montant = form.cleaned_data['montant']
                 date_paie = form.cleaned_data['date_paie']
                 bordereau = form.cleaned_data['bordereau']
 
-                if Paiement.objects.filter(
-                    id_eleve_id=id_eleve,
-                    id_variable_id=id_variable,
-                    date_paie=date_paie
-                ).exists():
+                if isinstance(date_paie, datetime.datetime):
+                    date_paie = date_paie.date()
+                today = datetime.date.today()
+                if date_paie > today:
                     return JsonResponse({
                         'success': False,
-                        'error': 'Ce paiement existe déjà.'
-                    }, status=400)
+                        'error': f"La date de paiement ({date_paie}) ne peut pas être antérieure à aujourd'hui ({today})."
+                    })
+
+                try:
+                    compte = Compte.objects.get(id_compte=id_compte)
+                except Compte.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Compte non trouvé.'}, status=404)
+
+                id_banque = compte.id_banque.id_banque if compte.id_banque else None
+                print(f"Compte choisi : {compte}, Banque : {id_banque}")
+
+                # if Paiement.objects.filter(
+                #     id_eleve_id=id_eleve,
+                #     id_variable_id=id_variable,
+                #     date_paie=date_paie
+                # ).exists():
+                #     return JsonResponse({
+                #         'success': False,
+                #         'error': 'Ce paiement existe déjà.'
+                #     }, status=400)
 
                 try:
                     classe_active = Classe_active.objects.get(id_classe_active=id_classe_active)
-                    id_campus = classe_active.id_campus_id
-                    id_cycle_actif = classe_active.cycle_id_id
+                    id_campus = classe_active.id_campus.id_campus
+                    id_cycle_actif = classe_active.cycle_id.id_cycle_actif
                 except Classe_active.DoesNotExist:
                     return JsonResponse({
                         'success': False,
                         'error': 'Classe active non trouvée.'
                     }, status=404)
+                
+                try:
+                    variable_prix = VariablePrix.objects.get(
+                        id_variable_id=id_variable,
+                        id_annee_id=id_annee,
+                        id_campus_id=id_campus,
+                        id_cycle_actif_id=id_cycle_actif,
+                        id_classe_active_id=id_classe_active
+                    )
+                except VariablePrix.DoesNotExist:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Aucun prix défini pour cette variable.'
+                    }, status=400)
 
+                prix_max = variable_prix.prix
+
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_eleve_id=id_eleve,
+                    id_variable_id=id_variable,
+                    id_annee_id=id_annee,
+                    id_campus_id=id_campus,
+                    id_cycle_actif_id=id_cycle_actif,
+                    id_classe_active_id=id_classe_active
+                ).first()
+
+                montant_autorise = prix_max  
+
+                if reduction:
+                    pourcentage = reduction.pourcentage
+                    montant_reduction = (prix_max * pourcentage) / 100
+                    montant_autorise = prix_max - montant_reduction
+
+                    print(f"Réduction appliquée: {pourcentage}%")
+                    print(f"Prix normal: {prix_max}")
+                    print(f"Montant autorisé après réduction: {montant_autorise}")
+
+                # ========================== Vérification cumul ==========================
+                total_deja_paye = Paiement.objects.filter(
+                    id_eleve_id=id_eleve,
+                    id_variable_id=id_variable,
+                ).aggregate(total=Sum('montant'))['total'] or 0
+
+                if total_deja_paye + montant > montant_autorise:
+                    montant_restant = montant_autorise - total_deja_paye
+                    message = (
+                    f"Le paiement dépasse le montant autorisé pour cette variable.\n"
+                    f"Montant à payer : {montant_autorise}\n"
+                    f"Déjà payé : {total_deja_paye}\n"
+                    f"Montant restant à payer : {montant_restant}\n"
+                )
+                    
+                    if reduction:
+                        message = (
+                            f"L'élève bénéficie d'une réduction de {reduction.pourcentage}%.\n"
+                            f"Montant à payer : {montant_autorise}\n"
+                            f"Déjà payé : {total_deja_paye}\n"
+                            f"Montant restant à payer : {montant_restant}\n"
+                        )
+
+                    return JsonResponse({
+                        'success': False,
+                        'error': message
+                    })
+                
                 paiement = Paiement(
                     id_variable_id=id_variable,
                     montant=montant,
@@ -238,7 +352,8 @@ def save_paiement(request):
                     id_campus_id=id_campus,
                     id_annee_id=id_annee,
                     id_cycle_actif_id=id_cycle_actif,
-                    id_classe_active_id=id_classe_active
+                    id_classe_active_id=id_classe_active,
+                    status = True
                 )
 
                 if bordereau:

@@ -36,5 +36,7 @@ urlpatterns =[
    path('update_paiement_field/', views.update_paiement_field, name='update_paiement_field'),
    path('generate_invoice/<int:id_paiement>/', views.generate_invoice, name='generate_invoice'),
    path('generate_fiche_paie_classe/', views.generate_fiche_paie_classe, name='generate_fiche_paie_classe'),
+   path('get_pupils_registred_classe/', views.get_pupils_registred_classe, name='get_pupils_registred_classe'),
+   path('get_variables_restant_a_payer/',views.get_variables_restant_a_payer,name='get_variables_restant_a_payer'),
    
 ]

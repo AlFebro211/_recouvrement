@@ -625,6 +625,7 @@
                     <div class="alert alert-danger">
                         {{ form_paiement.non_form_errors }}
                     </div>
+                    <div id="error-message-container" class="alert alert-danger" style="display:none;"></div>
                     {% endif %}
                     <div class="form-row">
                         {% for field in form_paiement %}
@@ -2330,11 +2331,11 @@
     <!-- ======== Ajout des paiements -->
     <script>
     $(document).ready(function() {
-        if (window.location.pathname.includes("ajouter_paiement")) {
+        if (window.location.pathname === "/") {
             $('#field-id_classe_active').hide();
             $('#field-id_eleve').hide();
             $('#field-id_variable').hide();
-            $('#field-id_banque').hide();
+            // $('#field-id_banque').hide();
             $('#field-id_compte').hide();
             $('#field-montant').hide();
             $('#field-bordereau').hide();
@@ -2353,7 +2354,7 @@
                     $('#field-id_classe_active').hide();
                     $('#field-id_eleve').hide();
                     $('#field-id_variable').hide();
-                    $('#field-id_banque').hide();
+                    // $('#field-id_banque').hide();
                     $('#field-id_compte').hide();
                     $('#field-montant').hide();
                     $('#field-bordereau').hide();
@@ -2413,7 +2414,7 @@
                         }
                         $('#field-id_eleve').hide();
                         $('#field-id_variable').hide();
-                        $('#field-id_banque').hide();
+                        // $('#field-id_banque').hide();
                         $('#field-id_compte').hide();
                         $('#field-montant').hide();
                         $('#field-bordereau').hide();
@@ -2436,7 +2437,7 @@
                 } else {
                     $('#field-id_eleve').hide();
                     $('#field-id_variable').hide();
-                    $('#field-id_banque').hide();
+                    // $('#field-id_banque').hide();
                     $('#field-id_compte').hide();
                     $('#field-montant').hide();
                     $('#field-bordereau').hide();
@@ -2479,27 +2480,59 @@
                         alert('Erreur lors du chargement des élèves.');
                     });
             }
-
             $('#id_id_eleve').on('change', function() {
                 selectedEleveId = $(this).val();
-                if (selectedEleveId) {
-                    $('#field-id_variable').show();
-                } else {
+                if (!selectedEleveId) {
                     $('#field-id_variable').hide();
-                    $('#field-id_banque').hide();
-                    $('#field-id_compte').hide();
-                    $('#field-montant').hide();
-                    $('#field-bordereau').hide();
-                    $('#field-date_paie').hide();
-                    $('#saveBtn').hide();
+                    return;
                 }
+
+                fetch(`/get_variables_restant_a_payer/?id_eleve=${selectedEleveId}&id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe=${selectedClasseId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        const dropdown = $('#id_id_variable')[0];
+                        dropdown.innerHTML = '<option value="">------</option>';
+
+                        if (data.success && data.variables.length > 0) {
+                            data.variables.forEach(v => {
+                                const option = document.createElement('option');
+                                option.value = v.id_variable;
+                                option.textContent = `${v.nom_variable} - ${v.reste_a_payer.toLocaleString()}`;
+                                dropdown.appendChild(option);
+                            });
+                            $('#field-id_variable').show();
+                        } else {
+                            $('#field-id_variable').hide();
+                            alert('Aucune variable avec solde restant pour cet élève.');
+                        }
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        alert('Erreur lors de la récupération des variables.');
+                    });
             });
+
+
+            // $('#id_id_eleve').on('change', function() {
+            //     selectedEleveId = $(this).val();
+            //     if (selectedEleveId) {
+            //         $('#field-id_variable').show();
+            //     } else {
+            //         $('#field-id_variable').hide();
+            //         // $('#field-id_banque').hide();
+            //         $('#field-id_compte').hide();
+            //         $('#field-montant').hide();
+            //         $('#field-bordereau').hide();
+            //         $('#field-date_paie').hide();
+            //         $('#saveBtn').hide();
+            //     }
+            // });
 
             $('#id_id_variable').on('change', function() {
                 if ($(this).val()) {
                     $('#field-id_banque').show();
                 } else {
-                    $('#field-id_banque').hide();
+                    // $('#field-id_banque').hide();
                     $('#field-id_compte').hide();
                     $('#field-montant').hide();
                     $('#field-bordereau').hide();
@@ -2508,19 +2541,18 @@
                 }
             });
 
-            $('#id_id_banque').on('change', function() {
-                var banqueId = $(this).val();
-                if (banqueId) {
-                    updateCompteDropdown(banqueId);
-                } else {
-                    $('#field-id_compte').hide();
-                    $('#field-montant').hide();
-                    $('#field-bordereau').hide();
-                    $('#field-date_paie').hide();
-                    $('#saveBtn').hide();
-                }
-            });
-
+            // $('#id_id_banque').on('change', function() {
+            //     var banqueId = $(this).val();
+            //     if (banqueId) {
+            //         updateCompteDropdown(banqueId);
+            //     } else {
+            //         $('#field-id_compte').hide();
+            //         $('#field-montant').hide();
+            //         $('#field-bordereau').hide();
+            //         $('#field-date_paie').hide();
+            //         $('#saveBtn').hide();
+            //     }
+            // });
             function updateCompteDropdown(banqueId) {
                 var dropdown = $('#id_id_compte')[0];
                 fetch('/get_comptes_banque/' + banqueId + '/')
@@ -2597,7 +2629,17 @@
                                 }
                             }
                             alert('Erreur : ' + errorMsg);
-                            window.location.href = "{% url 'ajouter_paiement' %}";
+                            // let errorMsg = response.error;
+                            // if (response.details) {
+                            //     try {
+                            //         const errors = JSON.parse(response.details);
+                            //         errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
+                            //     } catch (e) {
+                            //         console.error('Erreur lors du parsing des erreurs :', e);
+                            //     }
+                            // }
+                            // alert('Erreur : ' + errorMsg);
+                            // window.location.href = "{% url 'ajouter_paiement' %}";
                         }
                     },
                     error: function(xhr, status, error) {

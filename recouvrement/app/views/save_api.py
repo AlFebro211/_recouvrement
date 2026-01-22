@@ -1,6 +1,6 @@
 from .create_base import *
 
-@login_required
+
 @csrf_protect
 def save_variable_prix(request):
     if request.method == 'POST':
@@ -78,7 +78,7 @@ def save_variable_prix(request):
         'error': "Méthode non autorisée."
     }, status=405)
 
-@login_required
+
 @csrf_protect
 def save_variable_derogation(request):
     if request.method == 'POST':
@@ -130,7 +130,7 @@ def save_variable_derogation(request):
         'error': 'Méthode non autorisée.'
     }, status=405)
 
-@login_required
+
 @csrf_protect
 def save_variable_date_butoire(request):
     if request.method == 'POST':
@@ -181,7 +181,7 @@ def save_variable_date_butoire(request):
 
 
 
-@login_required
+
 @csrf_protect
 def save_variable_reduction(request):
     if request.method == 'POST':
@@ -205,6 +205,7 @@ def save_variable_reduction(request):
                 id_eleve=id_eleve,
                 id_annee = id_annee,
                 id_classe_active=id_classe_active,
+                id_variable=id_variable
             ).exists():
                 return JsonResponse({
                     'success': False,
