@@ -1,5 +1,5 @@
 from.create_base import *
-from app.models import Annee, Eleve_inscription, VariablePrix, Paiement, Eleve_reduction_prix
+from app.models import Annee,Annee_trimestre, Eleve_inscription, VariablePrix, Paiement, Eleve_reduction_prix
 from django.db.models import Q
 from django.http import JsonResponse
 from django.db.models import Sum
@@ -294,63 +294,79 @@ def get_pupils_registred_classe(request):
         return JsonResponse({'error': 'Paramètres manquants'}, status=400)
 
     try:
+        from django.utils.timezone import now
+        today = now().date()
+
+        # 🔹 Trimestre en cours
+        trimestre_en_cours = Annee_trimestre.objects.filter(
+            id_annee=id_annee,
+            id_campus=id_campus,
+            id_cycle=id_cycle,
+            id_classe=id_classe,
+            # debut__lte=today,
+            # fin__gte=today,
+            etat_trimestre='En attente'
+        ).first()
+
+        if not trimestre_en_cours:
+            return JsonResponse({'success': True, 'data': [], 'count': 0})
+
+        # 🔹 Variables définies pour la classe (source mobile)
         variables_prix = VariablePrix.objects.filter(
-            id_annee_id=id_annee,
-            id_campus_id=id_campus,
-            id_cycle_actif_id=id_cycle,
-            id_classe_active_id=id_classe
+            id_annee=id_annee,
+            id_campus=id_campus,
+            id_cycle_actif=id_cycle,
+            id_classe_active=id_classe
         ).select_related('id_variable')
 
+        # 🔹 Élèves inscrits
         inscriptions = Eleve_inscription.objects.filter(
             id_annee=id_annee,
             id_campus=id_campus,
             id_classe_cycle=id_cycle,
             id_classe=id_classe,
             status=1
-        ).select_related('id_eleve')
+        ).select_related('id_eleve').distinct()
 
         pupils_data = []
 
-        for inscription in inscriptions:
-            eleve = inscription.id_eleve
-
+        for ins in inscriptions:
+            eleve = ins.id_eleve
             total_a_payer = 0
             total_paye = 0
 
             for vp in variables_prix:
-                variable = vp.id_variable
-                montant_variable = vp.prix
+                montant = vp.prix
 
+                # 🔻 Réduction éventuelle
                 reduction = Eleve_reduction_prix.objects.filter(
-                    id_eleve_id=eleve.id_eleve,
-                    id_variable_id=variable.id_variable,
-                    id_annee_id=id_annee,
-                    id_campus_id=id_campus,
-                    id_cycle_actif_id=id_cycle,
-                    id_classe_active_id=id_classe
+                    id_eleve=eleve,
+                    id_variable=vp.id_variable,
+                    id_annee=id_annee,
+                    id_campus=id_campus,
+                    id_cycle_actif=id_cycle,
+                    id_classe_active=id_classe
                 ).first()
 
                 if reduction:
-                    montant_variable -= (montant_variable * reduction.pourcentage / 100)
+                    montant -= montant * reduction.pourcentage / 100
 
-                total_a_payer += montant_variable
+                total_a_payer += montant
 
                 paye = Paiement.objects.filter(
-                    id_eleve_id=eleve.id_eleve,
-                    id_variable_id=variable.id_variable
+                    id_eleve=eleve,
+                    id_variable=vp.id_variable
                 ).aggregate(total=Sum('montant'))['total'] or 0
 
                 total_paye += paye
 
+            # 🔥 IMPORTANT : afficher seulement les débiteurs
             if total_paye < total_a_payer:
                 pupils_data.append({
                     'id_eleve': eleve.id_eleve,
                     'nom_complet': f"{eleve.nom} {eleve.prenom}",
-                    'total_a_payer': total_a_payer,
-                    'total_paye': total_paye,
                     'reste_a_payer': total_a_payer - total_paye,
-                    'status': inscription.status,
-                    'redoublement': inscription.redoublement
+                    'trimestre': trimestre_en_cours.trimestre.trimestre
                 })
 
         return JsonResponse({
@@ -360,10 +376,8 @@ def get_pupils_registred_classe(request):
         })
 
     except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        }, status=500)
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 
 # @csrf_exempt
@@ -412,6 +426,65 @@ def get_pupils_registred_classe(request):
 #         }, status=500)
 
 
+# def get_variables_restant_a_payer(request):
+#     eleve_id = request.GET.get('id_eleve')
+#     annee_id = request.GET.get('id_annee')
+#     campus_id = request.GET.get('id_campus')
+#     cycle_id = request.GET.get('id_cycle')
+#     classe_id = request.GET.get('id_classe')
+
+#     variables_prix = VariablePrix.objects.filter(
+#         id_annee_id=annee_id,
+#         id_campus_id=campus_id,
+#         id_cycle_actif_id=cycle_id,
+#         id_classe_active_id=classe_id
+#     ).select_related('id_variable')
+
+#     result = []
+
+#     for vp in variables_prix:
+#         variable = vp.id_variable
+#         montant_max = vp.prix
+
+#         reduction = Eleve_reduction_prix.objects.filter(
+#             id_eleve_id=eleve_id,
+#             id_variable_id=variable.id_variable,
+#             id_annee_id=annee_id,
+#             id_campus_id=campus_id,
+#             id_cycle_actif_id=cycle_id,
+#             id_classe_active_id=classe_id
+#         ).first()
+
+#         if reduction:
+#             montant_max -= (montant_max * reduction.pourcentage / 100)
+
+#         total_paye = Paiement.objects.filter(
+#             id_eleve_id=eleve_id,
+#             id_variable_id=variable.id_variable,
+#             id_annee_id=annee_id,
+#             id_campus_id=campus_id,
+#             id_cycle_actif_id=cycle_id,
+#             id_classe_active_id=classe_id
+#         ).aggregate(total=Sum('montant'))['total'] or 0
+
+#         reste = max(0, montant_max - total_paye)
+
+#         if reste > 0:
+#             result.append({
+#                 'id_variable': variable.id_variable,
+#                 'nom_variable': variable.variable,
+#                 'montant_total': montant_max,
+#                 'total_deja_paye': total_paye,
+#                 'reste_a_payer': reste,
+#                 'reduction': reduction.pourcentage if reduction else 0
+#             })
+
+#     return JsonResponse({'success': True, 'variables': result})
+
+
+from datetime import date
+
+
 def get_variables_restant_a_payer(request):
     eleve_id = request.GET.get('id_eleve')
     annee_id = request.GET.get('id_annee')
@@ -419,12 +492,44 @@ def get_variables_restant_a_payer(request):
     cycle_id = request.GET.get('id_cycle')
     classe_id = request.GET.get('id_classe')
 
-    variables_prix = VariablePrix.objects.filter(
+    # 🔹 Pour l'instant on récupère même si le trimestre est "En attente"
+    annee_trimestre = Annee_trimestre.objects.filter(
         id_annee_id=annee_id,
         id_campus_id=campus_id,
-        id_cycle_actif_id=cycle_id,
-        id_classe_active_id=classe_id
-    ).select_related('id_variable')
+        id_cycle_id=cycle_id,
+        id_classe_id=classe_id,
+        etat_trimestre="En cours"  # 🔹 récupère les trimestres en attente
+    ).select_related('trimestre').first()
+
+    # 🔹 DEBUG : afficher tous les trimestres existants pour cette classe
+    print("=== DEBUG trimestres disponibles ===")
+    trimestres = Annee_trimestre.objects.filter(
+        id_annee_id=annee_id,
+        id_campus_id=campus_id,
+        id_cycle_id=cycle_id,
+        id_classe_id=classe_id,
+    )
+    for t in trimestres:
+        print(
+            t.trimestre.trimestre,
+            t.debut,
+            t.fin,
+            t.etat_trimestre
+        )
+
+    if not annee_trimestre:
+        return JsonResponse({
+            'success': False,
+            'error': 'Aucun trimestre trouvé pour cette classe'
+        }, status=400)
+
+    # 🔹 Récupérer toutes les variables liées à ce trimestre
+    variables_prix = VariablePrix.objects.filter(
+        id_annee_trimestre=annee_trimestre
+    ).select_related('id_variable', 'id_variable__id_variable_categorie')
+    print("====variables prix trouvées====")
+    print(list(variables_prix.values()))
+
 
     result = []
 
@@ -432,6 +537,7 @@ def get_variables_restant_a_payer(request):
         variable = vp.id_variable
         montant_max = vp.prix
 
+        # 🔹 Appliquer réduction si elle existe
         reduction = Eleve_reduction_prix.objects.filter(
             id_eleve_id=eleve_id,
             id_variable_id=variable.id_variable,
@@ -442,8 +548,9 @@ def get_variables_restant_a_payer(request):
         ).first()
 
         if reduction:
-            montant_max -= (montant_max * reduction.pourcentage / 100)
+            montant_max -= montant_max * reduction.pourcentage / 100
 
+        # 🔹 Somme déjà payée
         total_paye = Paiement.objects.filter(
             id_eleve_id=eleve_id,
             id_variable_id=variable.id_variable,
@@ -452,25 +559,36 @@ def get_variables_restant_a_payer(request):
             id_cycle_actif_id=cycle_id,
             id_classe_active_id=classe_id
         ).aggregate(total=Sum('montant'))['total'] or 0
+        print ("DEBUG total_paye for variable", variable.variable, ":", total_paye)
+        print ("DEBUG montant_max for variable", variable.variable, ":", montant_max)
+        print ("-----------------------------")
 
+        # 🔹 Calculer le reste à payer
         reste = max(0, montant_max - total_paye)
+        print(f"Variable: {variable.variable}, Montant max: {montant_max}, Total payé: {total_paye}, Reste: {reste}")
+        print ("DEBUG reste for variable", variable.variable, ":", reste)
+        print(variable.variable, montant_max, total_paye, reste)
 
         if reste > 0:
             result.append({
                 'id_variable': variable.id_variable,
                 'nom_variable': variable.variable,
+                'categorie': variable.id_variable_categorie.nom,
                 'montant_total': montant_max,
                 'total_deja_paye': total_paye,
                 'reste_a_payer': reste,
-                'reduction': reduction.pourcentage if reduction else 0
+                'trimestre': annee_trimestre.trimestre.trimestre,
+                'id_trimestre': annee_trimestre.trimestre.id_trimestre
             })
 
-    return JsonResponse({'success': True, 'variables': result})
-
-
-
-
-
-
-
-
+    return JsonResponse({
+        'success': True,
+        'annee_trimestre': {
+            'id': annee_trimestre.trimestre.id_trimestre,
+            'trimestre': annee_trimestre.trimestre.trimestre,
+            'etat': annee_trimestre.etat_trimestre,
+            'debut': annee_trimestre.debut,
+            'fin': annee_trimestre.fin
+        },
+        'variables': result
+    })

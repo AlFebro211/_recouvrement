@@ -81,18 +81,20 @@ class CompteForm(forms.ModelForm):
 class VariablePrixForm(forms.ModelForm):
     class Meta:
         model = VariablePrix
-        fields = ['id_annee', 'id_classe_active', 'id_variable', 'prix']
+        fields = ['id_annee', 'id_classe_active', 'id_variable','id_annee_trimestre', 'prix']
         labels = {
             'id_variable': "Frais scolaire / Variable",
             'prix': "Montant (Prix)",
             'id_annee': "Année scolaire",
             'id_classe_active': "Classe",
+            'id_annee_trimestre': "Trimestre",
         }
         widgets = {
             'id_variable': forms.Select(attrs={'class': 'form-select'}),
             'prix': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ex: 50000'}),
             'id_annee': forms.Select(attrs={'class': 'form-select'}),
             'id_classe_active': forms.Select(attrs={'class': 'form-select'}),
+            'id_annee_trimestre': forms.Select(attrs={'class': 'form-select'}),
     }
         
 

@@ -69,6 +69,7 @@ class VariablePrix(models.Model):
     id_campus = models.ForeignKey("Campus",on_delete=models.PROTECT,null=False)  
     id_cycle_actif = models.ForeignKey("Classe_cycle_actif",on_delete=models.PROTECT,null=False) 
     id_classe_active = models.ForeignKey("Classe_active",on_delete=models.PROTECT,null=False) 
+    id_annee_trimestre = models.ForeignKey("Annee_trimestre", on_delete=models.PROTECT, null=False)
   
     class Meta:
         db_table = "recouvrment_variable_prix"
