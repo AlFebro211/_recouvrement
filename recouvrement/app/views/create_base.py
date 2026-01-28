@@ -6,7 +6,7 @@ from app.forms.recouvrement_forms import (VariableCategorieForm,VariableCategori
                                 VariableForm,BanqueForm,CompteForm,Compte,Banque,
                                 VariablePrixForm,VariablePrix,VariableDerogationForm,
                                 VariableDerogation,VariableReductionForm,Eleve_reduction_prix,
-                                VariableDatebutoire,VariableDateButoireForm,PaiementForm,Paiement)
+                                VariableDatebutoire,VariableDateButoireForm,PaiementForm,Paiement,PenaliteForm)
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect,csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -103,8 +103,6 @@ def ajouter_compte_epargne(request):
 
     })
     
-
-
 
 
 def ajouter_variable_prix(request):
@@ -217,6 +215,16 @@ def ajouter_date_butoire_for_anyclass(request):
 
     })
 
+def ajouter_penalite(request):
+    form = PenaliteForm()
+    variables_list = Variable.objects.all()
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'form_penalite': form,
+        'form_type': 'penalite_form',
+        'variable_list': variables_list,
+    })
+
+
 @csrf_protect
 def save_paiement(request):
     if request.method == 'POST':
@@ -278,6 +286,44 @@ def save_paiement(request):
                         'error': 'Classe active non trouvée.'
                     }, status=404)
                 
+                try:
+                    variable_date_butoire = VariableDatebutoire.objects.get(
+                        id_variable_id=id_variable,
+                        id_annee_id=id_annee,
+                        id_campus_id=id_campus,
+                        id_cycle_actif_id=id_cycle_actif,
+                        id_classe_active_id=id_classe_active
+                    )
+                except VariableDatebutoire.DoesNotExist:
+                    return JsonResponse({
+                        'success': False,
+                        'error': "Aucune date butoire définie pour cette variable."
+                    }, status=400)
+
+                date_limite = variable_date_butoire.date_butoire
+
+                derogation = VariableDerogation.objects.filter(
+                    id_eleve_id=id_eleve,
+                    id_variable_id=id_variable,
+                    id_annee_id=id_annee,
+                    id_campus_id=id_campus,
+                    id_cycle_actif_id=id_cycle_actif,
+                    id_classe_active_id=id_classe_active
+                ).first()
+
+                if derogation:
+                    date_limite = derogation.date_derogation
+
+                if date_paie > date_limite:
+                    return JsonResponse({
+                        'success': False,
+                        'error': (
+                            f"Paiement refusé.\n"
+                            f"Date limite autorisée : {date_limite}\n"
+                            f"Date du paiement : {date_paie}"
+                        )
+                    })
+
                 try:
                     variable_prix = VariablePrix.objects.get(
                         id_variable_id=id_variable,
@@ -387,4 +433,6 @@ def save_paiement(request):
         'success': False,
         'error': 'Méthode non autorisée.'
     }, status=405)
+
+
 

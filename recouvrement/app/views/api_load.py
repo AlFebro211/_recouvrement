@@ -264,6 +264,7 @@ def get_paiements_validated(request):
             for p in paiements:
                 data.append({
                     "id_paiement": p.id_paiement,
+                    "id_eleve": p.id_eleve.id_eleve,
                     "id_variable": p.id_variable.id_variable,
                     "variable": p.id_variable.variable,
                     "montant": p.montant,
@@ -592,3 +593,159 @@ def get_variables_restant_a_payer(request):
         },
         'variables': result
     })
+
+
+
+from django.http import JsonResponse
+from app.models import Annee_trimestre, VariablePrix
+
+def get_trimestres_by_classe_active(request):
+    classe_active_id = request.GET.get('id_classe_active')
+    annee_id = request.GET.get('id_annee')
+    campus_id = request.GET.get('id_campus')
+    cycle_id = request.GET.get('id_cycle')
+
+    # 🔹 Vérification des paramètres
+    if not all([classe_active_id, annee_id, campus_id, cycle_id]):
+        return JsonResponse({'success': False, 'error': 'Tous les paramètres (classe, année, campus, cycle) sont requis'})
+
+    # 🔹 Filtrer les trimestres par année, classe, campus et cycle actif
+    trimestres_qs = Annee_trimestre.objects.filter(
+        id_annee_id=annee_id,
+        id_classe_id=classe_active_id,
+        id_campus_id=campus_id,
+        id_cycle_id=cycle_id
+    ).select_related('trimestre').order_by('trimestre__trimestre')
+
+    data = [
+        {
+            'id': t.trimestre.id_trimestre,
+            'nom': t.trimestre.trimestre,
+            'etat': t.etat_trimestre
+        }
+        for t in trimestres_qs
+    ]
+
+    return JsonResponse({'success': True, 'trimestres': data})
+
+
+def get_variables_by_trimestre(request):
+    # 🔹 Récupérer tous les IDs depuis le GET
+    trimestre_id = request.GET.get('id_trimestre')
+    classe_id = request.GET.get('id_classe')
+    annee_id = request.GET.get('id_annee')
+    campus_id = request.GET.get('id_campus')
+    cycle_id = request.GET.get('id_cycle')
+
+    # 🔹 Vérification minimale
+    if not all([trimestre_id, classe_id, annee_id, campus_id, cycle_id]):
+        return JsonResponse({
+            'success': False,
+            'error': 'Tous les paramètres (trimestre, classe, année, campus, cycle) sont requis'
+        }, status=400)
+
+    # ==================================================
+    # 1️⃣ FILTRAGE DES TRIMESTRES
+    # ==================================================
+    annee_trimestre = Annee_trimestre.objects.filter(
+        id_annee_id=annee_id,
+        id_campus_id=campus_id,
+        id_cycle_id=cycle_id,
+        id_classe_id=classe_id,
+        trimestre_id=trimestre_id
+    ).select_related('trimestre').first()
+
+    print("====DEBUG Annee_trimestre trouvé====")
+    print(annee_trimestre)
+
+    if not annee_trimestre:
+        return JsonResponse({
+            'success': False,
+            'error': 'Aucun trimestre trouvé pour ces critères'
+        }, status=400)
+
+    # ==================================================
+    # 2️⃣ FILTRAGE DES VARIABLEPRIX POUR CE TRIMESTRE
+    # ==================================================
+    variable_prix_qs = VariablePrix.objects.filter(
+        id_annee_trimestre=annee_trimestre,
+        id_classe_active_id=classe_id,
+        id_annee_id=annee_id,
+        id_campus_id=campus_id,
+        id_cycle_actif_id=cycle_id  # bien vérifier que c'est ce champ dans ton modèle
+    ).select_related('id_variable', 'id_variable__id_variable_categorie')
+
+    print("====DEBUG VariablePrix filtrées====")
+    print(list(variable_prix_qs.values(
+        'id_variable_id','id_annee_trimestre_id','id_classe_active_id',
+        'id_annee_id','id_campus_id','id_cycle_actif_id','prix'
+    )))
+
+    if not variable_prix_qs.exists():
+        return JsonResponse({
+            'success': False,
+            'error': 'Aucune configuration trouvée pour ces critères'
+        })
+
+    # ==================================================
+    # 3️⃣ EXTRACTION DES VARIABLES
+    # ==================================================
+    variables_data = []
+    for vp in variable_prix_qs:
+        variable = vp.id_variable
+        variables_data.append({
+            'id_variable': variable.id_variable,
+            'nom_variable': variable.variable,
+            'categorie': variable.id_variable_categorie.nom,
+            'prix': vp.prix
+        })
+
+    # ==================================================
+    # 4️⃣ RÉPONSE JSON
+    # ==================================================
+    return JsonResponse({
+        'success': True,
+        'annee_trimestre': {
+            'id': annee_trimestre.trimestre.id_trimestre,
+            'trimestre': annee_trimestre.trimestre.trimestre,
+            'etat': annee_trimestre.etat_trimestre,
+            'debut': annee_trimestre.debut,
+            'fin': annee_trimestre.fin
+        },
+        'variables': variables_data
+    })
+
+def get_eleves_classe(request):
+    id_campus = request.GET.get('id_campus')
+    id_cycle_actif = request.GET.get('id_cycle')
+    id_classe_active = request.GET.get('id_classe_active')
+    id_annee = request.GET.get('id_annee')
+
+    # 1️⃣ récupérer la classe active
+    classe_active = Classe_active.objects.filter(
+        id_classe_active=id_classe_active,
+        id_campus_id=id_campus,
+        id_annee_id=id_annee,
+        is_active=True
+    ).first()
+
+    if not classe_active:
+        return JsonResponse([], safe=False)
+
+    # 2️⃣ récupérer les élèves inscrits dans cette classe
+    eleves = Eleve_inscription.objects.filter(
+        id_campus_id=id_campus,
+        id_annee_id=id_annee,
+        id_classe_id=id_classe_active,   # ✅ correspondance réelle
+        id_classe_cycle_id=id_cycle_actif,
+        status=1
+    ).select_related('id_eleve').distinct()
+
+    data = [{
+        "id_eleve": e.id_eleve.id_eleve,
+        "nom": e.id_eleve.nom,
+        "prenom": e.id_eleve.prenom
+    } for e in eleves]
+
+    return JsonResponse(data, safe=False)
+

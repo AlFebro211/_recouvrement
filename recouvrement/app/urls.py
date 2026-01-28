@@ -38,5 +38,16 @@ urlpatterns =[
    path('generate_fiche_paie_classe/', views.generate_fiche_paie_classe, name='generate_fiche_paie_classe'),
    path('get_pupils_registred_classe/', views.get_pupils_registred_classe, name='get_pupils_registred_classe'),
    path('get_variables_restant_a_payer/',views.get_variables_restant_a_payer,name='get_variables_restant_a_payer'),
+   path('get_trimestres_by_classe_active/', views.get_trimestres_by_classe_active, name='get_trimestres_by_classe_active'),
+   path('get-variables-by-trimestre/',views.get_variables_by_trimestre,name='get_variables_by_trimestre'),
+   path('generate_fiche_paie_eleve/', views.generate_fiche_paie_eleve, name='generate_fiche_paie_eleve'),
+   path('get_eleves_classe/', views.get_eleves_classe, name='get_eleves_classe'),
+   path('get_paiements_eleve/', views.get_paiements_eleve, name='get_paiements_eleve'),
+
+
+   path('ajouter_penalite/', views.ajouter_penalite, name='ajouter_penalite'),
+   path('save_penalite/', views.save_penalite, name='save_penalite'),
+
+
    
 ]

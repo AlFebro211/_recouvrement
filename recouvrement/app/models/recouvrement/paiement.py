@@ -48,3 +48,28 @@ class Paiement(models.Model):
         
     def __str__(self):
         return self.montant
+    
+
+class PenaliteConfig(models.Model):
+    id_penalite_regle = models.AutoField(primary_key=True)
+    # Portée de la règle (NULL = global)
+    id_annee = models.ForeignKey("Annee",on_delete=models.PROTECT,null=False)
+    id_campus = models.ForeignKey("Campus", on_delete=models.PROTECT, null=True, blank=True)
+    id_cycle_actif = models.ForeignKey("Classe_cycle_actif", on_delete=models.PROTECT, null=True, blank=True)
+    id_classe_active = models.ForeignKey("Classe_active", on_delete=models.PROTECT, null=True, blank=True)
+    id_variable = models.ForeignKey("Variable", on_delete=models.PROTECT, null=True, blank=True)
+    id_annee_trimestre = models.ForeignKey("Annee_trimestre", on_delete=models.PROTECT, null=True, blank=True)
+    type_penalite = models.CharField(max_length=20,choices=[('FORFAIT', 'Forfait'),('POURCENTAGE', 'Pourcentage'),])
+    valeur = models.FloatField()  # montant ou %
+    plafond = models.PositiveIntegerField(null=True, blank=True)
+    actif = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "recouvrement_penalite_regle"
+        unique_together = ('id_variable', 'id_annee_trimestre', 'id_classe_active', 'id_cycle_actif', 'id_campus')
+
+    def __str__(self):
+        cible = self.id_variable.variable if self.id_variable else "Toutes variables"
+        tranche = self.id_annee_trimestre.trimestre if self.id_annee_trimestre else "Toutes périodes"
+        return f"{cible} - {tranche} - {self.valeur}{'%' if self.type_penalite == 'POURCENTAGE' else ' FORFAIT'}"
+

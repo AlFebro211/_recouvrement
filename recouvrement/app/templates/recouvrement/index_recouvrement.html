@@ -267,7 +267,7 @@
     }
     
     .menu-link, .submenu-link {
-        display: flex;
+    display: flex;
         align-items: center;
         padding: 12px 20px;
         color: rgba(255, 255, 255, 0.9);
@@ -649,9 +649,45 @@
                             <i class="fas fa-plus-circle"></i> Ajouter
                         </button>
                     </div>
+                    <!-- ================ penalite -->
 
-                   {% endif %}
+                    {% elif form_type == 'penalite_form' %}
+    <h2>Ajouter une pénalité</h2>
+    
+    {% if form_penalite.non_form_errors %}
+    <div class="alert alert-danger">
+        {{ form_penalite.non_form_errors }}
+    </div>
+    {% endif %}
+
+    <div class="form-row">
+        {% for field in form_penalite %}
+            {% if field.name == 'id_campus' or field.name == 'id_cycle_actif' %}
+                {# On utilise render_field pour garder la cohérence #}
+                <div style="display:none;">
+                    {% render_field field %}
+                </div>
+            {% else %}
+                <div class="form-group col-md-4" id="field-{{ field.id_for_label }}">
+                    <label>{{ field.label }}</label>
+                    {% render_field field class="form-control" %}
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="form-actions">
+        <button type="button" class="btn btn-cancel" id="cancelBtn">
+            <span class="emoji-icon">❌</span> Annuler
+        </button>
+        <button type="button" class="btn btn-primary" id="savePenaliteBtn">
+            <i class="fas fa-plus-circle"></i> Ajouter
+        </button>
+    </div>
+    {% endif %}
                 </form>
+                
+
             </div>
         </div>
         <!-- listes des categories_variables crees -->
@@ -1004,6 +1040,16 @@
                     <div class="table-header">
                         <h3>LISTE DES PAIEMENTS DEJA VALIDES</h3>
                     </div>
+                    <div class="form-group">
+                        <!-- <label for="select_eleve">Choisir un élève :</label> -->
+                        <select id="select_eleve" class="form-control">
+                            <option value="">-- Tous les élèves --</option>
+                            <!-- Options seront injectées dynamiquement -->
+                        </select>
+                    </div>
+                    
+                    <button id="generate_fiche_paie_eleve" class="btn btn-primary">Fiche de paie de l'élève sélectionné</button>
+
                     <button id="generate_fiche_paie_classe"  class="btn btn-success">Situation des paiements déjà effectues pour cette classe</button>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -1623,21 +1669,99 @@
                     });
             }
 
-            $('#id_id_classe_active').on('change', function() {
-                if ($(this).val()) {
-                    const selectedOption = $(this).find('option:selected');
-                    selectedCampusId = selectedOption.data('campusId');
-                    selectedCycleId = selectedOption.data('cycleId');
+            // $('#id_id_classe_active').on('change', function() {
+            //     if ($(this).val()) {
+            //         const selectedOption = $(this).find('option:selected');
+            //         selectedCampusId = selectedOption.data('campusId');
+            //         selectedCycleId = selectedOption.data('cycleId');
                     
+            //         $('#field-id_variable').show();
+            //     } else {
+            //         $('#field-id_variable').hide();
+            //         $('#field-prix').hide();
+            //         $('#saveBtn').hide();
+            //         selectedCampusId = null;
+            //         selectedCycleId = null;
+            //     }
+            // });
+            $('#id_id_classe_active').on('change', function() {
+            const classeOption = $(this).find('option:selected');
+            const classeId = $(this).val();
+            const anneeId = $('#id_id_annee').val();
+
+            selectedCampusId = classeOption.data('campusId');
+            selectedCycleId = classeOption.data('cycleId');
+
+            $('#id_id_annee_trimestre').html('<option value="">------</option>');
+            $('#field-id_annee_trimestre').hide();
+            $('#field-id_variable').hide();
+            $('#field-prix').hide();
+            $('#saveBtn').hide();
+
+            if (!classeId || !anneeId || !selectedCampusId || !selectedCycleId) return;
+
+            // 🔹 Charger les trimestres en incluant campus et cycle
+            fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+                .then(resp => resp.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert(data.error || 'Erreur chargement trimestres');
+                        return;
+                    }
+
+                    const dropdown = $('#id_id_annee_trimestre');
+                    dropdown.html('<option value="">------</option>');
+
+                    (data.trimestres || []).forEach(t => {
+                        dropdown.append(`<option value="${t.id}">${t.nom} (${t.etat})</option>`);
+                    });
+
+                    $('#field-id_annee_trimestre').show();
+                })
+                .catch(() => alert('Erreur serveur lors du chargement des trimestres'));
+        });
+
+        // 🔹 Changement de trimestre
+        $('#id_id_annee_trimestre').on('change', function() {
+            const trimestreId = $(this).val();
+            const classeId = $('#id_id_classe_active').val();
+            const anneeId = $('#id_id_annee').val();
+
+            $('#id_id_variable').html('<option value="">------</option>');
+            $('#field-id_variable').hide();
+            $('#field-prix').hide();
+            $('#saveBtn').hide();
+
+            if (!trimestreId || !classeId || !anneeId || !selectedCampusId || !selectedCycleId) {
+                console.warn('Paramètres manquants pour récupérer les variables', {
+                    trimestreId, classeId, anneeId, campusId: selectedCampusId, cycleId: selectedCycleId
+                });
+                return;
+            }
+
+            // 🔹 Charger les variables liées au trimestre + campus + cycle
+            fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+                .then(resp => resp.json())
+                .then(data => {
+                    if (!data.success) {
+                        alert(data.error || 'Erreur chargement variables');
+                        return;
+                    }
+
+                    const dropdown = $('#id_id_variable');
+                    dropdown.html('<option value="">------</option>');
+
+                    (data.variables || []).forEach(v => {
+                        dropdown.append(`<option value="${v.id_variable}">${v.nom_variable}</option>`);
+                    });
+
                     $('#field-id_variable').show();
-                } else {
-                    $('#field-id_variable').hide();
-                    $('#field-prix').hide();
-                    $('#saveBtn').hide();
-                    selectedCampusId = null;
-                    selectedCycleId = null;
-                }
-            });
+                })
+                .catch(err => {
+                    console.error('Erreur fetch variables:', err);
+                    alert('Erreur serveur lors du chargement des variables');
+                });
+        });
 
             $('#id_id_variable').on('change', function() {
                 if ($(this).val()) {
@@ -1854,67 +1978,201 @@
                     });
             }
 
+            // function getPaiementTable() {
+            //     if (!selectedAnneeId || !selectedCampusId || !selectedCycleId || !selectedClasseId) {
+            //         $('#tab_paiement_valider tbody').empty().append(`<tr><td colspan="6">Veuillez sélectionner une classe.</td></tr>`);
+            //         return;
+            //     }
+            //     $('#generate_fiche_paie_classe').on('click', function() {
+            //     if (!selectedAnneeId || !selectedCampusId || !selectedCycleId || !selectedClasseId) {
+            //         alert('Veuillez sélectionner une année, un campus, un cycle et une classe.');
+            //         return;
+            //     }
+
+            //     console.log(`✅ Génération de la fiche de paie pour id_annee=${selectedAnneeId}, id_campus=${selectedCampusId}, id_cycle=${selectedCycleId}, id_classe_active=${selectedClasseId}`);
+
+            //     // Construire l'URL avec les paramètres
+            //     const url = `/generate_fiche_paie_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+
+            //     // Rediriger pour télécharger le PDF
+            //     window.location.href = url;
+            //    });
+
+            //     const url = `/get_paiements_validated/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+            //     fetch(url)
+            //         .then(response => response.json())
+            //         .then(data => {
+            //             const tbody = $('#tab_paiement_valider tbody');
+            //             tbody.empty();
+
+            //             if (data.success) {
+            //                 if (data.data.length > 0) {
+            //                     data.data.forEach(p => {
+            //                         tbody.append(`
+                                        
+            //                             <tr id="row-paiement-${p.id_paiement}">
+            //                                 <td>${p.eleve_nom} ${p.eleve_prenom}</td>
+            //                                 <td>${p.variable}</td>
+            //                                 <td>${p.montant} Fbu</td>
+            //                                 <td>
+            //                                     <button style ="color:white" class=" btn btn-primary btn-generate" data-id="${p.id_paiement}">
+            //                                         Réçu de cette variable
+            //                                     </button>
+            //                                 </td>
+            //                             </tr>
+            //                         `);
+            //                     });
+            //                 } else {
+            //                     tbody.append(`<tr><td colspan="6">Aucun paiement trouvé déjà validé !</td></tr>`);
+            //                 }
+            //             } else {
+            //                 alert(data.error || "Erreur lors du chargement des paiements.");
+            //                 tbody.append(`<tr><td colspan="6">Erreur lors du chargement.</td></tr>`);
+            //             }
+
+            //             // Attacher l'événement aux boutons "Générer"
+            //             attachGenerateButtonEvents();
+            //         })
+            //         .catch(err => {
+            //             console.error('❌ Erreur lors du chargement des paiements :', err);
+            //             alert("Erreur serveur: " + err);
+            //             $('#tab_paiement_valider tbody').empty().append(`<tr><td colspan="6">Erreur serveur.</td></tr>`);
+            //         });
+            // }
+            
             function getPaiementTable() {
                 if (!selectedAnneeId || !selectedCampusId || !selectedCycleId || !selectedClasseId) {
-                    $('#tab_paiement_valider tbody').empty().append(`<tr><td colspan="6">Veuillez sélectionner une classe.</td></tr>`);
-                    return;
-                }
-                $('#generate_fiche_paie_classe').on('click', function() {
-                if (!selectedAnneeId || !selectedCampusId || !selectedCycleId || !selectedClasseId) {
-                    alert('Veuillez sélectionner une année, un campus, un cycle et une classe.');
+                    $('#tab_paiement_valider tbody')
+                        .empty()
+                        .append(`<tr><td colspan="4">Veuillez sélectionner une classe.</td></tr>`);
                     return;
                 }
 
-                console.log(`✅ Génération de la fiche de paie pour id_annee=${selectedAnneeId}, id_campus=${selectedCampusId}, id_cycle=${selectedCycleId}, id_classe_active=${selectedClasseId}`);
+                const params = `id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
 
-                // Construire l'URL avec les paramètres
-                const url = `/generate_fiche_paie_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+                // 1️⃣ TABLEAU → uniquement ceux qui ont payé
+                fetch(`/get_paiements_validated/?${params}`)
+                    .then(res => res.json())
+                    .then(response => {
 
-                // Rediriger pour télécharger le PDF
-                window.location.href = url;
-               });
-
-                const url = `/get_paiements_validated/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
-                fetch(url)
-                    .then(response => response.json())
-                    .then(data => {
                         const tbody = $('#tab_paiement_valider tbody');
                         tbody.empty();
 
-                        if (data.success) {
-                            if (data.data.length > 0) {
-                                data.data.forEach(p => {
-                                    tbody.append(`
-                                        
-                                        <tr id="row-paiement-${p.id_paiement}">
-                                            <td>${p.eleve_nom} ${p.eleve_prenom}</td>
-                                            <td>${p.variable}</td>
-                                            <td>${p.montant} Fbu</td>
-                                            <td>
-                                                <button style ="color:white" class=" btn btn-primary btn-generate" data-id="${p.id_paiement}">
-                                                    Réçu de cette variable
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    `);
-                                });
-                            } else {
-                                tbody.append(`<tr><td colspan="6">Aucun paiement trouvé déjà validé !</td></tr>`);
-                            }
-                        } else {
-                            alert(data.error || "Erreur lors du chargement des paiements.");
-                            tbody.append(`<tr><td colspan="6">Erreur lors du chargement.</td></tr>`);
+                        if (!response.success || response.data.length === 0) {
+                            tbody.append(`
+                                <tr>
+                                    <td colspan="4" class="text-center">
+                                        Aucun paiement enregistré pour cette classe
+                                    </td>
+                                </tr>
+                            `);
+                            return;
                         }
 
-                        // Attacher l'événement aux boutons "Générer"
-                        attachGenerateButtonEvents();
-                    })
-                    .catch(err => {
-                        console.error('❌ Erreur lors du chargement des paiements :', err);
-                        alert("Erreur serveur: " + err);
-                        $('#tab_paiement_valider tbody').empty().append(`<tr><td colspan="6">Erreur serveur.</td></tr>`);
+                        response.data.forEach(p => {
+                            tbody.append(`
+                                <tr>
+                                    <td>${p.eleve_nom} ${p.eleve_prenom}</td>
+                                    <td>${p.variable}</td>
+                                    <td>${p.montant} Fbu</td>
+                                    <td>
+                                        <button class="btn btn-primary btn-sm"
+                                            onclick="genererFacture(${p.id_paiement})">
+                                            Facture
+                                        </button>
+                                    </td>
+                                </tr>
+                            `);
+                        });
+                    });
+
+                // 2️⃣ SELECT → tous les élèves
+                fetch(`/get_eleves_classe/?${params}`)
+                    .then(res => res.json())
+                    .then(eleves => {
+                        const select = $('#select_eleve');
+                        select.empty();
+                        select.append(`<option value="">-- Tous les élèves --</option>`);
+
+                        eleves.forEach(e => {
+                            select.append(`<option value="${e.id_eleve}">
+                                ${e.nom} ${e.prenom}
+                            </option>`);
+                        });
                     });
             }
+            
+            // ====================================
+// 6️⃣ Quand on change l'élève sélectionné
+// ====================================
+$(document).on('change', '#select_eleve', function() {
+    selectedEleveId = $(this).val();
+
+    if (!selectedEleveId) {
+        // Aucun élève choisi → afficher tous les paiements de la classe
+        getPaiementTable();
+        return;
+    }
+
+    // Appel AJAX pour récupérer les paiements de l'élève
+    const url = `/get_paiements_eleve/?id_eleve=${selectedEleveId}&id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            const tbody = $('#tab_paiement_valider tbody');
+            tbody.empty();
+
+            if (!data || data.length === 0) {
+                tbody.append('<tr><td colspan="4" class="text-center">Aucun paiement trouvé pour cet élève</td></tr>');
+                return;
+            }
+
+            data.forEach(p => {
+                tbody.append(`
+                    <tr>
+                        <td>${$('#select_eleve option:selected').text()}</td>
+                        <td>${p.variable}</td>
+                        <td>${p.montant_paye} Fbu</td>
+                        <td>
+                            <button class="btn btn-success btn-sm" onclick="genererFactureEleve(${selectedEleveId})">
+                                Facture
+                            </button>
+                        </td>
+                    </tr>
+                `);
+            });
+        });
+});
+
+// ====================================
+// 7️⃣ Générer la facture PDF pour un élève
+// ====================================
+function genererFactureEleve(idEleve) {
+    const url = `/generate_fiche_paie_eleve/?id_eleve=${idEleve}&id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+    window.open(url, '_blank');
+}
+
+// ====================================
+// 8️⃣ Bouton pour générer la fiche de paie de l'élève sélectionné
+// ====================================
+$('#generate_fiche_paie_eleve').on('click', function() {
+    if (!selectedEleveId) {
+        alert("Veuillez sélectionner un élève.");
+        return;
+    }
+    genererFactureEleve(selectedEleveId);
+});
+
+// ====================================
+// 9️⃣ Bouton pour générer la situation complète de la classe
+// ====================================
+$('#generate_fiche_paie_classe').on('click', function() {
+    const url = `/generate_fiche_paie_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+    window.open(url, '_blank');
+});
+
+
+
 
 
             function attachCheckboxEvents() {
@@ -2655,9 +2913,166 @@
         }
     });
     </script>
+    <!-- penalites -->
+   <script>
+$(document).ready(function () {
 
+    let selectedCampusId = null;
+    let selectedCycleId = null;
 
-  
+    /* =======================
+       ANNÉE → CLASSES
+    ======================= */
+    $('#id_id_annee').on('change', function () {
+        const anneeId = $(this).val();
+
+        $('#id_id_classe_active').html('<option value="">------</option>');
+        $('#field-id_id_classe_active').hide();
+
+        if (!anneeId) return;
+
+        $.ajax({
+            url: '/store_annee_session/',
+            type: 'POST',
+            data: {
+                id_annee: anneeId,
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+            },
+            success: function () {
+                fetch(`/get_classes_actives/${anneeId}/`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.success) return;
+
+                        data.classes.forEach(c => {
+                            $('#id_id_classe_active').append(
+                                `<option value="${c.id_classe_active}"
+                                    data-campus-id="${c.id_campus}"
+                                    data-cycle-id="${c.id_cycle}">
+                                    ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
+                                </option>`
+                            );
+                        });
+                        $('#field-id_id_classe_active').show();
+                    });
+            }
+        });
+    });
+
+    /* =======================
+       CLASSE → TRIMESTRES
+    ======================= */
+    $('#id_id_classe_active').on('change', function () {
+        const opt = $(this).find(':selected');
+        const classeId = $(this).val();
+        const anneeId = $('#id_id_annee').val();
+
+        selectedCampusId = opt.data('campus-id');
+        selectedCycleId = opt.data('cycle-id');
+
+        $('#id_id_campus').val(selectedCampusId);
+        $('#id_id_cycle_actif').val(selectedCycleId);
+
+        $('#id_id_annee_trimestre').html('<option value="">------</option>');
+        $('#field-id_id_annee_trimestre').hide();
+
+        if (!classeId) return;
+
+        fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) return;
+
+                data.trimestres.forEach(t => {
+                    $('#id_id_annee_trimestre').append(
+                        `<option value="${t.id}">${t.nom} (${t.etat})</option>`
+                    );
+                });
+                $('#field-id_id_annee_trimestre').show();
+            });
+    });
+
+    /* =======================
+       TRIMESTRE → VARIABLES
+    ======================= */
+    $('#id_id_annee_trimestre').on('change', function () {
+        const trimestreId = $(this).val();
+        const classeId = $('#id_id_classe_active').val();
+        const anneeId = $('#id_id_annee').val();
+
+        $('#id_id_variable').html('<option value="">------</option>');
+        $('#field-id_id_variable').hide();
+
+        if (!trimestreId) return;
+
+        fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success) return;
+
+                data.variables.forEach(v => {
+                    $('#id_id_variable').append(
+                        `<option value="${v.id_variable}">${v.nom_variable}</option>`
+                    );
+                });
+                $('#field-id_id_variable').show();
+            });
+    });
+
+    /* =======================
+       TYPE → PLAFOND
+    ======================= */
+    $('#id_type_penalite').on('change', function () {
+        if ($(this).val() === 'POURCENTAGE') {
+            $('#field-id_plafond').show();
+        } else {
+            $('#field-id_plafond').hide();
+            $('#id_plafond').val('');
+        }
+    });
+
+    /* =======================
+       SUBMIT AJAX (COMME PRIX)
+    ======================= */
+    /* =======================
+   SUBMIT AJAX (CORRIGÉ & SYNCHRONISÉ)
+======================= */
+// On utilise 'click' sur le bouton comme pour tes autres formulaires
+$('#savePenaliteBtn').off('click').on('click', function (e) {
+    e.preventDefault();
+
+    // On cible le formulaire principal du modal
+    let form = $('#variablePrixForm'); 
+    
+    let formData = form.serializeArray();
+    formData.push({ name: 'id_campus', value: selectedCampusId });
+    formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
+
+    $.ajax({
+        url: "/save_penalite/",
+        type: 'POST',
+        data: formData,
+        // Le token sera trouvé car il est au début de #variablePrixForm
+        success: function (response) {
+            if (response.success) {
+                alert('✅ Pénalité enregistrée avec succès !');
+                $('#modalContainer').fadeOut();
+                window.location.reload();
+            } else {
+                // Affiche l'erreur spécifique retournée par save_api.py
+                alert('❌ Erreur : ' + (response.error || 'Veuillez vérifier les champs.'));
+                console.error("Détails :", response.details);
+            }
+        },
+        error: function (xhr) {
+            alert('❌ Erreur critique : Impossible de joindre le serveur.');
+            console.error(xhr.responseText);
+        }
+    });
+});
+
+});
+</script>
 
 </body>
 </html>

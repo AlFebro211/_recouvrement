@@ -3,6 +3,8 @@ from django import forms
 from app.models.recouvrement import (VariableCategorie,VariablePrix,Variable,Banque,
                                  Compte,VariableDatebutoire,VariableDerogation,
                                  Eleve_reduction_prix,Paiement)
+from app.models.annee import Annee_trimestre
+from app.models import PenaliteConfig
 
 class VariableForm(forms.ModelForm):
     class Meta:
@@ -81,7 +83,13 @@ class CompteForm(forms.ModelForm):
 class VariablePrixForm(forms.ModelForm):
     class Meta:
         model = VariablePrix
-        fields = ['id_annee', 'id_classe_active', 'id_variable','id_annee_trimestre', 'prix']
+        fields = ['id_annee', 'id_classe_active','id_annee_trimestre', 'id_variable', 'prix']
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+            # 🔒 Vide par défaut
+            self.fields['id_annee_trimestre'].queryset = Annee_trimestre.objects.none()
+            self.fields['id_variable'].queryset = Variable.objects.none()
         labels = {
             'id_variable': "Frais scolaire / Variable",
             'prix': "Montant (Prix)",
@@ -90,11 +98,11 @@ class VariablePrixForm(forms.ModelForm):
             'id_annee_trimestre': "Trimestre",
         }
         widgets = {
-            'id_variable': forms.Select(attrs={'class': 'form-select'}),
-            'prix': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ex: 50000'}),
             'id_annee': forms.Select(attrs={'class': 'form-select'}),
             'id_classe_active': forms.Select(attrs={'class': 'form-select'}),
             'id_annee_trimestre': forms.Select(attrs={'class': 'form-select'}),
+            'id_variable': forms.Select(attrs={'class': 'form-select'}),
+            'prix': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ex: 50000'}),
     }
         
 
@@ -232,4 +240,42 @@ class PaiementForm(forms.ModelForm):
             'bordereau': forms.FileInput(attrs={'class': 'form-control', 'accept': 'image/*'})
             
             
+        }
+
+
+class PenaliteForm(forms.ModelForm):
+    class Meta:
+        model = PenaliteConfig
+        fields = [
+            'id_campus',
+            'id_annee',
+            'id_cycle_actif',
+            'id_classe_active',
+            'id_annee_trimestre',
+            'id_variable',
+            'type_penalite',
+            'valeur',
+            'plafond',
+        ]
+        labels = {
+            'id_campus': "Campus",
+            'id_annee': "Année",
+            'id_cycle_actif': "Cycle",
+            'id_classe_active': "Classe",
+            'id_variable': "Variable (optionnel)",
+            'id_annee_trimestre': "Trimestre",
+            'type_penalite': "Type de pénalité",
+            'valeur': "Valeur de la pénalité",
+            'plafond': "Plafond (uniquement si %)",
+        }
+        widgets = {
+            'id_campus': forms.Select(attrs={'class': 'form-select'}),
+            'id_annee': forms.Select(attrs={'class': 'form-select'}),
+            'id_cycle_actif': forms.Select(attrs={'class': 'form-select'}),
+            'id_classe_active': forms.Select(attrs={'class': 'form-select'}),
+            'id_annee_trimestre': forms.Select(attrs={'class': 'form-select'}),
+            'id_variable': forms.Select(attrs={'class': 'form-select'}),
+            'type_penalite': forms.Select(attrs={'class': 'form-select'}),
+            'valeur': forms.NumberInput(attrs={'class': 'form-control'}),
+            'plafond': forms.NumberInput(attrs={'class': 'form-control'}),
         }

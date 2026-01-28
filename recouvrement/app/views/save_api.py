@@ -1,5 +1,6 @@
 from .create_base import *
-
+from datetime import datetime
+from app.models import *
 
 @csrf_protect
 def save_variable_prix(request):
@@ -97,11 +98,41 @@ def save_variable_derogation(request):
                     'success': False,
                     'error': 'Tous les champs sont requis.'
                 }, status=400)
+            
+            date_derogation = datetime.strptime(date_butoire, '%Y-%m-%d').date()
+
+            # 🔍 récupérer la date butoire officielle
+            try:
+                variable_date_butoire = VariableDatebutoire.objects.get(
+                    id_variable_id=id_variable,
+                    id_annee_id=id_annee,
+                    id_campus_id=id_campus,
+                    id_cycle_actif_id=id_cycle_actif,
+                    id_classe_active_id=id_classe_active
+                )
+            except VariableDatebutoire.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': "Aucune date butoire définie pour cette variable dans cette classe."
+                }, status=400)
+
+            # ❌ Vérification de la règle métier
+            if date_derogation < variable_date_butoire.date_butoire:
+                return JsonResponse({
+                    'success': False,
+                    'error': (
+                        f"La date de dérogation ({date_derogation}) "
+                        f"ne peut pas être inférieure à la date butoire "
+                        f"({variable_date_butoire.date_butoire})."
+                    )
+                })
+
 
             if VariableDerogation.objects.filter(
                 id_eleve=id_eleve,
                 id_annee = id_annee,
                 id_classe_active=id_classe_active,
+                id_variable = id_variable,
             ).exists():
                 return JsonResponse({
                     'success': False,
@@ -151,6 +182,7 @@ def save_variable_date_butoire(request):
             if VariableDatebutoire.objects.filter(
                 id_annee = id_annee,
                 id_classe_active=id_classe_active,
+                id_variable= id_variable,
             ).exists():
                 return JsonResponse({
                     'success': False,
@@ -234,5 +266,85 @@ def save_variable_reduction(request):
         'success': False,
         'error': 'Méthode non autorisée.'
     }, status=405)
+    
 
+@csrf_protect
+def save_penalite(request):
+    if request.method == "POST":
+        try:
+            # Récupération des IDs depuis le POST
+            id_annee = request.POST.get('id_annee')
+            id_campus = request.POST.get('id_campus')
+            id_cycle_actif = request.POST.get('id_cycle_actif')
+            id_classe_active = request.POST.get('id_classe_active')
+            id_variable = request.POST.get('id_variable')
+            id_annee_trimestre = request.POST.get('id_annee_trimestre')
+            type_penalite = request.POST.get('type_penalite')
+            valeur = request.POST.get('valeur')
+            plafond = request.POST.get('plafond')
+
+            if not all([id_annee, type_penalite, valeur]):
+                return JsonResponse({'success': False, 'error': 'Tous les champs obligatoires doivent être remplis.'}, status=400)
+
+            # ⚡ Récupération des instances avec try/except
+            try:
+                annee_obj = Annee.objects.get(id_annee=id_annee)
+            except Annee.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Année invalide.'}, status=400)
+
+            campus_obj = None
+            if id_campus:
+                try:
+                    campus_obj = Campus.objects.get(id_campus=id_campus)
+                except Campus.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Campus invalide.'}, status=400)
+
+            cycle_obj = None
+            if id_cycle_actif:
+                try:
+                    cycle_obj = Classe_cycle_actif.objects.get(id_cycle_actif=id_cycle_actif)
+                except Classe_cycle_actif.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Cycle invalide.'}, status=400)
+
+            classe_obj = None
+            if id_classe_active:
+                try:
+                    classe_obj = Classe_active.objects.get(id_classe_active=id_classe_active)
+                except Classe_active.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Classe invalide.'}, status=400)
+
+            variable_obj = None
+            if id_variable:
+                try:
+                    variable_obj = Variable.objects.get(id_variable=id_variable)
+                except Variable.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Variable invalide.'}, status=400)
+
+            trimestre_obj = None
+            if id_annee_trimestre:
+                try:
+                    trimestre_obj = Annee_trimestre.objects.get(id_trimestre=id_annee_trimestre)
+                except Annee_trimestre.DoesNotExist:
+                    return JsonResponse({'success': False, 'error': 'Trimestre invalide.'}, status=400)
+
+            # Création de la pénalité
+            penalite = PenaliteConfig(
+                id_annee=annee_obj,
+                id_campus=campus_obj,
+                id_cycle_actif=cycle_obj,
+                id_classe_active=classe_obj,
+                id_variable=variable_obj,
+                id_annee_trimestre=trimestre_obj,
+                type_penalite=type_penalite,
+                valeur=valeur,
+                plafond=plafond if plafond else None
+            )
+            penalite.save()
+
+            return JsonResponse({'success': True, 'message': 'Pénalité créée avec succès.'}, status=201)
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': f'Une erreur est survenue lors de l\'enregistrement : {str(e)}'}, status=500)
+
+    return JsonResponse({'success': False, 'error': 'Méthode non autorisée'}, status=405)
 
