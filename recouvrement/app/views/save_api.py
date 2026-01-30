@@ -272,7 +272,6 @@ def save_variable_reduction(request):
 def save_penalite(request):
     if request.method == "POST":
         try:
-            # Récupération des IDs depuis le POST
             id_annee = request.POST.get('id_annee')
             id_campus = request.POST.get('id_campus')
             id_cycle_actif = request.POST.get('id_cycle_actif')
@@ -286,7 +285,6 @@ def save_penalite(request):
             if not all([id_annee, type_penalite, valeur]):
                 return JsonResponse({'success': False, 'error': 'Tous les champs obligatoires doivent être remplis.'}, status=400)
 
-            # ⚡ Récupération des instances avec try/except
             try:
                 annee_obj = Annee.objects.get(id_annee=id_annee)
             except Annee.DoesNotExist:
@@ -327,7 +325,6 @@ def save_penalite(request):
                 except Annee_trimestre.DoesNotExist:
                     return JsonResponse({'success': False, 'error': 'Trimestre invalide.'}, status=400)
 
-            # Création de la pénalité
             penalite = PenaliteConfig(
                 id_annee=annee_obj,
                 id_campus=campus_obj,

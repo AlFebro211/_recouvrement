@@ -43,11 +43,11 @@ urlpatterns =[
    path('generate_fiche_paie_eleve/', views.generate_fiche_paie_eleve, name='generate_fiche_paie_eleve'),
    path('get_eleves_classe/', views.get_eleves_classe, name='get_eleves_classe'),
    path('get_paiements_eleve/', views.get_paiements_eleve, name='get_paiements_eleve'),
-
-
    path('ajouter_penalite/', views.ajouter_penalite, name='ajouter_penalite'),
    path('save_penalite/', views.save_penalite, name='save_penalite'),
-
+   path('historique/', views.historique, name='historique'),
+   path('historique_financier/', views.historique_financier, name='historique_financier'),
+   path('generate_historique_pdf/', views.generate_historique_pdf, name='generate_historique_pdf'),
 
    
 ]

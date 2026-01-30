@@ -16,6 +16,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
     <meta name="csrf-token" content="{{ csrf_token }}">
     
     <style>
@@ -325,8 +326,111 @@
         font-size: 14px;
     }
     
-    /* Logout Button */
-    
+    /* ----- RAPPORT FINANCIER AMÉLIORÉ ----- */
+#rapport-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+#rapport-header h4 {
+    font-weight: 700;
+    font-size: 1.6rem;
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#rapport-header h4 i {
+    font-size: 1.8rem;
+    color: var(--accent-color);
+}
+
+/* ----- BOUTON PDF ----- */
+#btn-download-pdf {
+    background: linear-gradient(45deg, var(--accent-color), var(--secondary-color));
+    color: #fff;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 8px 16px;
+    transition: var(--transition);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+#btn-download-pdf:hover {
+    background: linear-gradient(45deg, var(--secondary-color), var(--accent-color));
+    transform: scale(1.05);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+}
+
+/* ----- TABLEAU ----- */
+#rapport-table_wrapper {
+    background: var(--light-bg);
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+}
+#rapport-table {
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+}
+#rapport-table thead th {
+    background-color: var(--primary-color) !important;
+    color: var(--light-text);
+    text-align: center;
+    vertical-align: middle;
+}
+#rapport-table tbody tr:hover {
+    background-color: rgba(38, 97, 255, 0.1);
+}
+#rapport-table tbody td {
+    vertical-align: middle;
+}
+#rapport-table tbody td.text-end {
+    text-align: right;
+}
+#rapport-table .badge {
+    font-size: 0.85rem;
+    padding: 0.35em 0.65em;
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+/* ----- SEARCH & PAGINATION ----- */
+.dataTables_wrapper .dataTables_filter input {
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    padding: 6px 12px;
+    margin-left: 5px;
+    margin-bottom: 10px;
+    width: 250px;
+    transition: var(--transition);
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    border-radius: 6px;
+    padding: 5px 12px;
+    margin: 0 2px;
+    border: 1px solid transparent;
+    transition: var(--transition);
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background-color: var(--primary-color) !important;
+    color: #fff !important;
+}
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background-color: var(--secondary-color) !important;
+    color: #fff !important;
+}
+.dataTables_wrapper .dataTables_length select {
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+.dataTables_wrapper .dataTables_info {
+    font-size: 0.9rem;
+    color: var(--dark-text);
+    margin-top: 8px;
+}
+
     </style>
 </head>
 
@@ -652,39 +756,98 @@
                     <!-- ================ penalite -->
 
                     {% elif form_type == 'penalite_form' %}
-    <h2>Ajouter une pénalité</h2>
-    
-    {% if form_penalite.non_form_errors %}
-    <div class="alert alert-danger">
-        {{ form_penalite.non_form_errors }}
-    </div>
-    {% endif %}
+                        <h2>Ajouter une pénalité</h2>
+                        
+                        {% if form_penalite.non_form_errors %}
+                        <div class="alert alert-danger">
+                            {{ form_penalite.non_form_errors }}
+                        </div>
+                        {% endif %}
 
-    <div class="form-row">
-        {% for field in form_penalite %}
-            {% if field.name == 'id_campus' or field.name == 'id_cycle_actif' %}
-                {# On utilise render_field pour garder la cohérence #}
-                <div style="display:none;">
-                    {% render_field field %}
-                </div>
-            {% else %}
-                <div class="form-group col-md-4" id="field-{{ field.id_for_label }}">
-                    <label>{{ field.label }}</label>
-                    {% render_field field class="form-control" %}
-                </div>
-            {% endif %}
-        {% endfor %}
-    </div>
+                        <div class="form-row">
+                            {% for field in form_penalite %}
+                                {% if field.name == 'id_campus' or field.name == 'id_cycle_actif' %}
+                                    {# On utilise render_field pour garder la cohérence #}
+                                    <div style="display:none;">
+                                        {% render_field field %}
+                                    </div>
+                                {% else %}
+                                    <div class="form-group col-md-4" id="field-{{ field.id_for_label }}">
+                                        <label>{{ field.label }}</label>
+                                        {% render_field field class="form-control" %}
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
 
-    <div class="form-actions">
-        <button type="button" class="btn btn-cancel" id="cancelBtn">
-            <span class="emoji-icon">❌</span> Annuler
-        </button>
-        <button type="button" class="btn btn-primary" id="savePenaliteBtn">
-            <i class="fas fa-plus-circle"></i> Ajouter
-        </button>
-    </div>
-    {% endif %}
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-cancel" id="cancelBtn">
+                                <span class="emoji-icon">❌</span> Annuler
+                            </button>
+                            <button type="button" class="btn btn-primary" id="savePenaliteBtn">
+                                <i class="fas fa-plus-circle"></i> Ajouter
+                            </button>
+                        </div>
+                    {% elif form_type == 'historique_financier_form' %}
+                        <div class="modal-header">
+                            <h2>Historique financier</h2>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group col-md-3">
+                                <label>Année</label>
+                                <select id="hf-annee" class="form-control">
+                                    <option value="">-- Choisir une année --</option>
+                                    {% for annee in annees %}
+                                        <option value="{{ annee.id_annee }}">{{ annee.annee }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="form-group col-md-3">
+                                <label>Classe</label>
+                                <select id="hf-classe" class="form-control">
+                                    <option value="">-- Choisir une classe --</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group col-md-3">
+                                <label>Trimestre</label>
+                                <select id="hf-trimestre" class="form-control">
+                                    <option value="">-- Choisir un trimestre --</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group col-md-3">
+                            <label>Banque / Compte</label>
+                            <select id="hf-banque" class="form-control">
+                                <option value="">-- Tous les comptes --</option>
+                                {% for compte in comptes_bancaires %}
+                                    <option value="{{ compte.id_compte }}">
+                                        {{ compte.id_banque.banque }} - {{ compte.compte }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                            <div class="form-group col-md-3">
+                                <label>Élève</label>
+                                <select id="hf-eleve" class="form-control">
+                                    <option value="">-- Tous les élèves --</option>
+                                </select>
+                            </div>
+                        </div>
+
+
+                        <div class="form-actions mt-4">
+                            <button type="button" class="btn btn-cancel" id="cancelBtn">
+                                <span class="emoji-icon">❌</span> Annuler
+                            </button>
+                            <button type="button" id="hf-filtrer-btn" class="btn btn-primary">
+                                <i class="fas fa-filter"></i> Filtrer les données
+                            </button>
+                        </div>
+
+                    {% endif %}
                 </form>
                 
 
@@ -1072,6 +1235,10 @@
                 </div>
             </div>
         </div>
+        <div class="table-container mt-4" id="hf-result-container">
+            <!-- Le tableau sera injecté ici par JS -->
+        </div>
+
         
     </div>
 
@@ -1082,6 +1249,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{% static 'assets/vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
     <!-- variable categorie edition script :  -->
     <script>
     $(document).ready(function() {
@@ -2920,9 +3089,6 @@ $(document).ready(function () {
     let selectedCampusId = null;
     let selectedCycleId = null;
 
-    /* =======================
-       ANNÉE → CLASSES
-    ======================= */
     $('#id_id_annee').on('change', function () {
         const anneeId = $(this).val();
 
@@ -2959,9 +3125,6 @@ $(document).ready(function () {
         });
     });
 
-    /* =======================
-       CLASSE → TRIMESTRES
-    ======================= */
     $('#id_id_classe_active').on('change', function () {
         const opt = $(this).find(':selected');
         const classeId = $(this).val();
@@ -2992,9 +3155,6 @@ $(document).ready(function () {
             });
     });
 
-    /* =======================
-       TRIMESTRE → VARIABLES
-    ======================= */
     $('#id_id_annee_trimestre').on('change', function () {
         const trimestreId = $(this).val();
         const classeId = $('#id_id_classe_active').val();
@@ -3019,9 +3179,6 @@ $(document).ready(function () {
             });
     });
 
-    /* =======================
-       TYPE → PLAFOND
-    ======================= */
     $('#id_type_penalite').on('change', function () {
         if ($(this).val() === 'POURCENTAGE') {
             $('#field-id_plafond').show();
@@ -3031,48 +3188,297 @@ $(document).ready(function () {
         }
     });
 
-    /* =======================
-       SUBMIT AJAX (COMME PRIX)
-    ======================= */
-    /* =======================
-   SUBMIT AJAX (CORRIGÉ & SYNCHRONISÉ)
-======================= */
-// On utilise 'click' sur le bouton comme pour tes autres formulaires
-$('#savePenaliteBtn').off('click').on('click', function (e) {
-    e.preventDefault();
+    $('#savePenaliteBtn').off('click').on('click', function (e) {
+        e.preventDefault();
 
-    // On cible le formulaire principal du modal
-    let form = $('#variablePrixForm'); 
-    
-    let formData = form.serializeArray();
-    formData.push({ name: 'id_campus', value: selectedCampusId });
-    formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
+        let form = $('#variablePrixForm'); 
+        
+        let formData = form.serializeArray();
+        formData.push({ name: 'id_campus', value: selectedCampusId });
+        formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
 
-    $.ajax({
-        url: "/save_penalite/",
-        type: 'POST',
-        data: formData,
-        // Le token sera trouvé car il est au début de #variablePrixForm
-        success: function (response) {
-            if (response.success) {
-                alert('✅ Pénalité enregistrée avec succès !');
-                $('#modalContainer').fadeOut();
-                window.location.reload();
-            } else {
-                // Affiche l'erreur spécifique retournée par save_api.py
-                alert('❌ Erreur : ' + (response.error || 'Veuillez vérifier les champs.'));
-                console.error("Détails :", response.details);
+        $.ajax({
+            url: "/save_penalite/",
+            type: 'POST',
+            data: formData,
+            success: function (response) {
+                if (response.success) {
+                    alert(' Pénalité enregistrée avec succès !');
+                    $('#modalContainer').fadeOut();
+                    window.location.reload();
+                } else {
+                    alert('Erreur : ' + (response.error || 'Veuillez vérifier les champs.'));
+                    console.error("Détails :", response.details);
+                }
+            },
+            error: function (xhr) {
+                alert('Erreur critique : Impossible de joindre le serveur.');
+                console.error(xhr.responseText);
             }
-        },
-        error: function (xhr) {
-            alert('❌ Erreur critique : Impossible de joindre le serveur.');
-            console.error(xhr.responseText);
-        }
+        });
     });
-});
 
 });
 </script>
+
+<script>
+$(document).ready(function () {
+
+    /* =========================
+       1. CHARGER LES CLASSES
+    ========================= */
+    $('#hf-annee').on('change', function () {
+        const anneeId = $(this).val();
+        const classeSelect = $('#hf-classe');
+        const trimestreSelect = $('#hf-trimestre');
+        const eleveSelect = $('#hf-eleve');
+
+        classeSelect.html('<option value="">-- Chargement des classes... --</option>');
+        trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
+        eleveSelect.html('<option value="">-- Tous les élèves --</option>');
+
+        if (!anneeId) {
+            classeSelect.html('<option value="">-- Choisir une classe --</option>');
+            return;
+        }
+
+        fetch(`/get_classes_actives/${anneeId}/`)
+            .then(res => res.json())
+            .then(res => {
+                let options = '<option value="">-- Choisir une classe --</option>';
+                if (res.success) {
+                    res.classes.forEach(c => {
+                        options += `<option value="${c.id_classe_active}"
+                                    data-campus="${c.id_campus}"
+                                    data-cycle="${c.id_cycle}">
+                                    ${c.campus_nom} - ${c.classe_nom}${c.groupe ? ' ('+c.groupe+')' : ''}</option>`;
+                    });
+                }
+                classeSelect.html(options);
+            })
+            .catch(() => {
+                alert("Erreur réseau chargement classes");
+                classeSelect.html('<option value="">-- Choisir une classe --</option>');
+            });
+    });
+
+    /* =========================
+       2. CLASSE → TRIMESTRES + ÉLÈVES
+    ========================= */
+    $('#hf-classe').on('change', function () {
+        const classeId = $(this).val();
+        const anneeId = $('#hf-annee').val();
+        const opt = $(this).find(':selected');
+        const campusId = opt.data('campus');
+        const cycleId = opt.data('cycle');
+
+        const trimestreSelect = $('#hf-trimestre');
+        const eleveSelect = $('#hf-eleve');
+
+        trimestreSelect.html('<option value="">-- Chargement... --</option>');
+        eleveSelect.html('<option value="">-- Chargement élèves... --</option>');
+
+        if (!classeId) {
+            trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
+            eleveSelect.html('<option value="">-- Tous les élèves --</option>');
+            return;
+        }
+
+        // TRIMESTRES
+        fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${campusId}&id_cycle=${cycleId}`)
+            .then(res => res.json())
+            .then(res => {
+                let options = '<option value="">-- Choisir un trimestre --</option>';
+                if (res.success && res.trimestres.length > 0) {
+                    res.trimestres.forEach(t => {
+                        options += `<option value="${t.id}">${t.nom}</option>`;
+                    });
+                }
+                trimestreSelect.html(options);
+            })
+            .catch(() => {
+                trimestreSelect.html('<option value="">-- Erreur chargement --</option>');
+            });
+
+        // ÉLÈVES
+        chargerEleves(classeId, anneeId, campusId, cycleId);
+    });
+
+    /* =========================
+       3. CHARGER LES ÉLÈVES
+    ========================= */
+    function chargerEleves(classeId, anneeId, campusId, cycleId) {
+        const eleveSelect = $('#hf-eleve');
+
+        fetch(`/get_pupils_registred_classe/?id_annee=${anneeId}&id_campus=${campusId}&id_cycle=${cycleId}&id_classe_active=${classeId}`)
+            .then(res => res.json())
+            .then(res => {
+                let options = '<option value="">-- Tous les élèves --</option>';
+                if (res.success && res.data.length > 0) {
+                    res.data.forEach(e => {
+                        options += `<option value="${e.id_eleve}">${e.nom_complet}</option>`;
+                    });
+                }
+                eleveSelect.html(options);
+            })
+            .catch(() => {
+                eleveSelect.html('<option value="">-- Erreur chargement élèves --</option>');
+            });
+    }
+
+    /* =========================
+       4. CHARGER LES COMPTES BANQUE
+    ========================= */
+    $('#hf-banque-select').on('change', function() {
+        const banqueId = $(this).val();
+        const compteSelect = $('#hf-banque');
+
+        if (!banqueId) {
+            compteSelect.html('<option value="">-- Choisir un compte --</option>');
+            return;
+        }
+
+        fetch(`/get_comptes_banque/${banqueId}/`)
+            .then(res => res.json())
+            .then(res => {
+                let options = '<option value="">-- Choisir un compte --</option>';
+                if (res.success) {
+                    res.comptes.forEach(c => {
+                        options += `<option value="${c.id_compte}">${c.compte}</option>`;
+                    });
+                }
+                compteSelect.html(options);
+            })
+            .catch(() => {
+                compteSelect.html('<option value="">-- Erreur chargement comptes --</option>');
+            });
+    });
+
+    /* =========================
+       FILTRER ET AFFICHER LE RAPPORT
+    ========================= */
+    $('#hf-filtrer-btn').on('click', function() {
+        const params = {
+            annee: $('#hf-annee').val(),
+            classe: $('#hf-classe').val(),
+            trimestre: $('#hf-trimestre').val(),
+            eleve: $('#hf-eleve').val(),
+            compte: $('#hf-banque').val()
+        };
+
+        if (!params.annee || !params.classe) {
+            return alert("Veuillez choisir l'année et la classe.");
+        }
+
+        $('#modalContainer').hide();
+        $('#hf-result-container').html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-3x"></i><br>Chargement...</div>');
+
+        $.ajax({
+            url: '/historique_financier/',
+            type: 'GET',
+            data: params,
+            success: function(res) {
+    if (res.success && res.rapport.length > 0) {
+
+        let html = `
+        <div id="rapport-header">
+            <h4><i class="fas fa-file-invoice-dollar"></i> Rapport Financier</h4>
+            <button id="btn-download-pdf" class="btn btn-danger">
+                <i class="fas fa-file-pdf"></i> Télécharger PDF
+            </button>
+        </div>
+
+        <div class="table-responsive">
+        <table id="rapport-table" class="table table-striped table-bordered table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Élève</th>
+                    <th>Variable</th>
+                    <th>Montant payé</th>
+                    <th>Date paiement</th>
+                    <th>Banque / Compte</th>
+                </tr>
+            </thead>
+            <tbody>`;
+
+        res.rapport.forEach(r => {
+            html += `
+            <tr>
+                <td><strong>${r.eleve}</strong></td>
+                <td>${r.variable}</td>
+                <td class="text-end fw-bold text-success">
+                    ${Number(r.montant).toLocaleString()}
+                </td>
+                <td>${r.date_paie}</td>
+                <td>${r.banque_compte}</td>
+            </tr>`;
+        });
+
+        html += `
+            </tbody>
+            <tfoot>
+                <tr class="table-warning fw-bold">
+                    <td colspan="2">TOTAL GÉNÉRAL</td>
+                    <td class="text-end">${Number(res.total_general).toLocaleString()}</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        </table>
+        </div>`;
+
+        $('#hf-result-container').html(html);
+
+        $('#rapport-table').DataTable({
+            paging: true,
+            searching: true,
+            ordering: true,
+            order: [[0, 'asc']],
+            lengthMenu: [10, 25, 50],
+            language: {
+                search: "Recherche:",
+                lengthMenu: "Afficher _MENU_ lignes",
+                info: "Affichage _START_ à _END_ sur _TOTAL_ paiements",
+                paginate: {
+                    previous: "Précédent",
+                    next: "Suivant"
+                }
+            }
+        });
+
+    } else {
+        $('#hf-result-container').html(
+            '<div class="alert alert-warning text-center">Aucune donnée trouvée.</div>'
+        );
+    }
+},
+
+            error: function(xhr) {
+                $('#hf-result-container').html('<div class="alert alert-danger text-center">Erreur technique lors de la récupération des données.</div>');
+            }
+        });
+    });
+
+    // PDF
+    $(document).on('click', '#btn-download-pdf', function() {
+        const params = new URLSearchParams({
+            annee: $('#hf-annee').val(),
+            classe: $('#hf-classe').val(),
+            trimestre: $('#hf-trimestre').val(),
+            eleve: $('#hf-eleve').val(),
+            compte: $('#hf-banque').val()
+        });
+        if (!$('#hf-annee').val() || !$('#hf-classe').val()) {
+            return alert("Veuillez d'abord filtrer les données.");
+        }
+        window.open(`/generate_historique_pdf/?${params.toString()}`, '_blank');
+    });
+});
+
+
+
+
+</script>
+
 
 </body>
 </html>

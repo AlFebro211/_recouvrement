@@ -65,7 +65,7 @@ class PenaliteConfig(models.Model):
     actif = models.BooleanField(default=True)
 
     class Meta:
-        db_table = "recouvrement_penalite_regle"
+        db_table = "recouvrement_penalite"
         unique_together = ('id_variable', 'id_annee_trimestre', 'id_classe_active', 'id_cycle_actif', 'id_campus')
 
     def __str__(self):

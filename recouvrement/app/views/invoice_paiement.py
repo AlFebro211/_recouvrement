@@ -14,8 +14,9 @@ import logging
 from datetime import datetime
 from app.models import *
 from django.http import JsonResponse
-
-
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from django.contrib.staticfiles import finders
+import os
 
 
 def generate_invoice(request, id_paiement):
@@ -334,21 +335,8 @@ def get_paiements_eleve(request):
         })
     return JsonResponse(data, safe=False)
 
-from app.models import Eleve, Paiement, Annee, VariablePrix 
-
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from django.http import HttpResponse
-from django.contrib.staticfiles import finders
-import os
-
 def generate_fiche_paie_eleve(request):
     try:
-        # 1. Récupération des paramètres
         id_eleve = request.GET.get('id_eleve')
         id_campus = request.GET.get('id_campus')
         id_annee = request.GET.get('id_annee')
@@ -357,25 +345,21 @@ def generate_fiche_paie_eleve(request):
         eleve = Eleve.objects.get(id_eleve=id_eleve)
         obj_annee = Annee.objects.get(id_annee=id_annee)
         
-        # Récupération des paiements validés
         paiements_qs = Paiement.objects.filter(
             id_eleve_id=id_eleve, 
             id_annee_id=id_annee, 
             status=True
         ).select_related('id_campus', 'id_classe_active', 'id_variable')
 
-        # Gestion de l'affichage de la classe et du groupe (ex: 5ème A)
         classe_info = "N/A"
         campus_nom = "N/A"
         if paiements_qs.exists():
             p_ref = paiements_qs[0]
             campus_nom = p_ref.id_campus.campus
-            # On combine le nom de la classe et le groupe
-            nom_classe = p_ref.id_classe_active.classe_id.classe # Adaptez selon votre modèle Classe
+            nom_classe = p_ref.id_classe_active.classe_id.classe 
             groupe = p_ref.id_classe_active.groupe or ""
             classe_info = f"{nom_classe} {groupe}".strip()
 
-        # 2. Logique de tri (Inscription d'abord, puis trimestres)
         def tri_priorite(nom_variable):
             nom = nom_variable.upper()
             if "INSCRIPTION" in nom: return 1
@@ -384,7 +368,6 @@ def generate_fiche_paie_eleve(request):
             if "3EM" in nom or "3EME" in nom or "TRANCHE 3" in nom: return 4
             return 99
 
-        # 3. Préparation du PDF
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="Facture_{eleve.nom}.pdf"'
         
@@ -413,14 +396,12 @@ def generate_fiche_paie_eleve(request):
         elements.append(header_table)
         elements.append(Spacer(1, 10*mm))
 
-        # --- INFOS ELEVE ---
         elements.append(Paragraph(f"<b>Nom et Prénom :</b> {eleve.nom} {eleve.prenom}", styles['Normal']))
         elements.append(Paragraph(f"<b>Matricule :</b> {getattr(eleve, 'matricule', id_eleve)}", styles['Normal']))
         elements.append(Spacer(1, 5*mm))
         elements.append(Paragraph("<u>ETAT DES PAIEMENTS</u>", ParagraphStyle('T', fontSize=14, alignment=TA_CENTER)))
         elements.append(Spacer(1, 5*mm))
 
-        # --- TABLEAU 1 : CE QUE L'ELEVE DOIT PAYER ---
         elements.append(Paragraph("<b>I. FRAIS À PAYER</b>", styles['Normal']))
         prix_qs = list(VariablePrix.objects.filter(id_annee_id=id_annee, id_campus_id=id_campus, id_classe_active_id=id_classe))
         prix_qs.sort(key=lambda x: tri_priorite(x.id_variable.variable))
@@ -436,7 +417,6 @@ def generate_fiche_paie_eleve(request):
         elements.append(t1)
         elements.append(Spacer(1, 5*mm))
 
-        # --- TABLEAU 2 : CE QUE L'ELEVE A DEJA PAYE ---
         elements.append(Paragraph("<b>II. VERSEMENTS EFFECTUÉS</b>", styles['Normal']))
         paiements_liste = list(paiements_qs)
         paiements_liste.sort(key=lambda x: tri_priorite(x.id_variable.variable))
@@ -452,7 +432,6 @@ def generate_fiche_paie_eleve(request):
         elements.append(t2)
         elements.append(Spacer(1, 10*mm))
 
-        # --- TABLEAU 3 : RECAPITULATIF FINAL ---
         reste = total_attendu - total_paye
         status = "EN ORDRE" if reste <= 0 else "PAS EN ORDRE"
         couleur = colors.green if reste <= 0 else colors.red
@@ -489,3 +468,189 @@ def style_tableau_standard():
         ('ALIGN', (1,0), (1,-1), 'RIGHT'), # Montants à droite
         ('FONTSIZE', (0,0), (-1,-1), 9),
     ])
+
+
+def generate_historique_pdf(request):
+    try:
+        id_annee = request.GET.get('annee')
+        id_classe = request.GET.get('classe')
+        id_eleve = request.GET.get('eleve')
+        id_trimestre = request.GET.get('trimestre')
+        id_compte = request.GET.get('compte')
+
+        paiements_qs = Paiement.objects.select_related(
+            'id_eleve',
+            'id_variable',
+            'id_compte',
+            'id_compte__id_banque',
+            'id_classe_active',
+            'id_classe_active__classe_id',
+            'id_classe_active__id_campus',
+            'id_annee'
+        ).order_by(
+            'id_eleve__nom',
+            'id_variable__variable',
+            'date_paie'
+        )
+
+        if id_annee:
+            paiements_qs = paiements_qs.filter(id_annee=id_annee)
+        if id_classe:
+            paiements_qs = paiements_qs.filter(id_classe_active=id_classe)
+        if id_eleve:
+            paiements_qs = paiements_qs.filter(id_eleve=id_eleve)
+        if id_trimestre:
+            paiements_qs = paiements_qs.filter(id_variable__trimestre=id_trimestre)
+        if id_compte:
+            paiements_qs = paiements_qs.filter(id_compte=id_compte)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Rapport_Financier.pdf"'
+
+        doc = SimpleDocTemplate(
+            response,
+            pagesize=A4,
+            leftMargin=10*mm,
+            rightMargin=10*mm,
+            topMargin=10*mm,
+            bottomMargin=10*mm
+        )
+
+        elements = []
+        styles = getSampleStyleSheet()
+
+        small = ParagraphStyle(
+            'small',
+            parent=styles['Normal'],
+            fontSize=8,
+            leading=10
+        )
+
+        title_style = ParagraphStyle(
+            'title',
+            fontSize=16,
+            alignment=1,
+            fontName='Helvetica-Bold'
+        )
+
+        left_style = ParagraphStyle(
+            'left',
+            fontSize=9,
+            leading=11
+        )
+
+        right_style = ParagraphStyle(
+            'right',
+            fontSize=9,
+            leading=11,
+            alignment=2
+        )
+        
+        logo_path = finders.find('assets/img/logo.png')
+        if logo_path:
+            elements.append(Image(logo_path, width=25*mm, height=25*mm))
+        elements.append(Spacer(1, 4*mm))
+
+        p_ref = paiements_qs.first()
+
+        if p_ref:
+            annee_txt = p_ref.id_annee.annee
+            campus_txt = p_ref.id_classe_active.id_campus.campus
+
+            nom_classe = p_ref.id_classe_active.classe_id.classe
+            groupe = p_ref.id_classe_active.groupe or ""
+            classe_info = f"{nom_classe} {groupe}".strip()
+
+            eleve_txt = (
+                f"{p_ref.id_eleve.nom} {p_ref.id_eleve.prenom}"
+                if id_eleve else "Tous"
+            )
+        else:
+            annee_txt = campus_txt = classe_info = eleve_txt = "-"
+
+        elements.append(Paragraph("RAPPORT FINANCIER", title_style))
+        elements.append(Spacer(1, 2*mm))
+
+        elements.append(Table(
+            [[""]],
+            colWidths=[190*mm],
+            style=[('LINEBELOW', (0,0), (-1,-1), 1, colors.grey)]
+        ))
+        elements.append(Spacer(1, 4*mm))
+
+        header_table = Table(
+            [[
+                Paragraph(
+                    f"""
+                    <b>Campus :</b> {campus_txt}<br/>
+                    <b>Classe :</b> {classe_info}<br/>
+                    <b>Élève :</b> {eleve_txt}
+                    """,
+                    left_style
+                ),
+                Paragraph(
+                    f"<b>Année académique :</b><br/>{annee_txt}",
+                    right_style
+                )
+            ]],
+            colWidths=[120*mm, 70*mm]
+        )
+
+        elements.append(header_table)
+        elements.append(Spacer(1, 6*mm))
+
+        data = [[
+            "Élève",
+            "Variable",
+            "Montant",
+            "Date paiement",
+            "Banque / Compte"
+        ]]
+
+        total_general = 0
+
+        for p in paiements_qs:
+            total_general += p.montant
+
+            data.append([
+                Paragraph(f"{p.id_eleve.nom} {p.id_eleve.prenom}", small),
+                Paragraph(p.id_variable.variable, small),
+                f"{p.montant:,.0f}",
+                Paragraph(p.date_paie.strftime('%d/%m/%Y'), small),
+                Paragraph(
+                    f"{p.id_compte.id_banque.banque} - {p.id_compte.compte}",
+                    small
+                )
+            ])
+
+        data.append([
+            "",
+            "TOTAL GÉNÉRAL",
+            f"{total_general:,.0f}",
+            "",
+            ""
+        ])
+
+        table = Table(
+            data,
+            colWidths=[45*mm, 40*mm, 25*mm, 30*mm, 45*mm],
+            repeatRows=1
+        )
+
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0d6efd')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (2,1), (2,-1), 'RIGHT'),
+            ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#ffc107')),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('FONTSIZE', (0,1), (-1,-2), 8),
+        ]))
+
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur PDF : {str(e)}", status=500)

@@ -16,6 +16,8 @@ import logging
 import datetime
 from django.db.models import Sum
 
+from app.models import Eleve_inscription
+
 
 logger = logging.getLogger(__name__)
 import os
@@ -224,6 +226,19 @@ def ajouter_penalite(request):
         'variable_list': variables_list,
     })
 
+def historique(request):
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'historique_financier_form': True,
+        'form_type': 'historique_financier_form',
+        'annees': Annee.objects.all(),
+        'comptes_bancaires': Compte.objects.select_related('id_banque').all(),
+        'classes': Classe_active.objects.all(),  
+        'trimestres': ['Trimestre 1','Trimestre 2','Trimestre 3','Trimestre 4','Trimestre 5'],
+        'variables_list': Variable.objects.all(),  
+        'eleves': Eleve_inscription.objects.all(),  
+    })
+
+
 
 @csrf_protect
 def save_paiement(request):
@@ -313,16 +328,6 @@ def save_paiement(request):
 
                 if derogation:
                     date_limite = derogation.date_derogation
-
-                if date_paie > date_limite:
-                    return JsonResponse({
-                        'success': False,
-                        'error': (
-                            f"Paiement refusé.\n"
-                            f"Date limite autorisée : {date_limite}\n"
-                            f"Date du paiement : {date_paie}"
-                        )
-                    })
 
                 try:
                     variable_prix = VariablePrix.objects.get(

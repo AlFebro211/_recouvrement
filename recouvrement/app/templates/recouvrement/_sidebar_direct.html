@@ -75,22 +75,22 @@
         </div>
 
         <!-- Item 3 penalite -->
-         <div class="menu-item">
-    <a href="#" class="menu-link">
-        <span class="icon-wrapper">💰</span>
-        <span class="menu-text">Gestion des pénalités</span>
-        <i class="fas fa-chevron-right arrow-icon"></i>
-    </a>
-    <div class="submenu">
-        <!-- Créer / configurer les pénalités -->
         <div class="menu-item">
-            <a href="{% url 'ajouter_penalite' %}" class="submenu-link">
-                <span class="icon-wrapper">📝</span>
-                <span class="menu-text">Configurer une pénalité</span>
+            <a href="#" class="menu-link">
+                <span class="icon-wrapper">💰</span>
+                <span class="menu-text">Gestion des pénalités</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
             </a>
+            <div class="submenu">
+                <!-- Créer / configurer les pénalités -->
+                <div class="menu-item">
+                    <a href="{% url 'ajouter_penalite' %}" class="submenu-link">
+                        <span class="icon-wrapper">📝</span>
+                        <span class="menu-text">Configurer une pénalité</span>
+                    </a>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
 
         <!-- Item 4 -->
@@ -131,16 +131,16 @@
                         <span class="menu-text">Situation détaillée</span>
                     </a>
                 </div>
-                <div style="display: none;" class="menu-item">
-                    <a href="#" class="submenu-link">
-                        <span class="icon-wrapper">✅</span>
-                        <span class="menu-text">Paiements effectués</span>
+                <div class="menu-item">
+                    <a href="{% url 'historique' %}" class="submenu-link">
+                        <span class="icon-wrapper">🗓️</span>
+                        <span class="menu-text">historique financier</span>
                     </a>
                 </div>
                 <div style="display: none;" class="menu-item">
                     <a href="#" class="submenu-link">
-                        <span class="icon-wrapper">🗓️</span>
-                        <span class="menu-text">Paiements par période</span>
+                        <span class="icon-wrapper">✅</span>
+                        <span class="menu-text">Paiements effectués</span>
                     </a>
                 </div>
                 <div style="display: none;" class="menu-item">

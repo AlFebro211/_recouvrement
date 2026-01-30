@@ -1,8 +1,10 @@
 from.create_base import *
-from app.models import Annee,Annee_trimestre, Eleve_inscription, VariablePrix, Paiement, Eleve_reduction_prix
+from app.models import *
 from django.db.models import Q
 from django.http import JsonResponse
 from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from datetime import date
 
 
 def get_banques(request):
@@ -483,9 +485,6 @@ def get_pupils_registred_classe(request):
 #     return JsonResponse({'success': True, 'variables': result})
 
 
-from datetime import date
-
-
 def get_variables_restant_a_payer(request):
     eleve_id = request.GET.get('id_eleve')
     annee_id = request.GET.get('id_annee')
@@ -595,9 +594,6 @@ def get_variables_restant_a_payer(request):
     })
 
 
-
-from django.http import JsonResponse
-from app.models import Annee_trimestre, VariablePrix
 
 def get_trimestres_by_classe_active(request):
     classe_active_id = request.GET.get('id_classe_active')
@@ -749,3 +745,56 @@ def get_eleves_classe(request):
 
     return JsonResponse(data, safe=False)
 
+
+def historique_financier(request):
+
+    def clean(v): 
+        return v if v not in ("", None) else None
+
+    id_annee = clean(request.GET.get('annee'))
+    id_classe = clean(request.GET.get('classe'))
+    id_eleve = clean(request.GET.get('eleve'))
+    id_trimestre = clean(request.GET.get('trimestre'))
+    id_compte = clean(request.GET.get('compte'))
+
+    paiements_qs = Paiement.objects.select_related(
+        'id_eleve',
+        'id_variable',
+        'id_compte',
+        'id_compte__id_banque'
+    ).order_by(
+        'id_eleve__nom',
+        'id_variable__variable',
+        'date_paie'
+    )
+
+    if id_annee:
+        paiements_qs = paiements_qs.filter(id_annee=id_annee)
+    if id_classe:
+        paiements_qs = paiements_qs.filter(id_classe_active=id_classe)
+    if id_eleve:
+        paiements_qs = paiements_qs.filter(id_eleve=id_eleve)
+    if id_trimestre:
+        paiements_qs = paiements_qs.filter(id_variable__trimestre=id_trimestre)
+    if id_compte:
+        paiements_qs = paiements_qs.filter(id_compte=id_compte)
+
+    rapport = []
+    total_general = 0
+
+    for p in paiements_qs:
+        total_general += p.montant
+
+        rapport.append({
+            "eleve": f"{p.id_eleve.nom} {p.id_eleve.prenom}",
+            "variable": p.id_variable.variable,
+            "montant": p.montant,
+            "date_paie": p.date_paie.strftime('%d/%m/%Y'),
+            "banque_compte": f"{p.id_compte.id_banque.banque} - {p.id_compte.compte}"
+        })
+
+    return JsonResponse({
+        "success": True,
+        "rapport": rapport,
+        "total_general": total_general
+    })
