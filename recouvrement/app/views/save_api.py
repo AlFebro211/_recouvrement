@@ -345,3 +345,16 @@ def save_penalite(request):
 
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée'}, status=405)
 
+
+def delete_paiement(request, id_paiement):
+    if request.method == "POST":
+        try:
+            paiement = Paiement.objects.get(id_paiement=id_paiement)
+            paiement.status = False  # on ne supprime pas, on désactive
+            paiement.save()
+            return JsonResponse({'success': True})
+        except Paiement.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Paiement non trouvé'})
+    return JsonResponse({'success': False, 'error': 'Méthode non autorisée'})
+
+

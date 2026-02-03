@@ -1,3 +1,4 @@
+from app.forms.recouvrement_forms import PaiementUpdateForm
 from.create_base import *
 from app.models import *
 from django.db.models import Q
@@ -5,6 +6,7 @@ from django.http import JsonResponse
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from datetime import date
+
 
 
 def get_banques(request):
@@ -285,6 +287,40 @@ def get_paiements_validated(request):
             }, status=500)
 
     return JsonResponse({"success": False, "error": "Méthode non autorisée"}, status=405)
+
+def get_paiements_for_add_page(request):
+    """
+    Retourne les paiements filtrés pour la page d'ajout,
+    seulement ceux avec status=True
+    """
+    id_annee = request.GET.get('id_annee')
+    id_classe = request.GET.get('id_classe_active')
+    id_eleve = request.GET.get('id_eleve')
+
+    paiements = Paiement.objects.filter(status=True)
+
+    if id_annee:
+        paiements = paiements.filter(id_annee_id=id_annee)
+    if id_classe:
+        paiements = paiements.filter(id_classe_active_id=id_classe)
+    if id_eleve:
+        paiements = paiements.filter(id_eleve_id=id_eleve)
+
+    data = []
+    for p in paiements:
+        data.append({
+            "id": p.id_paiement,
+            "eleve": str(p.id_eleve),
+            "variable": str(p.id_variable),
+            "montant": p.montant,
+            "bordereau": p.bordereau.url if p.bordereau else None,
+            "date_paie": p.date_paie.strftime("%Y-%m-%d") if p.date_paie else None,
+            "status": p.status,
+            "is_rejected": p.is_rejected
+        })
+
+    return JsonResponse({"success": True, "data": data})
+
 
 @csrf_exempt
 def get_pupils_registred_classe(request):
@@ -798,3 +834,106 @@ def historique_financier(request):
         "rapport": rapport,
         "total_general": total_general
     })
+
+def eleves_en_dette(request):
+
+    id_annee = request.GET.get('annee')
+    id_classe = request.GET.get('classe')
+    id_trimestre = request.GET.get('trimestre')
+
+    if not id_annee or not id_classe:
+        return JsonResponse({
+            "success": False,
+            "message": "Année et classe obligatoires"
+        })
+
+    # 🔹 1. Récupérer les INSCRIPTIONS (BASE)
+    inscriptions = Eleve_inscription.objects.select_related(
+        'id_eleve',
+        'id_classe',
+        'id_classe__classe_id'
+    ).filter(
+        id_annee=id_annee,
+        id_classe=id_classe,
+        status=True
+    )
+
+    if id_trimestre:
+        inscriptions = inscriptions.filter(id_trimestre=id_trimestre)
+
+    rapport = []
+
+    for ins in inscriptions:
+        eleve = ins.id_eleve
+
+        # Nom classe + groupe
+        nom_classe = ins.id_classe.classe_id.classe
+        groupe = ins.id_classe.groupe or ""
+        classe_info = f"{nom_classe} {groupe}".strip()
+
+        # 🔹 Paiements de l'élève
+        paiements = Paiement.objects.filter(
+            id_eleve=eleve,
+            id_classe_active=id_classe,
+            id_annee=id_annee
+        )
+
+        # 🔹 Variables attendues pour la classe
+        variables = VariablePrix.objects.filter(
+            id_classe_active=id_classe,
+            id_annee=id_annee
+        ).select_related('id_variable')
+
+        details = []
+        total_dette = 0
+
+        for vp in variables:
+            variable = vp.id_variable
+
+            montant_a_payer = vp.prix
+
+            montant_paye = paiements.filter(
+                id_variable=variable
+            ).aggregate(total=Sum('montant'))['total'] or 0
+
+            reste = max(montant_a_payer - montant_paye, 0)
+
+            # 🔹 pénalité (simple)
+            penalite = 0
+            if reste > 0:
+                penalite = PenaliteConfig.objects.filter(
+                    id_variable=variable,
+                    id_classe_active=id_classe,
+                    actif=True
+                ).aggregate(total=Sum('valeur'))['total'] or 0
+
+            total_variable = reste + penalite
+            print("DEBUG dette for variable", variable.variable, ":", total_variable)
+
+            if total_variable > 0:
+                details.append({
+                    "variable": variable.variable,
+                    "montant_a_payer": montant_a_payer,
+                    "montant_paye": montant_paye,
+                    "reste": reste,
+                    "penalite": penalite,
+                    "total": total_variable
+                })
+
+                total_dette += total_variable
+
+        if total_dette > 0:
+            rapport.append({
+                "id_eleve": eleve.id_eleve,
+                "eleve": f"{eleve.nom} {eleve.prenom}",
+                "classe": classe_info,
+                "total_dette": total_dette,
+                "details": details
+            })
+
+    return JsonResponse({
+        "success": True,
+        "rapport": rapport
+    })
+
+

@@ -151,6 +151,7 @@ def add_paiement_for_anyclass(request):
 
             paiement.id_campus = classe_active.id_campus  
             paiement.id_cycle_actif = classe_active.cycle_id
+            paiement.status = True
 
 
             paiement.save() 
@@ -159,11 +160,15 @@ def add_paiement_for_anyclass(request):
             return redirect('create_compte')
     else:
         form = PaiementForm()
+    annees = Annee.objects.all()
+    print("Années disponibles:", annees)
+
     paiementList = Paiement.objects.all()
     return render(request, 'recouvrement/index_recouvrement.html', {
         'paiement_list': paiementList,
         'form_paiement': form,
         'form_type': 'paiement_form',
+        'annees': annees,
         
     })
     
@@ -238,6 +243,26 @@ def historique(request):
         'eleves': Eleve_inscription.objects.all(),  
     })
 
+def dette_anterieures(request):
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'dette_anterieures_form': True,
+        'form_type': 'dette_anterieures_form',
+        'annees': Annee.objects.all(),
+        'comptes_bancaires': Compte.objects.select_related('id_banque').all(),
+        'classes': Classe_active.objects.all(),  
+        'trimestres': ['Trimestre 1','Trimestre 2','Trimestre 3','Trimestre 4','Trimestre 5'],
+        'variables_list': Variable.objects.all(),  
+        'eleves': Eleve_inscription.objects.all(),  
+    })
+
+def update_paiement(request):
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'update_paiement_form': True,
+        'form_type': 'paiement_update_form',
+        'annees': Annee.objects.all(),
+        'comptes_bancaires': Compte.objects.select_related('id_banque').all(),
+        'classes': Classe_active.objects.all(),
+    })
 
 
 @csrf_protect

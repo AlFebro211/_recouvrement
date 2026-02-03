@@ -162,3 +162,155 @@ def update_variable(request, variable_id):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée.'})
+
+
+@csrf_protect
+def update_paiement(request, id_paiement):
+
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Méthode non autorisée'}, status=405)
+
+    try:
+
+        paiement = get_object_or_404(Paiement, id_paiement=id_paiement)
+
+        montant = request.POST.get('montant')
+        date_paie = request.POST.get('date_paie')
+        bordereau = request.FILES.get('bordereau')
+
+        if not montant:
+            return JsonResponse({'success': False, 'error': 'Montant obligatoire.'})
+
+        montant = int(montant)
+
+        # ========================== RECUPERATION CONTEXTE ==========================
+        id_variable = paiement.id_variable_id
+        id_eleve = paiement.id_eleve_id
+        id_annee = paiement.id_annee_id
+        id_campus = paiement.id_campus_id
+        id_cycle_actif = paiement.id_cycle_actif_id
+        id_classe_active = paiement.id_classe_active_id
+
+        # ========================== VERIF DATE ==========================
+        if date_paie:
+            date_paie = datetime.datetime.strptime(date_paie, "%Y-%m-%d").date()
+
+            today = datetime.date.today()
+
+            if date_paie > today:
+                return JsonResponse({
+                    'success': False,
+                    'error': f"La date de paiement ({date_paie}) ne peut pas être future."
+                })
+        else:
+            date_paie = paiement.date_paie
+
+        # ========================== DATE BUTOIRE ==========================
+        try:
+            variable_date_butoire = VariableDatebutoire.objects.get(
+                id_variable_id=id_variable,
+                id_annee_id=id_annee,
+                id_campus_id=id_campus,
+                id_cycle_actif_id=id_cycle_actif,
+                id_classe_active_id=id_classe_active
+            )
+        except VariableDatebutoire.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': "Aucune date butoire définie pour cette variable."
+            })
+
+        date_limite = variable_date_butoire.date_butoire
+
+        derogation = VariableDerogation.objects.filter(
+            id_eleve_id=id_eleve,
+            id_variable_id=id_variable,
+            id_annee_id=id_annee,
+            id_campus_id=id_campus,
+            id_cycle_actif_id=id_cycle_actif,
+            id_classe_active_id=id_classe_active
+        ).first()
+
+        if derogation:
+            date_limite = derogation.date_derogation
+
+        # ========================== PRIX VARIABLE ==========================
+        try:
+            variable_prix = VariablePrix.objects.get(
+                id_variable_id=id_variable,
+                id_annee_id=id_annee,
+                id_campus_id=id_campus,
+                id_cycle_actif_id=id_cycle_actif,
+                id_classe_active_id=id_classe_active
+            )
+        except VariablePrix.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Aucun prix défini pour cette variable.'
+            })
+
+        prix_max = variable_prix.prix
+
+        # ========================== REDUCTION ==========================
+        reduction = Eleve_reduction_prix.objects.filter(
+            id_eleve_id=id_eleve,
+            id_variable_id=id_variable,
+            id_annee_id=id_annee,
+            id_campus_id=id_campus,
+            id_cycle_actif_id=id_cycle_actif,
+            id_classe_active_id=id_classe_active
+        ).first()
+
+        montant_autorise = prix_max
+
+        if reduction:
+            montant_reduction = (prix_max * reduction.pourcentage) / 100
+            montant_autorise = prix_max - montant_reduction
+
+        # ========================== VERIFICATION CUMUL ==========================
+        total_deja_paye = Paiement.objects.filter(
+            id_eleve_id=id_eleve,
+            id_variable_id=id_variable,
+            status=True
+        ).exclude(id_paiement=id_paiement).aggregate(total=Sum('montant'))['total'] or 0
+
+        if total_deja_paye + montant > montant_autorise:
+
+            montant_restant = montant_autorise - total_deja_paye
+
+            message = (
+                f"Le paiement dépasse le montant autorisé.\n"
+                f"Montant à payer : {montant_autorise}\n"
+                f"Déjà payé : {total_deja_paye}\n"
+                f"Montant restant : {montant_restant}"
+            )
+
+            if reduction:
+                message = (
+                    f"L'élève bénéficie d'une réduction de {reduction.pourcentage}%.\n"
+                    f"Montant autorisé : {montant_autorise}\n"
+                    f"Déjà payé : {total_deja_paye}\n"
+                    f"Reste : {montant_restant}"
+                )
+
+            return JsonResponse({'success': False, 'error': message})
+
+        # ========================== SAVE ==========================
+        paiement.montant = montant
+        paiement.date_paie = date_paie
+
+        if bordereau:
+            file_extension = os.path.splitext(bordereau.name)[1]
+            new_filename = f"{bordereau.name}_{paiement.id_paiement}"
+            paiement.bordereau.save(new_filename, bordereau, save=False)
+            paiement.bordereau.name = new_filename
+
+        paiement.save()
+
+        return JsonResponse({'success': True})
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Erreur update paiement : {str(e)}'
+        })

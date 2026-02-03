@@ -242,6 +242,17 @@ class PaiementForm(forms.ModelForm):
             
         }
 
+class PaiementUpdateForm(forms.ModelForm):
+    class Meta:
+        model = Paiement
+        fields = ['id_variable', 'montant', 'id_compte', 'date_paie', 'bordereau']
+        widgets = {
+            'date_paie': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'montant': forms.NumberInput(attrs={'class': 'form-control'}),
+            'id_compte': forms.Select(attrs={'class': 'form-control'}),
+            'bordereau': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'id_variable': forms.Select(attrs={'class': 'form-control'}),
+        }
 
 class PenaliteForm(forms.ModelForm):
     class Meta:

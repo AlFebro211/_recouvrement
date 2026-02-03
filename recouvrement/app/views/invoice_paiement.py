@@ -328,10 +328,9 @@ def get_paiements_eleve(request):
     for p in paiements:
         # statut = "Payé" if p.montant >= p.id_variable.montant else "Non payé"
         data.append({
+            "id_paiement": p.id_paiement,
             "variable": p.id_variable.variable,
-            # "montant_a_payer": p.id_variable.montant,
-            "montant_paye": p.montant,
-            # "statut": p.status
+            "montant_paye": p.montant
         })
     return JsonResponse(data, safe=False)
 
@@ -399,7 +398,7 @@ def generate_fiche_paie_eleve(request):
         elements.append(Paragraph(f"<b>Nom et Prénom :</b> {eleve.nom} {eleve.prenom}", styles['Normal']))
         elements.append(Paragraph(f"<b>Matricule :</b> {getattr(eleve, 'matricule', id_eleve)}", styles['Normal']))
         elements.append(Spacer(1, 5*mm))
-        elements.append(Paragraph("<u>ETAT DES PAIEMENTS</u>", ParagraphStyle('T', fontSize=14, alignment=TA_CENTER)))
+        elements.append(Paragraph("<u>SITUATION DES PAIEMENTS</u>", ParagraphStyle('T', fontSize=14, alignment=TA_CENTER)))
         elements.append(Spacer(1, 5*mm))
 
         elements.append(Paragraph("<b>I. FRAIS À PAYER</b>", styles['Normal']))
@@ -433,7 +432,7 @@ def generate_fiche_paie_eleve(request):
         elements.append(Spacer(1, 10*mm))
 
         reste = total_attendu - total_paye
-        status = "EN ORDRE" if reste <= 0 else "PAS EN ORDRE"
+        status = "EN ORDRE" if reste <= 0 else "EN DETTE"
         couleur = colors.green if reste <= 0 else colors.red
 
         data_recap = [
@@ -468,6 +467,195 @@ def style_tableau_standard():
         ('ALIGN', (1,0), (1,-1), 'RIGHT'), # Montants à droite
         ('FONTSIZE', (0,0), (-1,-1), 9),
     ])
+
+from django.http import HttpResponse
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from django.contrib.staticfiles import finders
+import os
+
+
+def generate_facture_paiement(request):
+    try:
+        id_paiement = request.GET.get('id_paiement')
+
+        paiement = Paiement.objects.select_related(
+            'id_eleve',
+            'id_variable',
+            'id_campus',
+            'id_classe_active',
+            'id_classe_active__classe_id',
+            'id_annee'
+        ).get(id_paiement=id_paiement)
+
+        eleve = paiement.id_eleve
+
+        campus_nom = paiement.id_campus.campus if paiement.id_campus else "N/A"
+        nom_classe = paiement.id_classe_active.classe_id.classe if paiement.id_classe_active else ""
+        groupe = paiement.id_classe_active.groupe or ""
+        classe_info = f"{nom_classe} {groupe}".strip()
+        annee_txt = paiement.id_annee.annee if paiement.id_annee else "N/A"
+
+        # =========================
+        # MODE POS OU A4
+        # =========================
+        mode_pos = request.GET.get("pos")
+        is_pos = True if mode_pos == "1" else False
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'inline; filename="Facture_{eleve.nom}.pdf"'
+
+        if is_pos:
+            pagesize = (80*mm, 300*mm)
+            margin = 5*mm
+        else:
+            pagesize = A4
+            margin = 15*mm
+
+        doc = SimpleDocTemplate(
+            response,
+            pagesize=pagesize,
+            leftMargin=margin,
+            rightMargin=margin,
+            topMargin=10*mm,
+            bottomMargin=10*mm
+        )
+
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # =========================
+        # STYLES PRO
+        # =========================
+
+        title_style = ParagraphStyle(
+            "title",
+            alignment=TA_CENTER,
+            fontSize=11 if is_pos else 14,
+            spaceAfter=4
+        )
+
+        small_center = ParagraphStyle(
+            "small_center",
+            alignment=TA_CENTER,
+            fontSize=8 if is_pos else 10
+        )
+
+        right_style = ParagraphStyle(
+            "right",
+            alignment=TA_RIGHT,
+            fontSize=9 if is_pos else 11
+        )
+
+        # =========================
+        # HEADER (POS + A4 IDENTIQUE)
+        # =========================
+
+        if not is_pos:
+            logo_path = finders.find('assets/img/MonEcoleApp-logo.png')
+            if logo_path and os.path.exists(logo_path):
+                elements.append(Image(logo_path, width=25*mm, height=25*mm))
+
+        elements.append(Paragraph(f"<b>{campus_nom}</b>", title_style))
+        elements.append(Paragraph(f"Classe : {classe_info}", small_center))
+        elements.append(Paragraph(f"Année académique : {annee_txt}", small_center))
+        elements.append(Spacer(1,4*mm))
+
+        # =========================
+        # TITRE
+        # =========================
+
+        elements.append(Paragraph("<b>REÇU DE PAIEMENT</b>", title_style))
+        elements.append(Spacer(1,3*mm))
+
+        # =========================
+        # INFOS ELEVE
+        # =========================
+
+        info_data = [
+            ["Élève :", f"{eleve.nom} {eleve.prenom}"],
+            ["Motif :", paiement.id_variable.variable],
+            ["Date :", paiement.date_paie.strftime('%d/%m/%Y')],
+        ]
+
+        if is_pos:
+            info_table = Table(info_data, colWidths=[25*mm,45*mm])
+        else:
+            info_table = Table(info_data, colWidths=[60*mm,110*mm])
+
+        info_table.setStyle(TableStyle([
+            ('FONTSIZE',(0,0),(-1,-1),9 if is_pos else 11),
+            ('BOTTOMPADDING',(0,0),(-1,-1),3),
+        ]))
+
+        elements.append(info_table)
+        elements.append(Spacer(1,5*mm))
+
+        # =========================
+        # TABLEAU MONTANT
+        # =========================
+
+        data = [
+            ["Motif", "Montant"],
+            [paiement.id_variable.variable,
+             f"{paiement.montant:,} Fbu".replace(',', ' ')]
+        ]
+
+        if is_pos:
+            table = Table(data, colWidths=[45*mm,25*mm])
+        else:
+            table = Table(data, colWidths=[120*mm,60*mm])
+
+        table.setStyle(TableStyle([
+            ('GRID',(0,0),(-1,-1),0.5,colors.black),
+            ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#eeeeee")),
+            ('ALIGN',(1,0),(1,-1),'RIGHT'),
+            ('FONTSIZE',(0,0),(-1,-1),9 if is_pos else 11),
+        ]))
+
+        elements.append(table)
+        elements.append(Spacer(1,5*mm))
+
+        # =========================
+        # TOTAL (STYLE CAISSE PRO)
+        # =========================
+
+        total_data = [
+            ["TOTAL", f"{paiement.montant:,} Fbu".replace(',', ' ')]
+        ]
+
+        if is_pos:
+            total_table = Table(total_data, colWidths=[45*mm,25*mm])
+        else:
+            total_table = Table(total_data, colWidths=[120*mm,60*mm])
+
+        total_table.setStyle(TableStyle([
+            ('LINEABOVE',(0,0),(-1,0),1,colors.black),
+            ('FONTSIZE',(0,0),(-1,-1),10 if is_pos else 13),
+            ('ALIGN',(1,0),(1,0),'RIGHT'),
+        ]))
+
+        elements.append(total_table)
+        elements.append(Spacer(1,10*mm))
+
+        # =========================
+        # FOOTER
+        # =========================
+
+        elements.append(Paragraph(
+            "Merci pour votre paiement",
+            ParagraphStyle("footer", alignment=TA_CENTER, fontSize=9)
+        ))
+
+        doc.build(elements)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur technique : {str(e)}", status=500)
 
 
 def generate_historique_pdf(request):
@@ -654,3 +842,116 @@ def generate_historique_pdf(request):
 
     except Exception as e:
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
+
+
+from django.http import HttpResponse
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from django.contrib.staticfiles import finders
+import os
+
+def generate_dette_pdf(request):
+    try:
+        id_annee = request.GET.get('annee')
+        id_classe = request.GET.get('classe')
+        id_trimestre = request.GET.get('trimestre')
+        id_eleve = request.GET.get('eleve')
+        id_compte = request.GET.get('compte')
+
+        paiements_qs = Paiement.objects.select_related(
+            'id_eleve','id_variable','id_compte','id_compte__id_banque',
+            'id_classe_active','id_classe_active__classe_id','id_classe_active__id_campus','id_annee'
+        ).order_by('id_eleve__nom','id_variable__variable','date_paie')
+
+        if id_annee: paiements_qs = paiements_qs.filter(id_annee=id_annee)
+        if id_classe: paiements_qs = paiements_qs.filter(id_classe_active=id_classe)
+        if id_trimestre: paiements_qs = paiements_qs.filter(id_variable__trimestre=id_trimestre)
+        if id_eleve: paiements_qs = paiements_qs.filter(id_eleve=id_eleve)
+        if id_compte: paiements_qs = paiements_qs.filter(id_compte=id_compte)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Dette_Rapport.pdf"'
+
+        doc = SimpleDocTemplate(
+            response,
+            pagesize=A4,
+            leftMargin=10*mm,rightMargin=10*mm,
+            topMargin=10*mm,bottomMargin=10*mm
+        )
+
+        elements = []
+        styles = getSampleStyleSheet()
+        small = ParagraphStyle('small',parent=styles['Normal'],fontSize=8,leading=10)
+        title_style = ParagraphStyle('title',fontSize=14,alignment=TA_CENTER,fontName='Helvetica-Bold')
+        right_style = ParagraphStyle('right',parent=styles['Normal'],alignment=TA_RIGHT,fontSize=9)
+
+        # Logo
+        logo_path = finders.find('assets/img/logo.png')
+        if logo_path and os.path.exists(logo_path):
+            elements.append(Image(logo_path,width=25*mm,height=25*mm))
+        elements.append(Spacer(1,4*mm))
+
+        # Infos filtrage
+        p_ref = paiements_qs.first()
+        if p_ref:
+            campus_txt = p_ref.id_classe_active.id_campus.campus
+            nom_classe = p_ref.id_classe_active.classe_id.classe
+            groupe = p_ref.id_classe_active.groupe or ""
+            classe_info = f"{nom_classe} {groupe}"
+            annee_txt = p_ref.id_annee.annee
+        else:
+            campus_txt = classe_info = annee_txt = "N/A"
+
+        elements.append(Paragraph("ÉLÈVES EN DETTE", title_style))
+        elements.append(Spacer(1,2*mm))
+
+        header_table = Table([
+            [f"Campus : {campus_txt}", f"Classe : {classe_info}", f"Année : {annee_txt}"]
+        ], colWidths=[60*mm,60*mm,60*mm])
+        header_table.setStyle(TableStyle([('FONTSIZE',(0,0),(-1,-1),9)]))
+        elements.append(header_table)
+        elements.append(Spacer(1,4*mm))
+
+        # Tableau
+        data = [["Élève","Variable","À payer","Payé","Reste","Pénalité","Total"]]
+        total_general = 0
+
+        for e in paiements_qs:
+            montant = e.montant
+            reste = getattr(e,'reste',0)
+            penalite = getattr(e,'penalite',0)
+            total = montant + penalite
+            total_general += total
+            data.append([
+                f"{e.id_eleve.nom} {e.id_eleve.prenom}",
+                e.id_variable.variable,
+                f"{montant:,.0f}",
+                f"{montant:,.0f}",
+                f"{reste:,.0f}",
+                f"{penalite:,.0f}",
+                f"{total:,.0f}"
+            ])
+
+        data.append(["","","","","","TOTAL",f"{total_general:,.0f}"])
+        table = Table(data,colWidths=[40*mm,35*mm,20*mm,20*mm,20*mm,20*mm,25*mm],repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0d6efd')),
+            ('TEXTCOLOR',(0,0),(-1,0),colors.white),
+            ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
+            ('ALIGN',(2,1),(-1,-1),'RIGHT'),
+            ('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold'),
+            ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#ffc107')),
+            ('GRID',(0,0),(-1,-1),0.5,colors.grey),
+            ('FONTSIZE',(0,1),(-1,-2),8)
+        ]))
+
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur PDF : {str(e)}",status=500)

@@ -48,6 +48,15 @@ urlpatterns =[
    path('historique/', views.historique, name='historique'),
    path('historique_financier/', views.historique_financier, name='historique_financier'),
    path('generate_historique_pdf/', views.generate_historique_pdf, name='generate_historique_pdf'),
+   path('dettes_anterieures/', views.dette_anterieures, name='dettes_anterieures'),
+   path('eleves_en_dette/', views.eleves_en_dette, name='eleves_en_dette'),
+   path('generate_dette_pdf/', views.generate_dette_pdf, name='generate_dette_pdf'),
+   path('get_paiements_for_add_page/',views.get_paiements_for_add_page, name='get_paiements_for_add_page'),
+   path('delete_paiement/<int:id_paiement>/', views.delete_paiement, name='delete_paiement'),
+   path('paiement/update/<int:id_paiement>/', views.update_paiement, name='update_paiement'),
+   path('generate_facture_paiement/', views.generate_facture_paiement, name='generate_facture_paiement')
+   
+
 
    
 ]
