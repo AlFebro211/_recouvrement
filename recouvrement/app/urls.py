@@ -54,7 +54,9 @@ urlpatterns =[
    path('get_paiements_for_add_page/',views.get_paiements_for_add_page, name='get_paiements_for_add_page'),
    path('delete_paiement/<int:id_paiement>/', views.delete_paiement, name='delete_paiement'),
    path('paiement/update/<int:id_paiement>/', views.update_paiement, name='update_paiement'),
-   path('generate_facture_paiement/', views.generate_facture_paiement, name='generate_facture_paiement')
+   path('generate_facture_paiement/', views.generate_facture_paiement, name='generate_facture_paiement'),
+   path('dashboard/', views.dashboard, name='dashboard'),
+   path('dashboard-data/', views.dashboard_data, name='dashboard_data'),
    
 
 

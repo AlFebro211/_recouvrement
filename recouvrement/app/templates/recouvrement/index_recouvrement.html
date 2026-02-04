@@ -361,6 +361,20 @@
     transform: scale(1.05);
     box-shadow: 0 6px 15px rgba(0,0,0,0.15);
 }
+#btn-download {
+    background: linear-gradient(45deg, var(--accent-color), var(--secondary-color));
+    color: #fff;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 8px 16px;
+    transition: var(--transition);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+#btn-download:hover {
+    background: linear-gradient(45deg, var(--secondary-color), var(--accent-color));
+    transform: scale(1.05);
+    box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+}
 
 /* ----- TABLEAU ----- */
 #rapport-table_wrapper {
@@ -498,10 +512,17 @@
         <i class="fas fa-bars"></i>
     </div>
     
+    <!-- Dashboard -->
+    {% if request.resolver_match.url_name == 'dashboard' %}
+        <div id="dashboard-section">
+            {% include 'dashboard/_dashboard.html' %}
+        </div>
+    {% endif %}
     <!-- Sidebar -->
     {% include 'recouvrement/_sidebar_direct.html'%}
     <!-- Bottom Navigation -->
     {% include 'partials/_foot_bar.html' %}
+    
 
     <!-- Main Content -->
     <div class="main-content">
@@ -923,38 +944,8 @@
                                 <i class="fas fa-plus-circle"></i> Afficher les dettes
                             </button>
                         </div>
-                        <!-- update paiement  -->
-{% elif form_type == 'paiement_update_form' %}
-<div id="formUpdateWrapper" style="padding: 20px; background: white; border-radius: 8px; width: 100%; max-width: 800px;">
-    
-    <div class="modal-header" style="display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; margin-bottom: 15px;">
-        <h5 class="modal-title">Modifier le Paiement</h5>
-        <button type="button" class="btn-close" onclick="$('#modalContainer').hide()">&times;</button>
-    </div>
-
-    <form id="paiementUpdateForm" enctype="multipart/form-data">
-        <div class="modal-body">
-            <input type="hidden" id="paiement_id" name="paiement_id">
-            
-            <div class="form-row">
-                 <div class="form-group col-md-4">
-                     <label>Année</label>
-                     <input type="text" id="modal_annee" class="form-control" readonly>
-                 </div>
-                 </div>
-            </div>
-
-        <div class="form-actions" style="margin-top: 20px; text-align: right;">
-            <button type="button" class="btn btn-secondary" onclick="$('#modalContainer').hide()">
-                ❌ Annuler
-            </button>
-            <button type="submit" class="btn btn-primary">
-                💾 Enregistrer les modifications
-            </button>
-        </div>
-    </form>
-</div>
-{% endif %}
+  
+                    {% endif %}
                 </form>
                 
 
@@ -3991,7 +3982,9 @@ $(document).ready(function () {
     /* ===============================
        AFFICHER DETTES / RAPPORT
     =============================== */
-    $('#btn-afficher-dette').on('click', function () {
+    $('#btn-afficher-dette').on('click', function (e) {
+        e.preventDefault();
+
         const params = {
             annee: $('#hf-annee').val(),
             classe: $('#hf-classe').val(),
@@ -4005,6 +3998,10 @@ $(document).ready(function () {
             return;
         }
 
+        /* 🔹 FERMER LE MODAL AUTOMATIQUEMENT */
+        $('#modalContainer').hide();
+
+
         $('#dette-result-container').html(`
             <div class="text-center py-4">
                 <i class="fas fa-spinner fa-spin fa-2x"></i><br>
@@ -4016,9 +4013,10 @@ $(document).ready(function () {
             url: '/eleves_en_dette/',
             type: 'GET',
             data: params,
-            success: function(res) {
 
-                if (!res.success || res.rapport.length === 0) {
+            success: function (res) {
+
+                if (!res.success || !Array.isArray(res.rapport) || res.rapport.length === 0) {
                     $('#dette-result-container').html(`
                         <div class="alert alert-success text-center">
                             🎉 Tous les élèves sont à jour
@@ -4029,75 +4027,93 @@ $(document).ready(function () {
 
                 let html = `
                     <div id="rapport-header">
-                        <h4><i class="fas fa-exclamation-triangle"></i> Élèves en dette</h4>
-                        <button id="btn-download-pdf" class="btn btn-danger">
+                        <h4 class="mb-0">
+                            <i class="fas fa-exclamation-triangle text-danger"></i>
+                                Rapport des dettes
+                        </h4>
+
+                        <button id="btn-download" class="btn btn-danger btn-sm">
                             <i class="fas fa-file-pdf"></i> Télécharger PDF
                         </button>
                     </div>
 
                     <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
-                        <table id="dette-table" class="table table-striped table-bordered table-hover align-middle">
-                            <thead>
+                        <table id="dette-table"
+                               class="table table-striped table-bordered table-hover align-middle">
+
+                            <thead class="table-dark sticky-top">
                                 <tr>
                                     <th>Élève</th>
                                     <th>Variable</th>
-                                    <th>À payer</th>
-                                    <th>Payé</th>
-                                    <th>Reste</th>
-                                    <th>Pénalité</th>
-                                    <th>Total</th>
+                                    <th class="text-end">À payer</th>
+                                    <th class="text-end">Payé</th>
+                                    <th class="text-end">Reste</th>
+                                    <th class="text-end">Pénalité</th>
+                                    <th class="text-end">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                 `;
 
-                // Tableau classique avec rowspan
+                /* 🔹 TABLEAU CLASSIQUE AVEC ROWSPAN */
                 res.rapport.forEach(eleve => {
-                    eleve.details.forEach((d, index) => {
-                        html += `<tr>
-                            ${index === 0 ? `<td rowspan="${eleve.details.length}">
-                                <strong>${eleve.eleve}</strong><br>
-                                <span class="badge bg-danger">
-                                    Dette: ${eleve.total_dette.toLocaleString()} FBU
-                                </span>
-                            </td>` : ''}
-                            <td>${d.variable || '-'}</td>
-                            <td class="text-end">${(d.montant_a_payer || 0).toLocaleString()}</td>
-                            <td class="text-end text-success">${(d.montant_paye || 0).toLocaleString()}</td>
-                            <td class="text-end text-warning">${(d.reste || 0).toLocaleString()}</td>
-                            <td class="text-end text-danger">${(d.penalite || 0).toLocaleString()}</td>
-                            <td class="text-end fw-bold">${(d.total || 0).toLocaleString()}</td>
-                        </tr>`;
+
+                    const details = Array.isArray(eleve.details) ? eleve.details : [];
+
+                    if (details.length === 0) {
+                        html += `
+                            <tr>
+                                <td>
+                                    <strong>${eleve.eleve}</strong><br>
+                                    <span class="badge bg-danger">
+                                        Dette: ${(eleve.total_dette || 0).toLocaleString()} FBU
+                                    </span>
+                                </td>
+                                <td colspan="6" class="text-center text-muted">
+                                    Aucun détail
+                                </td>
+                            </tr>
+                        `;
+                        return;
+                    }
+
+                    details.forEach((d, index) => {
+                        html += `
+                            <tr>
+                                ${index === 0 ? `
+                                    <td rowspan="${details.length}">
+                                        <strong>${eleve.eleve}</strong><br>
+                                        <span class="badge bg-danger">
+                                            Dette: ${(eleve.total_dette || 0).toLocaleString()} FBU
+                                        </span>
+                                    </td>
+                                ` : ''}
+
+                                <td>${d.variable || '-'}</td>
+                                <td class="text-end">${(d.montant_a_payer || 0).toLocaleString()}</td>
+                                <td class="text-end text-success">${(d.montant_paye || 0).toLocaleString()}</td>
+                                <td class="text-end text-warning">${(d.reste || 0).toLocaleString()}</td>
+                                <td class="text-end text-danger">${(d.penalite || 0).toLocaleString()}</td>
+                                <td class="text-end fw-bold">${(d.total || 0).toLocaleString()}</td>
+                            </tr>
+                        `;
                     });
                 });
 
-                html += `</tbody></table></div>`;
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
 
                 $('#dette-result-container').html(html);
 
-                // ----------------------------
-                // DataTable avec fonctionnalités complètes
-                // ----------------------------
-                $('#dette-table').DataTable({
-                    paging: true,
-                    searching: true,
-                    ordering: true,
-                    order: [[0,'asc']],
-                    lengthMenu: [10, 25, 50, 100],
-                    pageLength: 10,
-                    language: {
-                        search: "Recherche:",
-                        lengthMenu: "Afficher _MENU_ lignes",
-                        info: "Affichage _START_ à _END_ sur _TOTAL_ paiements",
-                        infoEmpty: "Aucun paiement à afficher",
-                        paginate: { previous: "Précédent", next: "Suivant" }
-                    }
-                });
-
-                // Scroll automatique vers le bas
-                $('#dette-result-container').scrollTop($('#dette-result-container')[0].scrollHeight);
+                /* 🔹 SCROLL AUTO */
+                $('#dette-result-container')[0]
+                    .scrollIntoView({ behavior: 'smooth' });
             },
-            error: function() {
+
+            error: function () {
                 $('#dette-result-container').html(`
                     <div class="alert alert-danger text-center">
                         Erreur lors du chargement des données
@@ -4108,27 +4124,31 @@ $(document).ready(function () {
     });
 
     /* ===============================
-       BOUTON TÉLÉCHARGER PDF
+       BOUTON TÉLÉCHARGER PDF (INCHANGÉ)
     =============================== */
-    $(document).on('click', '#btn-download-pdf', function(){
-        const params = new URLSearchParams({
-            annee: $('#hf-annee').val(),
-            classe: $('#hf-classe').val(),
-            trimestre: $('#hf-trimestre').val(),
-            eleve: $('#hf-eleve').val(),
-            compte: $('#hf-banque').val()
-        });
+  $(document).on('click', '#btn-download', function () {
+    // On ne récupère QUE ce qui est dans ton formulaire
+    const annee = $('#hf-annee').val();
+    const classe = $('#hf-classe').val();
+    const trimestre = $('#hf-trimestre').val() || ''; // Vide si non choisi
 
-        if (!$('#hf-annee').val() || !$('#hf-classe').val()) {
-            return alert("Veuillez filtrer les données avant le téléchargement.");
-        }
+    if (!annee || !classe) {
+        alert("Veuillez choisir l'année et la classe");
+        return;
+    }
 
-        window.open(`/generate_dette_pdf/?${params.toString()}`, '_blank');
-    });
+    // Construction propre de l'URL sans paramètres inutiles
+    const params = new URLSearchParams();
+    params.append('annee', annee);
+    params.append('classe', classe);
+    if (trimestre) params.append('trimestre', trimestre);
 
+    window.open(`/generate_dette_pdf/?${params.toString()}`, '_blank');
 });
-
+});
 </script>
+
+
 
 
 </body>

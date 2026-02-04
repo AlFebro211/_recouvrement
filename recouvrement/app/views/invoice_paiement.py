@@ -707,124 +707,91 @@ def generate_historique_pdf(request):
         elements = []
         styles = getSampleStyleSheet()
 
-        small = ParagraphStyle(
-            'small',
-            parent=styles['Normal'],
-            fontSize=8,
-            leading=10
-        )
+        small = ParagraphStyle('small', parent=styles['Normal'], fontSize=8, leading=10)
+        title_style = ParagraphStyle('title', fontSize=16, alignment=1, fontName='Helvetica-Bold')
+        left_style = ParagraphStyle('left', fontSize=9, leading=11)
+        right_style = ParagraphStyle('right', fontSize=9, leading=11, alignment=2)
 
-        title_style = ParagraphStyle(
-            'title',
-            fontSize=16,
-            alignment=1,
-            fontName='Helvetica-Bold'
-        )
-
-        left_style = ParagraphStyle(
-            'left',
-            fontSize=9,
-            leading=11
-        )
-
-        right_style = ParagraphStyle(
-            'right',
-            fontSize=9,
-            leading=11,
-            alignment=2
-        )
-        
+        # Logo
         logo_path = finders.find('assets/img/logo.png')
         if logo_path:
             elements.append(Image(logo_path, width=25*mm, height=25*mm))
         elements.append(Spacer(1, 4*mm))
 
         p_ref = paiements_qs.first()
-
         if p_ref:
             annee_txt = p_ref.id_annee.annee
             campus_txt = p_ref.id_classe_active.id_campus.campus
-
             nom_classe = p_ref.id_classe_active.classe_id.classe
             groupe = p_ref.id_classe_active.groupe or ""
             classe_info = f"{nom_classe} {groupe}".strip()
-
-            eleve_txt = (
-                f"{p_ref.id_eleve.nom} {p_ref.id_eleve.prenom}"
-                if id_eleve else "Tous"
-            )
+            eleve_txt = f"{p_ref.id_eleve.nom} {p_ref.id_eleve.prenom}" if id_eleve else "Tous"
+            banque_txt = f"{p_ref.id_compte.id_banque.banque} - {p_ref.id_compte.compte}" if id_compte and p_ref.id_compte else None
         else:
-            annee_txt = campus_txt = classe_info = eleve_txt = "-"
+            annee_txt = campus_txt = classe_info = eleve_txt = banque_txt = "-"
 
+        # Titre
         elements.append(Paragraph("RAPPORT FINANCIER", title_style))
         elements.append(Spacer(1, 2*mm))
 
-        elements.append(Table(
-            [[""]],
-            colWidths=[190*mm],
-            style=[('LINEBELOW', (0,0), (-1,-1), 1, colors.grey)]
-        ))
+        # Ligne séparatrice
+        elements.append(Table([[""]], colWidths=[190*mm], style=[('LINEBELOW', (0,0), (-1,-1), 1, colors.grey)]))
         elements.append(Spacer(1, 4*mm))
 
+        # Header
         header_table = Table(
             [[
                 Paragraph(
-                    f"""
-                    <b>Campus :</b> {campus_txt}<br/>
-                    <b>Classe :</b> {classe_info}<br/>
-                    <b>Élève :</b> {eleve_txt}
-                    """,
+                    f"<b>Campus :</b> {campus_txt}<br/><b>Classe :</b> {classe_info}<br/><b>Élève :</b> {eleve_txt}",
                     left_style
                 ),
-                Paragraph(
-                    f"<b>Année académique :</b><br/>{annee_txt}",
-                    right_style
-                )
+                Paragraph(f"<b>Année académique :</b><br/>{annee_txt}", right_style)
             ]],
             colWidths=[120*mm, 70*mm]
         )
-
+        header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
         elements.append(header_table)
-        elements.append(Spacer(1, 6*mm))
+        elements.append(Spacer(1, 2*mm))
 
-        data = [[
-            "Élève",
-            "Variable",
-            "Montant",
-            "Date paiement",
-            "Banque / Compte"
-        ]]
+        # Affichage de la banque en dessous du nom de l'élève si sélectionnée
+        if banque_txt:
+            elements.append(Paragraph(f"<b>Banque :</b> {banque_txt}", left_style))
+            elements.append(Spacer(1, 4*mm))
+
+        # Déterminer si on affiche la colonne banque
+        afficher_banque = not id_compte
+
+        # Tableau
+        table_header = ["Élève", "Variable", "Montant", "Date paiement"]
+        if afficher_banque:
+            table_header.append("Banque / Compte")
+        data = [table_header]
 
         total_general = 0
 
         for p in paiements_qs:
             total_general += p.montant
-
-            data.append([
+            row = [
                 Paragraph(f"{p.id_eleve.nom} {p.id_eleve.prenom}", small),
                 Paragraph(p.id_variable.variable, small),
                 f"{p.montant:,.0f}",
-                Paragraph(p.date_paie.strftime('%d/%m/%Y'), small),
-                Paragraph(
-                    f"{p.id_compte.id_banque.banque} - {p.id_compte.compte}",
-                    small
-                )
-            ])
+                Paragraph(p.date_paie.strftime('%d/%m/%Y'), small)
+            ]
+            if afficher_banque:
+                row.append(Paragraph(f"{p.id_compte.id_banque.banque} - {p.id_compte.compte}" if p.id_compte else "-", small))
+            data.append(row)
 
-        data.append([
-            "",
-            "TOTAL GÉNÉRAL",
-            f"{total_general:,.0f}",
-            "",
-            ""
-        ])
+        # Total général
+        total_row = ["", "TOTAL GÉNÉRAL", f"{total_general:,.0f}", ""]
+        if afficher_banque:
+            total_row.append("")
+        data.append(total_row)
 
-        table = Table(
-            data,
-            colWidths=[45*mm, 40*mm, 25*mm, 30*mm, 45*mm],
-            repeatRows=1
-        )
+        colWidths = [45*mm, 40*mm, 25*mm, 30*mm]
+        if afficher_banque:
+            colWidths.append(45*mm)
 
+        table = Table(data, colWidths=colWidths, repeatRows=1)
         table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0d6efd')),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -844,14 +811,16 @@ def generate_historique_pdf(request):
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
 
 
+
+
 from django.http import HttpResponse
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib import colors
 from django.contrib.staticfiles import finders
+from django.db.models import Sum
 import os
 
 def generate_dette_pdf(request):
@@ -859,99 +828,165 @@ def generate_dette_pdf(request):
         id_annee = request.GET.get('annee')
         id_classe = request.GET.get('classe')
         id_trimestre = request.GET.get('trimestre')
-        id_eleve = request.GET.get('eleve')
-        id_compte = request.GET.get('compte')
 
-        paiements_qs = Paiement.objects.select_related(
-            'id_eleve','id_variable','id_compte','id_compte__id_banque',
-            'id_classe_active','id_classe_active__classe_id','id_classe_active__id_campus','id_annee'
-        ).order_by('id_eleve__nom','id_variable__variable','date_paie')
+        if not id_annee or not id_classe:
+            return HttpResponse("Année et classe obligatoires", status=400)
 
-        if id_annee: paiements_qs = paiements_qs.filter(id_annee=id_annee)
-        if id_classe: paiements_qs = paiements_qs.filter(id_classe_active=id_classe)
-        if id_trimestre: paiements_qs = paiements_qs.filter(id_variable__trimestre=id_trimestre)
-        if id_eleve: paiements_qs = paiements_qs.filter(id_eleve=id_eleve)
-        if id_compte: paiements_qs = paiements_qs.filter(id_compte=id_compte)
+        # 🔹 1. Récupérer les inscriptions
+        inscriptions = Eleve_inscription.objects.select_related(
+            'id_eleve', 'id_classe', 'id_classe__classe_id'
+        ).filter(
+            id_annee=id_annee,
+            id_classe=id_classe,
+            status=True
+        )
+        if id_trimestre:
+            inscriptions = inscriptions.filter(id_trimestre=id_trimestre)
 
+        rapport = []
+
+        # 🔹 Préparer infos globales pour entête
+        classe_obj = Classe_active.objects.filter(classe_id=id_classe).first()
+        nom_classe = classe_obj.classe_id.classe if classe_obj else "N/A"
+        groupe = classe_obj.groupe if classe_obj and hasattr(classe_obj, 'groupe') else ""
+        classe_info = f"{nom_classe} {groupe}".strip()
+        campus_txt = classe_obj.id_campus.campus if classe_obj and hasattr(classe_obj, 'id_campus') and classe_obj.id_campus else "N/A"
+
+        annee_obj = Annee.objects.filter(id_annee=id_annee).first()
+        annee_txt = annee_obj.annee if annee_obj else "N/A"
+        trimestre_txt = id_trimestre or "Tous"
+
+        # 🔹 Construire le rapport
+        for ins in inscriptions:
+            eleve = ins.id_eleve
+            paiements = Paiement.objects.filter(
+                id_eleve=eleve,
+                id_classe_active=id_classe,
+                id_annee=id_annee
+            )
+
+            variables = VariablePrix.objects.filter(
+                id_classe_active=id_classe,
+                id_annee=id_annee
+            ).select_related('id_variable')
+
+            details = []
+            total_dette = 0
+
+            for vp in variables:
+                variable = vp.id_variable
+                montant_a_payer = vp.prix
+                montant_paye = paiements.filter(id_variable=variable).aggregate(total=Sum('montant'))['total'] or 0
+                reste = max(montant_a_payer - montant_paye, 0)
+
+                penalite = 0
+                if reste > 0:
+                    penalite = PenaliteConfig.objects.filter(
+                        id_variable=variable,
+                        id_classe_active=id_classe,
+                        actif=True
+                    ).aggregate(total=Sum('valeur'))['total'] or 0
+
+                total_variable = reste + penalite
+                if total_variable > 0:
+                    details.append({
+                        "variable": variable.variable,
+                        "montant_a_payer": montant_a_payer,
+                        "montant_paye": montant_paye,
+                        "reste": reste,
+                        "penalite": penalite,
+                        "total": total_variable
+                    })
+                    total_dette += total_variable
+
+            if total_dette > 0:
+                rapport.append({
+                    "eleve": f"{eleve.nom} {eleve.prenom}",
+                    "classe": classe_info,
+                    "total_dette": total_dette,
+                    "details": details
+                })
+
+        # 🔹 Générer le PDF
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'inline; filename="Dette_Rapport.pdf"'
 
         doc = SimpleDocTemplate(
             response,
             pagesize=A4,
-            leftMargin=10*mm,rightMargin=10*mm,
-            topMargin=10*mm,bottomMargin=10*mm
+            leftMargin=10*mm, rightMargin=10*mm,
+            topMargin=10*mm, bottomMargin=10*mm
         )
 
         elements = []
         styles = getSampleStyleSheet()
-        small = ParagraphStyle('small',parent=styles['Normal'],fontSize=8,leading=10)
-        title_style = ParagraphStyle('title',fontSize=14,alignment=TA_CENTER,fontName='Helvetica-Bold')
-        right_style = ParagraphStyle('right',parent=styles['Normal'],alignment=TA_RIGHT,fontSize=9)
+        title_style = ParagraphStyle('title', fontSize=14, alignment=TA_CENTER, fontName='Helvetica-Bold')
+        small_left = ParagraphStyle('small_left', alignment=TA_LEFT, fontSize=9)
+        small_right = ParagraphStyle('small_right', alignment=TA_RIGHT, fontSize=9)
 
         # Logo
+        # 🔹 Logo
         logo_path = finders.find('assets/img/logo.png')
-        if logo_path and os.path.exists(logo_path):
-            elements.append(Image(logo_path,width=25*mm,height=25*mm))
-        elements.append(Spacer(1,4*mm))
+        logo_img = Image(logo_path, width=30*mm, height=30*mm) if logo_path and os.path.exists(logo_path) else Paragraph("", styles['Normal'])
 
-        # Infos filtrage
-        p_ref = paiements_qs.first()
-        if p_ref:
-            campus_txt = p_ref.id_classe_active.id_campus.campus
-            nom_classe = p_ref.id_classe_active.classe_id.classe
-            groupe = p_ref.id_classe_active.groupe or ""
-            classe_info = f"{nom_classe} {groupe}"
-            annee_txt = p_ref.id_annee.annee
-        else:
-            campus_txt = classe_info = annee_txt = "N/A"
-
-        elements.append(Paragraph("ÉLÈVES EN DETTE", title_style))
-        elements.append(Spacer(1,2*mm))
-
-        header_table = Table([
-            [f"Campus : {campus_txt}", f"Classe : {classe_info}", f"Année : {annee_txt}"]
-        ], colWidths=[60*mm,60*mm,60*mm])
-        header_table.setStyle(TableStyle([('FONTSIZE',(0,0),(-1,-1),9)]))
+        # 🔹 Entête améliorée
+        header_data = [[
+            logo_img,
+            [
+                Paragraph(f"CAMPUS : {campus_txt}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
+                Paragraph(f"CLASSE : {classe_info}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
+                Paragraph(f"Trimestre : {id_trimestre or 'Tous'}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
+            ],
+            Paragraph(f"A-A : {annee_txt}", ParagraphStyle('H3', fontSize=10, alignment=TA_RIGHT))
+        ]]
+        header_table = Table(header_data, colWidths=[30*mm, 110*mm, 40*mm])
+        header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
         elements.append(header_table)
-        elements.append(Spacer(1,4*mm))
+        elements.append(Spacer(1, 10*mm))
+
+
+        # Titre
+        elements.append(Paragraph("RAPPORT DES DETTES", title_style))
+        elements.append(Spacer(1,3*mm))
 
         # Tableau
         data = [["Élève","Variable","À payer","Payé","Reste","Pénalité","Total"]]
-        total_general = 0
+        for eleve in rapport:
+            details = eleve['details']
+            for i, d in enumerate(details):
+                row = []
+                if i == 0:
+                    row.append(Paragraph(f"<b>{eleve['eleve']}</b><br/><font color='red'>Dette: {eleve['total_dette']:,} FBU</font>", styles['Normal']))
+                else:
+                    row.append('')
+                row.append(d['variable'])
+                row.append(f"{d['montant_a_payer']:,}")
+                row.append(f"{d['montant_paye']:,}")
+                row.append(f"{d['reste']:,}")
+                row.append(f"{d['penalite']:,}")
+                row.append(f"{d['total']:,}")
+                data.append(row)
 
-        for e in paiements_qs:
-            montant = e.montant
-            reste = getattr(e,'reste',0)
-            penalite = getattr(e,'penalite',0)
-            total = montant + penalite
-            total_general += total
-            data.append([
-                f"{e.id_eleve.nom} {e.id_eleve.prenom}",
-                e.id_variable.variable,
-                f"{montant:,.0f}",
-                f"{montant:,.0f}",
-                f"{reste:,.0f}",
-                f"{penalite:,.0f}",
-                f"{total:,.0f}"
-            ])
-
-        data.append(["","","","","","TOTAL",f"{total_general:,.0f}"])
-        table = Table(data,colWidths=[40*mm,35*mm,20*mm,20*mm,20*mm,20*mm,25*mm],repeatRows=1)
+        table = Table(data, colWidths=[40*mm,35*mm,20*mm,20*mm,20*mm,20*mm,25*mm], repeatRows=1)
         table.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0d6efd')),
             ('TEXTCOLOR',(0,0),(-1,0),colors.white),
             ('FONTNAME',(0,0),(-1,0),'Helvetica-Bold'),
             ('ALIGN',(2,1),(-1,-1),'RIGHT'),
-            ('FONTNAME',(0,-1),(-1,-1),'Helvetica-Bold'),
-            ('BACKGROUND',(0,-1),(-1,-1),colors.HexColor('#ffc107')),
             ('GRID',(0,0),(-1,-1),0.5,colors.grey),
-            ('FONTSIZE',(0,1),(-1,-2),8)
+            ('FONTSIZE',(0,1),(-1,-1),8),
+            ('VALIGN',(0,0),(-1,-1),'MIDDLE'),
         ]))
-
         elements.append(table)
+        elements.append(Spacer(1,6*mm))
+
+        # elements.append(Paragraph(
+        #     "Rapport généré automatiquement",
+        #     ParagraphStyle("footer", alignment=TA_CENTER, fontSize=9)
+        # ))
+
         doc.build(elements)
         return response
 
     except Exception as e:
-        return HttpResponse(f"Erreur PDF : {str(e)}",status=500)
+        return HttpResponse(f"Erreur PDF : {str(e)}", status=500)

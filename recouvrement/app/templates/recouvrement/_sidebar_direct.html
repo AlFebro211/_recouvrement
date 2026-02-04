@@ -1,8 +1,16 @@
 <div class="sidebar">
     {% include 'partials/title_logo.html' %}
     <div class="menu">
+        <div class="menu-item">
+            <a href="{% url 'dashboard' %}" class="menu-link">
+                <span class="icon-wrapper">📊</span>
+                <span class="menu-text">Tableau de bord</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
+            </a>
+        </div>
         <!-- Item 1 -->
         <div class="menu-item">
+
             <a href="#" class="menu-link">
                 <span class="icon-wrapper">📂</span>
                 <span class="menu-text">Categorie des variable</span>

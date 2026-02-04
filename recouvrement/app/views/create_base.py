@@ -16,7 +16,7 @@ import logging
 import datetime
 from django.db.models import Sum
 
-from app.models import Eleve_inscription
+from app.models import *
 
 
 logger = logging.getLogger(__name__)
@@ -465,4 +465,77 @@ def save_paiement(request):
     }, status=405)
 
 
+def dashboard(request):
 
+    context = {
+        'annees': Annee.objects.all(),
+        'classes': Classe.objects.all(),
+        'campus': Campus.objects.all(),
+        'cycles': Classe_cycle_actif.objects.all(),
+    }
+
+    return render(request,'recouvrement/index_recouvrement.html',context)
+
+from django.http import JsonResponse
+from django.db.models import Sum, Count
+
+
+def dashboard_data(request):
+
+    annee = request.GET.get('annee')
+    classe = request.GET.get('classe')
+    campus = request.GET.get('campus')
+    cycle = request.GET.get('cycle')
+
+    paiements = Paiement.objects.filter(status=True)
+
+    # ===== FILTRES =====
+    if annee:
+        paiements = paiements.filter(annee_id=annee)
+
+    if classe:
+        paiements = paiements.filter(id_eleve__classe_id=classe)
+
+    if campus:
+        paiements = paiements.filter(id_eleve__classe__campus_id=campus)
+
+    if cycle:
+        paiements = paiements.filter(id_eleve__classe__cycle_id=cycle)
+
+    # ===== STATS =====
+    total_paye = paiements.aggregate(total=Sum('montant'))['total'] or 0
+    total_transactions = paiements.count()
+
+    total_eleves = paiements.values('id_eleve').distinct().count()
+
+    eleves_en_dette = Eleve_inscription.objects.exclude(
+        id_eleve__in=paiements.values('id_eleve')
+    ).count()
+
+    # ===== GRAPHIQUE BANQUE =====
+    banques = (
+        paiements
+        .values('id_banque__banque')
+        .annotate(total=Sum('montant'))
+        .order_by('-total')
+    )
+
+    # ===== GRAPHIQUE VARIABLE =====
+    variables = (
+        paiements
+        .values('id_variable__variable')
+        .annotate(total=Sum('montant'))
+        .order_by('-total')
+    )
+
+    return JsonResponse({
+        'success': True,
+        'stats': {
+            'total_eleves': total_eleves,
+            'total_paye': total_paye,
+            'total_transactions': total_transactions,
+            'eleves_en_dette': eleves_en_dette,
+        },
+        'banques': list(banques),
+        'variables': list(variables),
+    })

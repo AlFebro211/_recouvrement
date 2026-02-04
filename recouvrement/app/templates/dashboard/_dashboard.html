@@ -1,0 +1,253 @@
+<div class="dashboard">
+
+    <h2 class="dashboard-title">📊 Tableau de Bord Financier</h2>
+
+    <!-- =======================
+            FILTRES
+    ======================== -->
+    <div class="filter-box">
+        <select id="anneeFilter">
+            <option value="">Année scolaire</option>
+            {% for a in annees %}
+            <option value="{{a.id}}">{{a}}</option>
+            {% endfor %}
+        </select>
+
+        <select id="classeFilter">
+            <option value="">Classe</option>
+            {% for c in classes %}
+            <option value="{{c.id}}">{{c}}</option>
+            {% endfor %}
+        </select>
+        <select id="variableFilter">
+            <option value="">Variable</option>
+            {% for v in variables %}
+            <option value="{{v.id}}">{{v}}</option>
+            {% endfor %}
+        </select>
+
+        
+        <select id="trimestreFilter">
+            <option value="">Trimestre</option>
+            {% for t in trimestres %}
+            <option value="{{t.id}}">{{t}}</option>
+            {% endfor %}
+        </select>
+        <select id="eleveFilter">
+            <option value="">Élève</option>
+        </select>
+
+        <button id="applyFilter">Appliquer</button>
+    </div>
+
+    <!-- =======================
+            CARTES STATS
+    ======================== -->
+    <div class="dashboard-cards">
+
+        <div class="card blue">
+            <h4>Total Paiements</h4>
+            <p id="totalPaiement">0</p>
+        </div>
+
+        <div class="card green">
+            <h4>Montant Payé</h4>
+            <p id="montantPaye">0</p>
+        </div>
+
+        <div class="card purple">
+            <h4>Reste à payer</h4>
+            <p id="restePaye">0</p>
+        </div>
+
+        <div class="card red">
+            <h4>Élèves en dette</h4>
+            <p id="elevesDette">0</p>
+        </div>
+
+    </div>
+
+    <!-- =======================
+            GRAPHIQUES
+    ======================== -->
+    <div class="charts">
+        <div class="chart-box">
+            <canvas id="paiementChart"></canvas>
+        </div>
+
+        <div class="chart-box">
+            <canvas id="classeChart"></canvas>
+        </div>
+    </div>
+
+</div>
+
+<style>
+
+/* CONTAINER */
+.dashboard{
+    margin-left:300px;
+    padding:25px;
+    max-width:calc(100% - 300px);
+}
+
+/* FILTRES */
+.filter-box{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:25px;
+}
+
+.filter-box select,
+.filter-box button{
+    padding:8px 12px;
+    border-radius:8px;
+    border:1px solid #ddd;
+}
+
+.filter-box button{
+    background:var(--primary-color);
+    color:white;
+    cursor:pointer;
+}
+
+/* CARTES */
+.dashboard-cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    gap:20px;
+}
+
+.card{
+    padding:20px;
+    border-radius:12px;
+    color:white;
+    box-shadow:var(--card-shadow);
+}
+
+.card h4{
+    font-size:14px;
+}
+
+.card p{
+    font-size:24px;
+    font-weight:bold;
+}
+
+.blue{background:linear-gradient(135deg,var(--primary-color),#2563eb);}
+.green{background:linear-gradient(135deg,#16a34a,#22c55e);}
+.purple{background:linear-gradient(135deg,#7c3aed,#8b5cf6);}
+.red{background:linear-gradient(135deg,#dc2626,var(--accent-color));}
+
+/* CHARTS */
+.charts{
+    margin-top:30px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:20px;
+}
+
+.chart-box{
+    flex:1 1 450px;
+    background:white;
+    padding:15px;
+    border-radius:12px;
+    box-shadow:var(--card-shadow);
+}
+
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+
+let paiementChart;
+let classeChart;
+
+/* ===========================
+        FETCH DATA DASHBOARD
+=========================== */
+function loadDashboard(){
+
+    const annee = document.getElementById("anneeFilter").value;
+    const classe = document.getElementById("classeFilter").value;
+    const eleve = document.getElementById("eleveFilter").value;
+    const trimestre = document.getElementById("trimestreFilter").value;
+    const variable = document.getElementById("variableFilter").value;
+
+    fetch(`/dashboard-data/?annee=${annee}&classe=${classe}&eleve=${eleve}&trimestre=${trimestre}&variable=${variable}`)
+    .then(res => res.json())
+    .then(data => {
+
+        if(!data.success) return;
+
+        const stats = data.stats;
+
+        // ==== CARTES ====
+        document.getElementById("totalPaiement").innerText = stats.total_transactions;
+        document.getElementById("montantPaye").innerText = stats.total_paye;
+        document.getElementById("restePaye").innerText = stats.total_paye ? stats.total_transactions*1 - stats.total_paye : 0; // ou calcul correct
+        document.getElementById("elevesDette").innerText = stats.eleves_en_dette;
+
+        // ==== CHART 1 : Paiements par Variable ====
+        if(paiementChart) paiementChart.destroy();
+
+        paiementChart = new Chart(
+            document.getElementById("paiementChart"),
+            {
+                type:'bar',
+                data:{
+                    labels: data.variables.map(v => v.id_variable__variable),
+                    datasets:[{
+                        label:"Paiements",
+                        data: data.variables.map(v => v.total),
+                        backgroundColor:'#2563eb'
+                    }]
+                },
+                options: { responsive:true, plugins:{legend:{display:true}} }
+            }
+        );
+
+        // ==== CHART 2 : Paiements par Classe ou Banques ====
+        if(classeChart) classeChart.destroy();
+
+        classeChart = new Chart(
+            document.getElementById("classeChart"),
+            {
+                type:'doughnut',
+                data:{
+                    labels: data.banques.map(b => b.id_banque__banque),
+                    datasets:[{
+                        data: data.banques.map(b => b.total),
+                        backgroundColor:['#2563eb','#16a34a','#7c3aed','#dc2626']
+                    }]
+                },
+                options:{ responsive:true, plugins:{legend:{position:'bottom'}} }
+            }
+        );
+
+        // ==== POPULER LES ÉLÈVES DANS LE FILTRE ====
+        const eleveSelect = document.getElementById("eleveFilter");
+        eleveSelect.innerHTML = '<option value="">Élève</option>'; // reset
+        if(data.eleves){
+            data.eleves.forEach(e => {
+                const opt = document.createElement("option");
+                opt.value = e.id;
+                opt.text = e.nom;
+                eleveSelect.add(opt);
+            });
+        }
+
+    });
+}
+
+/* ===========================
+        EVENTS
+=========================== */
+document.getElementById("applyFilter").addEventListener("click", loadDashboard);
+
+/* LOAD DEFAULT */
+loadDashboard();
+
+</script>
