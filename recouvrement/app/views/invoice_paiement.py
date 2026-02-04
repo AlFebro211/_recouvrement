@@ -16,6 +16,7 @@ from app.models import *
 from django.http import JsonResponse
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from django.contrib.staticfiles import finders
+from django.db.models import Sum
 import os
 
 
@@ -468,16 +469,6 @@ def style_tableau_standard():
         ('FONTSIZE', (0,0), (-1,-1), 9),
     ])
 
-from django.http import HttpResponse
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-from django.contrib.staticfiles import finders
-import os
-
 
 def generate_facture_paiement(request):
     try:
@@ -810,18 +801,6 @@ def generate_historique_pdf(request):
     except Exception as e:
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
 
-
-
-
-from django.http import HttpResponse
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.lib import colors
-from django.contrib.staticfiles import finders
-from django.db.models import Sum
-import os
 
 def generate_dette_pdf(request):
     try:

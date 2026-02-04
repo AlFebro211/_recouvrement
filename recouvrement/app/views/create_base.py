@@ -14,8 +14,7 @@ from app.models import Classe_active,Annee
 
 import logging
 import datetime
-from django.db.models import Sum
-
+from django.db.models import Sum, Count
 from app.models import *
 
 
@@ -475,9 +474,6 @@ def dashboard(request):
     }
 
     return render(request,'recouvrement/index_recouvrement.html',context)
-
-from django.http import JsonResponse
-from django.db.models import Sum, Count
 
 
 def dashboard_data(request):
