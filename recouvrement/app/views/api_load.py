@@ -637,11 +637,9 @@ def get_trimestres_by_classe_active(request):
     campus_id = request.GET.get('id_campus')
     cycle_id = request.GET.get('id_cycle')
 
-    # 🔹 Vérification des paramètres
     if not all([classe_active_id, annee_id, campus_id, cycle_id]):
-        return JsonResponse({'success': False, 'error': 'Tous les paramètres (classe, année, campus, cycle) sont requis'})
+        return JsonResponse({'success': False, 'error': 'Paramètres manquants'})
 
-    # 🔹 Filtrer les trimestres par année, classe, campus et cycle actif
     trimestres_qs = Annee_trimestre.objects.filter(
         id_annee_id=annee_id,
         id_classe_id=classe_active_id,
@@ -651,7 +649,7 @@ def get_trimestres_by_classe_active(request):
 
     data = [
         {
-            'id': t.trimestre.id_trimestre,
+            'id': t.id_trimestre,  # ✅ IMPORTANT (plus trimestre.id)
             'nom': t.trimestre.trimestre,
             'etat': t.etat_trimestre
         }
@@ -662,29 +660,24 @@ def get_trimestres_by_classe_active(request):
 
 
 def get_variables_by_trimestre(request):
-    # 🔹 Récupérer tous les IDs depuis le GET
-    trimestre_id = request.GET.get('id_trimestre')
+
+    annee_trimestre_id = request.GET.get('id_trimestre')  # 🔥 c'est maintenant id_annee_trimestre
     classe_id = request.GET.get('id_classe')
     annee_id = request.GET.get('id_annee')
     campus_id = request.GET.get('id_campus')
     cycle_id = request.GET.get('id_cycle')
 
-    # 🔹 Vérification minimale
-    if not all([trimestre_id, classe_id, annee_id, campus_id, cycle_id]):
+    if not all([annee_trimestre_id, classe_id, annee_id, campus_id, cycle_id]):
         return JsonResponse({
             'success': False,
-            'error': 'Tous les paramètres (trimestre, classe, année, campus, cycle) sont requis'
+            'error': 'Paramètres manquants'
         }, status=400)
 
-    # ==================================================
-    # 1️⃣ FILTRAGE DES TRIMESTRES
-    # ==================================================
+    # ==============================
+    # 1️⃣ RECUPERER DIRECTEMENT Annee_trimestre
+    # ==============================
     annee_trimestre = Annee_trimestre.objects.filter(
-        id_annee_id=annee_id,
-        id_campus_id=campus_id,
-        id_cycle_id=cycle_id,
-        id_classe_id=classe_id,
-        trimestre_id=trimestre_id
+        id_trimestre=annee_trimestre_id
     ).select_related('trimestre').first()
 
     print("====DEBUG Annee_trimestre trouvé====")
@@ -693,18 +686,18 @@ def get_variables_by_trimestre(request):
     if not annee_trimestre:
         return JsonResponse({
             'success': False,
-            'error': 'Aucun trimestre trouvé pour ces critères'
+            'error': 'Trimestre invalide'
         }, status=400)
 
-    # ==================================================
-    # 2️⃣ FILTRAGE DES VARIABLEPRIX POUR CE TRIMESTRE
-    # ==================================================
+    # ==============================
+    # 2️⃣ VARIABLE PRIX
+    # ==============================
     variable_prix_qs = VariablePrix.objects.filter(
-        id_annee_trimestre=annee_trimestre,
+        id_annee_trimestre_id=annee_trimestre_id,
         id_classe_active_id=classe_id,
         id_annee_id=annee_id,
         id_campus_id=campus_id,
-        id_cycle_actif_id=cycle_id  # bien vérifier que c'est ce champ dans ton modèle
+        id_cycle_actif_id=cycle_id
     ).select_related('id_variable', 'id_variable__id_variable_categorie')
 
     print("====DEBUG VariablePrix filtrées====")
@@ -716,12 +709,12 @@ def get_variables_by_trimestre(request):
     if not variable_prix_qs.exists():
         return JsonResponse({
             'success': False,
-            'error': 'Aucune configuration trouvée pour ces critères'
+            'error': 'Aucune configuration trouvée'
         })
 
-    # ==================================================
-    # 3️⃣ EXTRACTION DES VARIABLES
-    # ==================================================
+    # ==============================
+    # 3️⃣ VARIABLES
+    # ==============================
     variables_data = []
     for vp in variable_prix_qs:
         variable = vp.id_variable
@@ -732,13 +725,13 @@ def get_variables_by_trimestre(request):
             'prix': vp.prix
         })
 
-    # ==================================================
-    # 4️⃣ RÉPONSE JSON
-    # ==================================================
+    # ==============================
+    # 4️⃣ REPONSE
+    # ==============================
     return JsonResponse({
         'success': True,
         'annee_trimestre': {
-            'id': annee_trimestre.trimestre.id_trimestre,
+            'id': annee_trimestre.id_trimestre,   # ✅ CORRIGÉ
             'trimestre': annee_trimestre.trimestre.trimestre,
             'etat': annee_trimestre.etat_trimestre,
             'debut': annee_trimestre.debut,
@@ -746,6 +739,7 @@ def get_variables_by_trimestre(request):
         },
         'variables': variables_data
     })
+
 
 def get_eleves_classe(request):
     id_campus = request.GET.get('id_campus')
@@ -937,3 +931,29 @@ def eleves_en_dette(request):
     })
 
 
+def get_penalites(request):
+    penalites = PenaliteConfig.objects.select_related(
+        'id_annee',
+        'id_campus',
+        'id_cycle_actif',
+        'id_classe_active',
+        'id_variable',
+        'id_annee_trimestre'
+    ).order_by('-id_penalite_regle')
+
+    data = []
+
+    for p in penalites:
+        data.append({
+            'annee': str(p.id_annee) if p.id_annee else '',
+            'campus': str(p.id_campus) if p.id_campus else '',
+            'cycle': str(p.id_cycle_actif) if p.id_cycle_actif else '',
+            'classe': str(p.id_classe_active) if p.id_classe_active else '',
+            'variable': str(p.id_variable) if p.id_variable else '',
+            'trimestre': str(p.id_annee_trimestre) if p.id_annee_trimestre else '',
+            'type_penalite': p.type_penalite,
+            'valeur': p.valeur,
+            'plafond': p.plafond if p.plafond else ''
+        })
+
+    return JsonResponse({'success': True, 'penalites': data})

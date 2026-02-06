@@ -1388,6 +1388,8 @@
         <div id="dette-result-container" class="mt-4">
             <!-- Le tableau des dettes antérieures sera injecté ici par JS  -->
         </div>
+        <div id="penaliteContainer" class="table-container"></div>
+
 
 
         
@@ -3714,8 +3716,76 @@ $(document).ready(function () {
             }
         });
     });
+    // Vérifie qu'on est sur la bonne page
+if (window.location.pathname === "/ajouter_penalite/") {
+
+    function loadPenalites() {
+        fetch("/get_penalites/")
+            .then(res => res.json())
+            .then(data => {
+                if (!data.success || !data.penalites) {
+                    $('#penaliteContainer').html('<p>Aucune pénalité trouvée.</p>');
+                    return;
+                }
+
+                let rows = data.penalites.map(p => `
+                    <tr>
+                        <td>${p.annee || ''}</td>
+                        <td>${[p.campus, p.cycle, p.classe].filter(Boolean).join(' - ')}</td>
+                        <td>${p.variable || ''}</td>
+                        <td>${p.trimestre || ''}</td>
+                        <td>${p.type_penalite || ''}</td>
+                        <td>${p.valeur || ''}</td>
+                        <td>${p.plafond || ''}</td>
+                    </tr>
+                `).join('');
+
+                let tableHTML = `
+                    <div class="col-md-12">
+                        <div style="background-color: darkgrey; max-height: 500px; overflow-y: auto;" class="card">
+                            <div class="table-header">
+                                <h3>Liste des pénalités créées</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-hover text-center shadow-sm">
+                                        <thead class="bg-primary text-white">
+                                            <tr>
+                                                <th>Année</th>
+                                                <th>Classe (Campus - Cycle)</th>
+                                                <th>Variable</th>
+                                                <th>Trimestre</th>
+                                                <th>Type</th>
+                                                <th>Valeur</th>
+                                                <th>Plafond</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${rows}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const container = document.getElementById('penaliteContainer');
+                if(container) container.innerHTML = tableHTML;
+
+            })
+            .catch(err => {
+                console.error('Erreur chargement pénalités :', err);
+                $('#penaliteContainer').html('<p style="color:red;">Impossible de charger les pénalités.</p>');
+            });
+    }
+
+    // Appel initial
+    loadPenalites();
+}
 
 });
+
 </script>
 <!-- historiques financier -->
 <script>
@@ -4147,6 +4217,7 @@ $(document).ready(function () {
 });
 });
 </script>
+<!-- Dashboard -->
 
 
 

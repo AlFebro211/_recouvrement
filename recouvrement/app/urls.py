@@ -45,6 +45,7 @@ urlpatterns =[
    path('get_paiements_eleve/', views.get_paiements_eleve, name='get_paiements_eleve'),
    path('ajouter_penalite/', views.ajouter_penalite, name='ajouter_penalite'),
    path('save_penalite/', views.save_penalite, name='save_penalite'),
+   path('get_penalites/', views.get_penalites, name='get_penalites'),
    path('historique/', views.historique, name='historique'),
    path('historique_financier/', views.historique_financier, name='historique_financier'),
    path('generate_historique_pdf/', views.generate_historique_pdf, name='generate_historique_pdf'),

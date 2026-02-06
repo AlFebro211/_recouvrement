@@ -470,6 +470,17 @@ def style_tableau_standard():
     ])
 
 
+from django.http import HttpResponse
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from django.contrib.staticfiles import finders
+import socket
+import os
+
 def generate_facture_paiement(request):
     try:
         id_paiement = request.GET.get('id_paiement')
@@ -492,20 +503,53 @@ def generate_facture_paiement(request):
         annee_txt = paiement.id_annee.annee if paiement.id_annee else "N/A"
 
         # =========================
-        # MODE POS OU A4
+        # MODE POS ?
         # =========================
         mode_pos = request.GET.get("pos")
         is_pos = True if mode_pos == "1" else False
 
+        # ==================================================
+        # 🧾 IMPRESSION POS DIRECTE (PAS DE PDF)
+        # ==================================================
+        if is_pos:
+
+            ticket = f"""
+            {campus_nom}
+            Classe : {classe_info}
+            Année : {annee_txt}
+            ------------------------------
+            RECU DE PAIEMENT
+            ------------------------------
+            Eleve : {eleve.nom} {eleve.prenom}
+            Motif : {paiement.id_variable.variable}
+            Date  : {paiement.date_paie.strftime('%d/%m/%Y')}
+
+            TOTAL : {paiement.montant} Fbu
+
+            Merci pour votre paiement
+
+
+            """
+
+            POS_IP = "192.168.1.50"   # ⚠️ CHANGE avec IP réelle du POS
+            PORT = 9100
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((POS_IP, PORT))
+            s.send(ticket.encode('utf-8'))
+            s.close()
+
+            return HttpResponse("IMPRESSION POS OK")
+
+        # ==================================================
+        # 📄 SINON → GENERER PDF (CODE ORIGINAL)
+        # ==================================================
+
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="Facture_{eleve.nom}.pdf"'
 
-        if is_pos:
-            pagesize = (80*mm, 300*mm)
-            margin = 5*mm
-        else:
-            pagesize = A4
-            margin = 15*mm
+        pagesize = A4
+        margin = 15*mm
 
         doc = SimpleDocTemplate(
             response,
@@ -519,53 +563,30 @@ def generate_facture_paiement(request):
         elements = []
         styles = getSampleStyleSheet()
 
-        # =========================
-        # STYLES PRO
-        # =========================
-
         title_style = ParagraphStyle(
             "title",
             alignment=TA_CENTER,
-            fontSize=11 if is_pos else 14,
+            fontSize=14,
             spaceAfter=4
         )
 
         small_center = ParagraphStyle(
             "small_center",
             alignment=TA_CENTER,
-            fontSize=8 if is_pos else 10
+            fontSize=10
         )
 
-        right_style = ParagraphStyle(
-            "right",
-            alignment=TA_RIGHT,
-            fontSize=9 if is_pos else 11
-        )
-
-        # =========================
-        # HEADER (POS + A4 IDENTIQUE)
-        # =========================
-
-        if not is_pos:
-            logo_path = finders.find('assets/img/MonEcoleApp-logo.png')
-            if logo_path and os.path.exists(logo_path):
-                elements.append(Image(logo_path, width=25*mm, height=25*mm))
+        logo_path = finders.find('assets/img/MonEcoleApp-logo.png')
+        if logo_path and os.path.exists(logo_path):
+            elements.append(Image(logo_path, width=25*mm, height=25*mm))
 
         elements.append(Paragraph(f"<b>{campus_nom}</b>", title_style))
         elements.append(Paragraph(f"Classe : {classe_info}", small_center))
         elements.append(Paragraph(f"Année académique : {annee_txt}", small_center))
         elements.append(Spacer(1,4*mm))
 
-        # =========================
-        # TITRE
-        # =========================
-
         elements.append(Paragraph("<b>REÇU DE PAIEMENT</b>", title_style))
         elements.append(Spacer(1,3*mm))
-
-        # =========================
-        # INFOS ELEVE
-        # =========================
 
         info_data = [
             ["Élève :", f"{eleve.nom} {eleve.prenom}"],
@@ -573,22 +594,14 @@ def generate_facture_paiement(request):
             ["Date :", paiement.date_paie.strftime('%d/%m/%Y')],
         ]
 
-        if is_pos:
-            info_table = Table(info_data, colWidths=[25*mm,45*mm])
-        else:
-            info_table = Table(info_data, colWidths=[60*mm,110*mm])
-
+        info_table = Table(info_data, colWidths=[60*mm,110*mm])
         info_table.setStyle(TableStyle([
-            ('FONTSIZE',(0,0),(-1,-1),9 if is_pos else 11),
+            ('FONTSIZE',(0,0),(-1,-1),11),
             ('BOTTOMPADDING',(0,0),(-1,-1),3),
         ]))
 
         elements.append(info_table)
         elements.append(Spacer(1,5*mm))
-
-        # =========================
-        # TABLEAU MONTANT
-        # =========================
 
         data = [
             ["Motif", "Montant"],
@@ -596,57 +609,22 @@ def generate_facture_paiement(request):
              f"{paiement.montant:,} Fbu".replace(',', ' ')]
         ]
 
-        if is_pos:
-            table = Table(data, colWidths=[45*mm,25*mm])
-        else:
-            table = Table(data, colWidths=[120*mm,60*mm])
-
+        table = Table(data, colWidths=[120*mm,60*mm])
         table.setStyle(TableStyle([
             ('GRID',(0,0),(-1,-1),0.5,colors.black),
             ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#eeeeee")),
             ('ALIGN',(1,0),(1,-1),'RIGHT'),
-            ('FONTSIZE',(0,0),(-1,-1),9 if is_pos else 11),
+            ('FONTSIZE',(0,0),(-1,-1),11),
         ]))
 
         elements.append(table)
-        elements.append(Spacer(1,5*mm))
-
-        # =========================
-        # TOTAL (STYLE CAISSE PRO)
-        # =========================
-
-        total_data = [
-            ["TOTAL", f"{paiement.montant:,} Fbu".replace(',', ' ')]
-        ]
-
-        if is_pos:
-            total_table = Table(total_data, colWidths=[45*mm,25*mm])
-        else:
-            total_table = Table(total_data, colWidths=[120*mm,60*mm])
-
-        total_table.setStyle(TableStyle([
-            ('LINEABOVE',(0,0),(-1,0),1,colors.black),
-            ('FONTSIZE',(0,0),(-1,-1),10 if is_pos else 13),
-            ('ALIGN',(1,0),(1,0),'RIGHT'),
-        ]))
-
-        elements.append(total_table)
-        elements.append(Spacer(1,10*mm))
-
-        # =========================
-        # FOOTER
-        # =========================
-
-        elements.append(Paragraph(
-            "Merci pour votre paiement",
-            ParagraphStyle("footer", alignment=TA_CENTER, fontSize=9)
-        ))
 
         doc.build(elements)
         return response
 
     except Exception as e:
         return HttpResponse(f"Erreur technique : {str(e)}", status=500)
+
 
 
 def generate_historique_pdf(request):

@@ -476,62 +476,154 @@ def dashboard(request):
     return render(request,'recouvrement/index_recouvrement.html',context)
 
 
-def dashboard_data(request):
+from django.http import JsonResponse
+from django.db.models import Sum
+import calendar
 
+def dashboard_data(request):
     annee = request.GET.get('annee')
     classe = request.GET.get('classe')
-    campus = request.GET.get('campus')
-    cycle = request.GET.get('cycle')
+    eleve = request.GET.get('eleve')
+    trimestre = request.GET.get('trimestre')
+    variable = request.GET.get('variable')
 
-    paiements = Paiement.objects.filter(status=True)
+    if not annee:
+        return JsonResponse({'success': False})
 
-    # ===== FILTRES =====
-    if annee:
-        paiements = paiements.filter(annee_id=annee)
+    # ===============================
+    # 🔵 BASE QUERY PAIEMENTS
+    # ===============================
+    paiements = Paiement.objects.filter(
+        id_annee_id=annee,
+        status=True
+    )
 
     if classe:
-        paiements = paiements.filter(id_eleve__classe_id=classe)
+        paiements = paiements.filter(id_classe_active_id=classe)
+    if eleve:
+        paiements = paiements.filter(id_eleve_id=eleve)
+    if variable:
+        paiements = paiements.filter(id_variable_id=variable)
 
-    if campus:
-        paiements = paiements.filter(id_eleve__classe__campus_id=campus)
-
-    if cycle:
-        paiements = paiements.filter(id_eleve__classe__cycle_id=cycle)
-
-    # ===== STATS =====
+    # ===============================
+    # 🔵 STATS DE BASE
+    # ===============================
     total_paye = paiements.aggregate(total=Sum('montant'))['total'] or 0
     total_transactions = paiements.count()
 
-    total_eleves = paiements.values('id_eleve').distinct().count()
+    # ===============================
+    # 🔵 RECUP CONTEXTE CLASSE
+    # ===============================
+    classe_active = Classe_active.objects.filter(
+        id_classe_active=classe
+    ).select_related('id_campus', 'cycle_id').first()
 
-    eleves_en_dette = Eleve_inscription.objects.exclude(
-        id_eleve__in=paiements.values('id_eleve')
-    ).count()
+    campus = classe_active.id_campus_id if classe_active else None
+    cycle = classe_active.cycle_id_id if classe_active else None
 
-    # ===== GRAPHIQUE BANQUE =====
-    banques = (
-        paiements
-        .values('id_banque__banque')
-        .annotate(total=Sum('montant'))
-        .order_by('-total')
+    # ===============================
+    # 🔵 ELEVE INSCRITS
+    # ===============================
+    eleves_inscrits = Eleve_inscription.objects.filter(
+        id_annee_id=annee,
+        id_classe_id=classe,
+        id_campus_id=campus,
+        id_classe_cycle_id=cycle,
+        status=1
+    ).values_list('id_eleve_id', flat=True)
+
+    # ===============================
+    # 🔥 CALCUL TOTAL ATTENDU CORRECT
+    # ===============================
+    total_attendu = 0
+    variables_prix = VariablePrix.objects.filter(
+        id_annee_id=annee,
+        id_classe_active_id=classe,
+        id_campus_id=campus,
+        id_cycle_actif_id=cycle
     )
 
-    # ===== GRAPHIQUE VARIABLE =====
-    variables = (
-        paiements
-        .values('id_variable__variable')
-        .annotate(total=Sum('montant'))
-        .order_by('-total')
+    if eleve:
+        # 🔹 CAS ÉLÈVE SPÉCIFIQUE
+        for vp in variables_prix:
+            prix_normal = vp.prix
+            reduction = Eleve_reduction_prix.objects.filter(
+                id_variable_id=vp.id_variable_id,
+                id_eleve_id=eleve,
+                id_annee_id=annee,
+                id_classe_active_id=classe,
+                id_campus_id=campus,
+                id_cycle_actif_id=cycle
+            ).first()
+            montant_final = prix_normal
+            if reduction:
+                montant_final -= (prix_normal * reduction.pourcentage) / 100
+            total_attendu += montant_final
+
+    else:
+        # 🔹 CAS CLASSE ENTIÈRE
+        for vp in variables_prix:
+            prix_normal = vp.prix
+            variable_id = vp.id_variable_id
+
+            # élèves avec réduction
+            reductions = Eleve_reduction_prix.objects.filter(
+                id_variable_id=variable_id,
+                id_annee_id=annee,
+                id_classe_active_id=classe,
+                id_campus_id=campus,
+                id_cycle_actif_id=cycle,
+                id_eleve_id__in=eleves_inscrits
+            )
+
+            nb_reduction = reductions.count()
+            nb_total_eleves = len(eleves_inscrits)
+            nb_sans_reduction = nb_total_eleves - nb_reduction
+
+            # total sans réduction
+            total_sans_reduction = prix_normal * nb_sans_reduction
+
+            # total avec réduction
+            total_avec_reduction = 0
+            for red in reductions:
+                montant_reduit = prix_normal - ((prix_normal * red.pourcentage) / 100)
+                total_avec_reduction += montant_reduit
+
+            # total variable
+            total_attendu += (total_sans_reduction + total_avec_reduction)
+
+    # ===============================
+    # 🔵 RESTE A PAYER
+    # ===============================
+    reste_a_payer = total_attendu - total_paye
+
+    # ===============================
+    # 🔵 BANQUES
+    # ===============================
+    banques = paiements.values('id_banque__banque').annotate(
+        total=Sum('montant')
     )
 
+    # ===============================
+    # 🔵 VARIABLES GRAPH
+    # ===============================
+    variables_data = paiements.values(
+        'id_variable__variable'
+    ).annotate(total=Sum('montant'))
+
+    # ===============================
+    # 🔵 REPONSE JSON
+    # ===============================
     return JsonResponse({
         'success': True,
         'stats': {
-            'total_eleves': total_eleves,
-            'total_paye': total_paye,
             'total_transactions': total_transactions,
-            'eleves_en_dette': eleves_en_dette,
+            'total_paye': total_paye,
+            'total_attendu': total_attendu,
+            'reste_a_payer': reste_a_payer,
+            'eleves_en_dette': 0,
+            'total_rejete': 0
         },
         'banques': list(banques),
-        'variables': list(variables),
+        'variables': list(variables_data),
     })
