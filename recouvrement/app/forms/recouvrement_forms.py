@@ -84,12 +84,6 @@ class VariablePrixForm(forms.ModelForm):
     class Meta:
         model = VariablePrix
         fields = ['id_annee', 'id_classe_active','id_annee_trimestre', 'id_variable', 'prix']
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-
-            # 🔒 Vide par défaut
-            self.fields['id_annee_trimestre'].queryset = Annee_trimestre.objects.none()
-            self.fields['id_variable'].queryset = Variable.objects.none()
         labels = {
             'id_variable': "Frais scolaire / Variable",
             'prix': "Montant (Prix)",
@@ -105,6 +99,12 @@ class VariablePrixForm(forms.ModelForm):
             'prix': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ex: 50000'}),
     }
         
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 🔒 Vide par défaut
+        self.fields['id_variable'].queryset = Variable.objects.all()
+
+        self.fields['id_annee_trimestre'].queryset = Annee_trimestre.objects.all()
 
 class VariableDerogationForm(forms.ModelForm):
     class Meta:

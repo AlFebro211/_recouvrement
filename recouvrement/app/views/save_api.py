@@ -36,12 +36,14 @@ def save_variable_prix(request):
             id_annee = form.cleaned_data['id_annee']
             id_classe_active = form.cleaned_data['id_classe_active']
             id_variable = form.cleaned_data['id_variable']
+            id_annee_trimestre = form.cleaned_data['id_annee_trimestre']
             prix = form.cleaned_data['prix']
 
             if VariablePrix.objects.filter(
                 id_annee=id_annee,
                 id_classe_active=id_classe_active,
-                id_variable=id_variable
+                id_variable=id_variable,
+                id_annee_trimestre=id_annee_trimestre
             ).exists():
                 return JsonResponse({
                     'success': False,

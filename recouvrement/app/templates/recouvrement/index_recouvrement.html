@@ -1913,239 +1913,146 @@
     <!-- ====== prix/variables -->
     
     <script>
-        $(document).ready(function() {
-         if (window.location.pathname.includes("create_variable_prix")) {
-            $('#field-id_classe_active').hide();
-            $('#field-id_variable').hide();
-            $('#field-prix').hide();
-            $('#saveBtn').hide();
+$(document).ready(function() {
+    if (window.location.pathname.includes("create_variable_prix")) {
+        $('#field-id_classe_active, #field-id_annee_trimestre, #field-id_variable, #field-prix, #saveBtn').hide();
 
-            let selectedCampusId = null;
-            let selectedCycleId = null;
+        let selectedCampusId = null;
+        let selectedCycleId = null;
 
-            $('#id_id_annee').on('change', function() {
-                var anneeId = $(this).val();
-                if (!anneeId) {
-                    $('#field-id_classe_active').hide();
-                    $('#field-id_variable').hide();
-                    $('#field-prix').hide();
-                    $('#saveBtn').hide();
-                    selectedCampusId = null;
-                    selectedCycleId = null;
-                    return;
-                }
-
-                $.ajax({
-                    url: '/store_annee_session/',
-                    type: 'POST',
-                    data: {
-                        'id_annee': anneeId,
-                        'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            updateClasseDropdown(anneeId);
-                        } else {
-                            alert('Erreur : ' + response.error);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        alert('Une erreur est survenue lors de l\'enregistrement de l\'année.');
-                    }
-                });
-            });
-
-            function updateClasseDropdown(anneeId) {
-                var dropdown = $('#id_id_classe_active')[0];
-                fetch('/get_classes_actives/' + anneeId + '/')
-                    .then(response => response.json())
-                    .then(responseData => {
-                        if (!responseData.success && responseData.error) {
-                            alert('Erreur : ' + responseData.error);
-                            return;
-                        }
-                        const data = responseData.classes || [];
-                        dropdown.innerHTML = '<option value="">------</option>';
-                        if (data.length > 0) {
-                            data.forEach(item => {
-                                let option = document.createElement("option");
-                                option.value = item.id_classe_active;
-                                option.textContent = `${item.campus_nom} - ${item.cycle_nom} - ${item.classe_nom}${item.groupe ? ' (' + item.groupe + ')' : ''}`;
-                                option.dataset.campusId = item.id_campus;
-                                option.dataset.cycleId = item.id_cycle; 
-                                dropdown.appendChild(option);
-                            });
-                            $('#field-id_classe_active').show();
-                        } else {
-                            alert(responseData.message || 'Aucune classe active trouvée pour cette année scolaire.');
-                            $('#field-id_classe_active').hide();
-                        }
-                        $('#field-id_variable').hide();
-                        $('#field-prix').hide();
-                        $('#saveBtn').hide();
-                        selectedCampusId = null;
-                        selectedCycleId = null;
-                    })
-                    .catch(error => {
-                        alert('Erreur lors du chargement des classes.');
-                    });
-            }
-
-            // $('#id_id_classe_active').on('change', function() {
-            //     if ($(this).val()) {
-            //         const selectedOption = $(this).find('option:selected');
-            //         selectedCampusId = selectedOption.data('campusId');
-            //         selectedCycleId = selectedOption.data('cycleId');
-                    
-            //         $('#field-id_variable').show();
-            //     } else {
-            //         $('#field-id_variable').hide();
-            //         $('#field-prix').hide();
-            //         $('#saveBtn').hide();
-            //         selectedCampusId = null;
-            //         selectedCycleId = null;
-            //     }
-            // });
-            $('#id_id_classe_active').on('change', function() {
-            const classeOption = $(this).find('option:selected');
-            const classeId = $(this).val();
-            const anneeId = $('#id_id_annee').val();
-
-            selectedCampusId = classeOption.data('campusId');
-            selectedCycleId = classeOption.data('cycleId');
-
-            $('#id_id_annee_trimestre').html('<option value="">------</option>');
-            $('#field-id_annee_trimestre').hide();
-            $('#field-id_variable').hide();
-            $('#field-prix').hide();
-            $('#saveBtn').hide();
-
-            if (!classeId || !anneeId || !selectedCampusId || !selectedCycleId) return;
-
-            // 🔹 Charger les trimestres en incluant campus et cycle
-            fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
-                .then(resp => resp.json())
-                .then(data => {
-                    if (!data.success) {
-                        alert(data.error || 'Erreur chargement trimestres');
-                        return;
-                    }
-
-                    const dropdown = $('#id_id_annee_trimestre');
-                    dropdown.html('<option value="">------</option>');
-
-                    (data.trimestres || []).forEach(t => {
-                        dropdown.append(`<option value="${t.id}">${t.nom} (${t.etat})</option>`);
-                    });
-
-                    $('#field-id_annee_trimestre').show();
-                })
-                .catch(() => alert('Erreur serveur lors du chargement des trimestres'));
-        });
-
-        // 🔹 Changement de trimestre
-        $('#id_id_annee_trimestre').on('change', function() {
-            const trimestreId = $(this).val();
-            const classeId = $('#id_id_classe_active').val();
-            const anneeId = $('#id_id_annee').val();
-
-            $('#id_id_variable').html('<option value="">------</option>');
-            $('#field-id_variable').hide();
-            $('#field-prix').hide();
-            $('#saveBtn').hide();
-
-            if (!trimestreId || !classeId || !anneeId || !selectedCampusId || !selectedCycleId) {
-                console.warn('Paramètres manquants pour récupérer les variables', {
-                    trimestreId, classeId, anneeId, campusId: selectedCampusId, cycleId: selectedCycleId
-                });
+        // 🔹 Changement d'année
+        $('#id_id_annee').on('change', function() {
+            const anneeId = $(this).val();
+            if (!anneeId) {
+                $('#field-id_classe_active, #field-id_annee_trimestre, #field-id_variable, #field-prix, #saveBtn').hide();
+                selectedCampusId = null;
+                selectedCycleId = null;
                 return;
             }
 
-            // 🔹 Charger les variables liées au trimestre + campus + cycle
-            fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
-                .then(resp => resp.json())
-                .then(data => {
-                    if (!data.success) {
-                        alert(data.error || 'Erreur chargement variables');
-                        return;
-                    }
+            $.post('/store_annee_session/', {
+                id_annee: anneeId,
+                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+            }, function(response) {
+                if (response.success) updateClasseDropdown(anneeId);
+                else alert('Erreur : ' + response.error);
+            });
+        });
 
-                    const dropdown = $('#id_id_variable');
+        function updateClasseDropdown(anneeId) {
+            fetch(`/get_classes_actives/${anneeId}/`)
+                .then(res => res.json())
+                .then(data => {
+                    const dropdown = $('#id_id_classe_active');
                     dropdown.html('<option value="">------</option>');
 
-                    (data.variables || []).forEach(v => {
-                        dropdown.append(`<option value="${v.id_variable}">${v.nom_variable}</option>`);
-                    });
-
-                    $('#field-id_variable').show();
-                })
-                .catch(err => {
-                    console.error('Erreur fetch variables:', err);
-                    alert('Erreur serveur lors du chargement des variables');
-                });
-        });
-
-            $('#id_id_variable').on('change', function() {
-                if ($(this).val()) {
-                    $('#field-prix').show();
-                } else {
-                    $('#field-prix').hide();
-                    $('#saveBtn').hide();
-                }
-            });
-
-            $('#id_prix').on('input', function() {
-                if ($(this).val().trim() && parseFloat($(this).val()) > 0) {
-                    $('#saveBtn').show();
-                } else {
-                    $('#saveBtn').hide();
-                }
-            });
-
-            $('#variablePrixForm').on('submit', function(e) {
-                e.preventDefault();
-                var formData = $(this).serializeArray();
-                formData.push({ name: 'id_campus', value: selectedCampusId });
-                formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
-            
-
-                $.ajax({
-                    url: '/save_variable_prix/',
-                    type: 'POST',
-                    data: formData,
-                    
-                    success: function(response) {
-                    if (response.success) {
-                        alert('Frais scolaire enregistré avec succès !');
-                        $('#modalContainer').modal('hide');
-                        window.location.href = "{% url 'create_variable_prix' %}";
+                    if (data.success && data.classes.length > 0) {
+                        data.classes.forEach(c => {
+                            dropdown.append(
+                                `<option value="${c.id_classe_active}" data-campus-id="${c.id_campus}" data-cycle-id="${c.id_cycle}">
+                                    ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}${c.groupe ? ' (' + c.groupe + ')' : ''}</option>`
+                            );
+                        });
+                        $('#field-id_classe_active').show();
                     } else {
-                        let errorMsg = response.error;
-                        if (response.details) {
-                            try {
-                                const errors = JSON.parse(response.details);
-                                errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
-                            } catch (e) {
-                                console.error('Erreur lors du parsing des erreurs :', e);
-                            }
-                        }
-                        alert('Erreur : ' + errorMsg);
-                        // Redirection même en cas d’erreur
-                        window.location.href = "{% url 'create_variable_prix' %}";
+                        $('#field-id_classe_active').hide();
+                        alert(data.message || 'Aucune classe active trouvée.');
                     }
-                },
-                    error: function(xhr, status, error) {
-                        alert('Une erreur est survenue lors de l\'enregistrement.');
-                    }
-                });
-            });
 
-            $('#cancelBtn, #cancelBtnForm').on('click', function() {
-                $('#modalContainer').modal('hide');
-            });
-         };
+                    // Reset trimestres et variables
+                    $('#id_id_annee_trimestre').html('<option value="">------</option>');
+                    $('#field-id_annee_trimestre,, #field-prix, #saveBtn').hide();
+                    selectedCampusId = null;
+                    selectedCycleId = null;
+                })
+                .catch(() => alert('Erreur serveur lors du chargement des classes.'));
+        }
+
+        // 🔹 Changement de classe
+        $('#id_id_classe_active').on('change', function() {
+            const classeOption = $(this).find(':selected');
+            const classeId = $(this).val();
+            const anneeId = $('#id_id_annee').val();
+
+            selectedCampusId = classeOption.data('campus-id');
+            selectedCycleId = classeOption.data('cycle-id');
+
+            // Reset trimestres
+            $('#id_id_annee_trimestre').html('<option value="">------</option>');
+            $('#field-id_annee_trimestre').hide();
+
+            if (!classeId) return;
+
+            fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.trimestres.length > 0) {
+                        const trimestreDropdown = $('#id_id_annee_trimestre');
+                        trimestreDropdown.html('<option value="">------</option>');
+                        data.trimestres.forEach(t => {
+                            trimestreDropdown.append(`<option value="${t.id}">${t.nom} (${t.etat})</option>`);
+                        });
+                        $('#field-id_annee_trimestre').show();
+                    }
+                })
+                .catch(() => alert('Erreur serveur lors du chargement des trimestres.'));
         });
-    </script>
+
+        // 🔹 Changement de trimestre → **ne fait pas de fetch pour variables**
+        $('#id_id_annee_trimestre').on('change', function() {
+            const trimestreId = $(this).val();
+            const classeId = $('#id_id_classe_active').val();
+
+            // Afficher le champ variable et reset prix
+            $('#field-id_variable, #field-prix, #saveBtn').hide();
+            if (!trimestreId || !classeId) return;
+
+            // 🔹 Ici, simplement montrer le select variable (déjà rempli par Django)
+            $('#field-id_variable').show();
+        });
+
+        $('#id_id_variable').on('change', function() {
+            if ($(this).val()) $('#field-prix, #saveBtn').show();
+            else $('#field-prix, #saveBtn').hide();
+        });
+
+        $('#id_prix').on('input', function() {
+            if ($(this).val().trim() && parseFloat($(this).val()) > 0) $('#saveBtn').show();
+            else $('#saveBtn').hide();
+        });
+
+        // 🔹 Soumission formulaire
+        $('#variablePrixForm').on('submit', function(e) {
+            e.preventDefault();
+            let formData = $(this).serializeArray();
+            formData.push({ name: 'id_campus', value: selectedCampusId });
+            formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
+
+            $.post('/save_variable_prix/', formData, function(response) {
+                if (response.success) {
+                    alert('Frais scolaire enregistré avec succès !');
+                    $('#modalContainer').modal('hide');
+                    window.location.href = "{% url 'create_variable_prix' %}";
+                } else {
+                    let errorMsg = response.error || '';
+                    if (response.details) {
+                        try {
+                            const errors = JSON.parse(response.details);
+                            errorMsg += '\n' + Object.values(errors).map(f => f.message).join('\n');
+                        } catch(e) { console.error(e); }
+                    }
+                    alert('Erreur : ' + errorMsg);
+                }
+            });
+        });
+
+        $('#cancelBtn, #cancelBtnForm').on('click', function() {
+            $('#modalContainer').modal('hide');
+        });
+    }
+});
+</script>
+
     <!-- ====== derogation / datebutoire script ! -->
 
     <script>
@@ -3584,205 +3491,204 @@ $('#filter_classe').on('change', function () {
     <!-- penalites -->
    <script>
 $(document).ready(function () {
+    if (window.location.pathname === '/ajouter_penalite/') {
 
-    let selectedCampusId = null;
-    let selectedCycleId = null;
+        let selectedCampusId = null;
+        let selectedCycleId = null;
 
-    $('#id_id_annee').on('change', function () {
-        const anneeId = $(this).val();
+        $('#id_id_annee').on('change', function () {
+            const anneeId = $(this).val();
 
-        $('#id_id_classe_active').html('<option value="">------</option>');
-        $('#field-id_id_classe_active').hide();
+            $('#id_id_classe_active').html('<option value="">------</option>');
+            $('#field-id_id_classe_active').hide();
 
-        if (!anneeId) return;
+            if (!anneeId) return;
 
-        $.ajax({
-            url: '/store_annee_session/',
-            type: 'POST',
-            data: {
-                id_annee: anneeId,
-                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
-            },
-            success: function () {
-                fetch(`/get_classes_actives/${anneeId}/`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (!data.success) return;
+            $.ajax({
+                url: '/store_annee_session/',
+                type: 'POST',
+                data: {
+                    id_annee: anneeId,
+                    csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+                },
+                success: function () {
+                    fetch(`/get_classes_actives/${anneeId}/`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (!data.success) return;
 
-                        data.classes.forEach(c => {
-                            $('#id_id_classe_active').append(
-                                `<option value="${c.id_classe_active}"
-                                    data-campus-id="${c.id_campus}"
-                                    data-cycle-id="${c.id_cycle}">
-                                    ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
-                                </option>`
-                            );
+                            data.classes.forEach(c => {
+                                $('#id_id_classe_active').append(
+                                    `<option value="${c.id_classe_active}"
+                                        data-campus-id="${c.id_campus}"
+                                        data-cycle-id="${c.id_cycle}">
+                                        ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
+                                    </option>`
+                                );
+                            });
+                            $('#field-id_id_classe_active').show();
                         });
-                        $('#field-id_id_classe_active').show();
+                }
+            });
+        });
+
+        $('#id_id_classe_active').on('change', function () {
+            const opt = $(this).find(':selected');
+            const classeId = $(this).val();
+            const anneeId = $('#id_id_annee').val();
+
+            selectedCampusId = opt.data('campus-id');
+            selectedCycleId = opt.data('cycle-id');
+
+            $('#id_id_campus').val(selectedCampusId);
+            $('#id_id_cycle_actif').val(selectedCycleId);
+
+            $('#id_id_annee_trimestre').html('<option value="">------</option>');
+            $('#field-id_id_annee_trimestre').hide();
+
+            if (!classeId) return;
+
+            fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) return;
+
+                    data.trimestres.forEach(t => {
+                        $('#id_id_annee_trimestre').append(
+                            `<option value="${t.id}">${t.nom} (${t.etat})</option>`
+                        );
                     });
+                    $('#field-id_id_annee_trimestre').show();
+                });
+        });
+
+        $('#id_id_annee_trimestre').on('change', function () {
+            const trimestreId = $(this).val();
+            const classeId = $('#id_id_classe_active').val();
+            const anneeId = $('#id_id_annee').val();
+
+            $('#id_id_variable').html('<option value="">------</option>');
+            $('#field-id_id_variable').hide();
+
+            if (!trimestreId) return;
+
+            fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success) return;
+
+                    data.variables.forEach(v => {
+                        $('#id_id_variable').append(
+                            `<option value="${v.id_variable}">${v.nom_variable}</option>`
+                        );
+                    });
+                    $('#field-id_id_variable').show();
+                });
+        });
+
+        $('#id_type_penalite').on('change', function () {
+            if ($(this).val() === 'POURCENTAGE') {
+                $('#field-id_plafond').show();
+            } else {
+                $('#field-id_plafond').hide();
+                $('#id_plafond').val('');
             }
         });
-    });
 
-    $('#id_id_classe_active').on('change', function () {
-        const opt = $(this).find(':selected');
-        const classeId = $(this).val();
-        const anneeId = $('#id_id_annee').val();
+        $('#savePenaliteBtn').off('click').on('click', function (e) {
+            e.preventDefault();
 
-        selectedCampusId = opt.data('campus-id');
-        selectedCycleId = opt.data('cycle-id');
+            let form = $('#variablePrixForm'); 
+            
+            let formData = form.serializeArray();
+            formData.push({ name: 'id_campus', value: selectedCampusId });
+            formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
 
-        $('#id_id_campus').val(selectedCampusId);
-        $('#id_id_cycle_actif').val(selectedCycleId);
-
-        $('#id_id_annee_trimestre').html('<option value="">------</option>');
-        $('#field-id_id_annee_trimestre').hide();
-
-        if (!classeId) return;
-
-        fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
-            .then(res => res.json())
-            .then(data => {
-                if (!data.success) return;
-
-                data.trimestres.forEach(t => {
-                    $('#id_id_annee_trimestre').append(
-                        `<option value="${t.id}">${t.nom} (${t.etat})</option>`
-                    );
-                });
-                $('#field-id_id_annee_trimestre').show();
-            });
-    });
-
-    $('#id_id_annee_trimestre').on('change', function () {
-        const trimestreId = $(this).val();
-        const classeId = $('#id_id_classe_active').val();
-        const anneeId = $('#id_id_annee').val();
-
-        $('#id_id_variable').html('<option value="">------</option>');
-        $('#field-id_id_variable').hide();
-
-        if (!trimestreId) return;
-
-        fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
-            .then(res => res.json())
-            .then(data => {
-                if (!data.success) return;
-
-                data.variables.forEach(v => {
-                    $('#id_id_variable').append(
-                        `<option value="${v.id_variable}">${v.nom_variable}</option>`
-                    );
-                });
-                $('#field-id_id_variable').show();
-            });
-    });
-
-    $('#id_type_penalite').on('change', function () {
-        if ($(this).val() === 'POURCENTAGE') {
-            $('#field-id_plafond').show();
-        } else {
-            $('#field-id_plafond').hide();
-            $('#id_plafond').val('');
-        }
-    });
-
-    $('#savePenaliteBtn').off('click').on('click', function (e) {
-        e.preventDefault();
-
-        let form = $('#variablePrixForm'); 
-        
-        let formData = form.serializeArray();
-        formData.push({ name: 'id_campus', value: selectedCampusId });
-        formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
-
-        $.ajax({
-            url: "/save_penalite/",
-            type: 'POST',
-            data: formData,
-            success: function (response) {
-                if (response.success) {
-                    alert(' Pénalité enregistrée avec succès !');
-                    $('#modalContainer').fadeOut();
-                    window.location.reload();
-                } else {
-                    alert('Erreur : ' + (response.error || 'Veuillez vérifier les champs.'));
-                    console.error("Détails :", response.details);
+            $.ajax({
+                url: "/save_penalite/",
+                type: 'POST',
+                data: formData,
+                success: function (response) {
+                    if (response.success) {
+                        alert(' Pénalité enregistrée avec succès !');
+                        $('#modalContainer').fadeOut();
+                        window.location.reload();
+                    } else {
+                        alert('Erreur : ' + (response.error || 'Veuillez vérifier les champs.'));
+                        console.error("Détails :", response.details);
+                    }
+                },
+                error: function (xhr) {
+                    alert('Erreur critique : Impossible de joindre le serveur.');
+                    console.error(xhr.responseText);
                 }
-            },
-            error: function (xhr) {
-                alert('Erreur critique : Impossible de joindre le serveur.');
-                console.error(xhr.responseText);
-            }
+            });
         });
-    });
-    // Vérifie qu'on est sur la bonne page
-if (window.location.pathname === "/ajouter_penalite/") {
 
-    function loadPenalites() {
-        fetch("/get_penalites/")
-            .then(res => res.json())
-            .then(data => {
-                if (!data.success || !data.penalites) {
-                    $('#penaliteContainer').html('<p>Aucune pénalité trouvée.</p>');
-                    return;
-                }
+        function loadPenalites() {
+            fetch("/get_penalites/")
+                .then(res => res.json())
+                .then(data => {
+                    if (!data.success || !data.penalites) {
+                        $('#penaliteContainer').html('<p>Aucune pénalité trouvée.</p>');
+                        return;
+                    }
 
-                let rows = data.penalites.map(p => `
-                    <tr>
-                        <td>${p.annee || ''}</td>
-                        <td>${[p.campus, p.cycle, p.classe].filter(Boolean).join(' - ')}</td>
-                        <td>${p.variable || ''}</td>
-                        <td>${p.trimestre || ''}</td>
-                        <td>${p.type_penalite || ''}</td>
-                        <td>${p.valeur || ''}</td>
-                        <td>${p.plafond || ''}</td>
-                    </tr>
-                `).join('');
+                    let rows = data.penalites.map(p => `
+                        <tr>
+                            <td>${p.annee || ''}</td>
+                            <td>${[p.campus, p.cycle, p.classe].filter(Boolean).join(' - ')}</td>
+                            <td>${p.variable || ''}</td>
+                            <td>${p.trimestre || ''}</td>
+                            <td>${p.type_penalite || ''}</td>
+                            <td>${p.valeur || ''}</td>
+                            <td>${p.plafond || ''}</td>
+                        </tr>
+                    `).join('');
 
-                let tableHTML = `
-                    <div class="col-md-12">
-                        <div style="background-color: darkgrey; max-height: 500px; overflow-y: auto;" class="card">
-                            <div class="table-header">
-                                <h3>Liste des pénalités créées</h3>
-                            </div>
-                            <div class="card-body">
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-hover text-center shadow-sm">
-                                        <thead class="bg-primary text-white">
-                                            <tr>
-                                                <th>Année</th>
-                                                <th>Classe (Campus - Cycle)</th>
-                                                <th>Variable</th>
-                                                <th>Trimestre</th>
-                                                <th>Type</th>
-                                                <th>Valeur</th>
-                                                <th>Plafond</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            ${rows}
-                                        </tbody>
-                                    </table>
+                    let tableHTML = `
+                        <div class="col-md-12">
+                            <div style="background-color: darkgrey; max-height: 500px; overflow-y: auto;" class="card">
+                                <div class="table-header">
+                                    <h3>Liste des pénalités créées</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover text-center shadow-sm">
+                                            <thead class="bg-primary text-white">
+                                                <tr>
+                                                    <th>Année</th>
+                                                    <th>Classe (Campus - Cycle)</th>
+                                                    <th>Variable</th>
+                                                    <th>Trimestre</th>
+                                                    <th>Type</th>
+                                                    <th>Valeur</th>
+                                                    <th>Plafond</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${rows}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
 
-                const container = document.getElementById('penaliteContainer');
-                if(container) container.innerHTML = tableHTML;
+                    const container = document.getElementById('penaliteContainer');
+                    if(container) container.innerHTML = tableHTML;
 
-            })
-            .catch(err => {
-                console.error('Erreur chargement pénalités :', err);
-                $('#penaliteContainer').html('<p style="color:red;">Impossible de charger les pénalités.</p>');
-            });
+                })
+                .catch(err => {
+                    console.error('Erreur chargement pénalités :', err);
+                    $('#penaliteContainer').html('<p style="color:red;">Impossible de charger les pénalités.</p>');
+                });
+        }
+
+        // Appel initial
+        loadPenalites();
     }
-
-    // Appel initial
-    loadPenalites();
-}
 
 });
 

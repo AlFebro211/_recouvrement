@@ -476,9 +476,6 @@ def dashboard(request):
     return render(request,'recouvrement/index_recouvrement.html',context)
 
 
-from django.http import JsonResponse
-from django.db.models import Sum
-import calendar
 
 def dashboard_data(request):
     annee = request.GET.get('annee')
@@ -490,68 +487,62 @@ def dashboard_data(request):
     if not annee:
         return JsonResponse({'success': False})
 
-    # ===============================
     # 🔵 BASE QUERY PAIEMENTS
-    # ===============================
-    paiements = Paiement.objects.filter(
-        id_annee_id=annee,
-        status=True
-    )
+    paiements = Paiement.objects.filter(id_annee_id=annee, status=True)
 
-    if classe:
-        paiements = paiements.filter(id_classe_active_id=classe)
-    if eleve:
-        paiements = paiements.filter(id_eleve_id=eleve)
-    if variable:
-        paiements = paiements.filter(id_variable_id=variable)
+    if classe and classe.isdigit():
+        paiements = paiements.filter(id_classe_active_id=int(classe))
+    if eleve and eleve.isdigit():
+        paiements = paiements.filter(id_eleve_id=int(eleve))
+    if variable and variable.isdigit():
+        paiements = paiements.filter(id_variable_id=int(variable))
 
-    # ===============================
     # 🔵 STATS DE BASE
-    # ===============================
     total_paye = paiements.aggregate(total=Sum('montant'))['total'] or 0
     total_transactions = paiements.count()
 
-    # ===============================
-    # 🔵 RECUP CONTEXTE CLASSE
-    # ===============================
-    classe_active = Classe_active.objects.filter(
-        id_classe_active=classe
-    ).select_related('id_campus', 'cycle_id').first()
+    # 🔵 CONTEXTE CLASSE
+    classe_active = None
+    campus = None
+    cycle = None
+    if classe and classe.isdigit():
+        classe_active = Classe_active.objects.filter(id_classe_active=int(classe)) \
+            .select_related('id_campus', 'cycle_id').first()
+        if classe_active:
+            campus = classe_active.id_campus_id
+            cycle = classe_active.cycle_id_id
 
-    campus = classe_active.id_campus_id if classe_active else None
-    cycle = classe_active.cycle_id_id if classe_active else None
+    # 🔵 ÉLÈVES INSCRITS
+    eleves_inscrits = Eleve_inscription.objects.filter(id_annee_id=annee, status=1)
+    if classe_active:
+        eleves_inscrits = eleves_inscrits.filter(
+            id_classe_id=int(classe),
+            id_campus_id=campus,
+            id_classe_cycle_id=cycle
+        )
+    eleves_inscrits = list(eleves_inscrits.values_list('id_eleve_id', flat=True))
 
-    # ===============================
-    # 🔵 ELEVE INSCRITS
-    # ===============================
-    eleves_inscrits = Eleve_inscription.objects.filter(
-        id_annee_id=annee,
-        id_classe_id=classe,
-        id_campus_id=campus,
-        id_classe_cycle_id=cycle,
-        status=1
-    ).values_list('id_eleve_id', flat=True)
-
-    # ===============================
-    # 🔥 CALCUL TOTAL ATTENDU CORRECT
-    # ===============================
+    # 🔥 CALCUL TOTAL ATTENDU
     total_attendu = 0
-    variables_prix = VariablePrix.objects.filter(
-        id_annee_id=annee,
-        id_classe_active_id=classe,
-        id_campus_id=campus,
-        id_cycle_actif_id=cycle
-    )
+    variables_prix = VariablePrix.objects.filter(id_annee_id=annee)
+    if classe_active:
+        variables_prix = variables_prix.filter(
+            id_classe_active_id=int(classe),
+            id_campus_id=campus,
+            id_cycle_actif_id=cycle
+        )
+    if variable and variable.isdigit():
+        variables_prix = variables_prix.filter(id_variable=int(variable))
 
-    if eleve:
-        # 🔹 CAS ÉLÈVE SPÉCIFIQUE
+    if eleve and eleve.isdigit():
+        # CAS ÉLÈVE SPÉCIFIQUE
         for vp in variables_prix:
             prix_normal = vp.prix
             reduction = Eleve_reduction_prix.objects.filter(
                 id_variable_id=vp.id_variable_id,
-                id_eleve_id=eleve,
+                id_eleve_id=int(eleve),
                 id_annee_id=annee,
-                id_classe_active_id=classe,
+                id_classe_active_id=int(classe) if classe and classe.isdigit() else None,
                 id_campus_id=campus,
                 id_cycle_actif_id=cycle
             ).first()
@@ -559,18 +550,16 @@ def dashboard_data(request):
             if reduction:
                 montant_final -= (prix_normal * reduction.pourcentage) / 100
             total_attendu += montant_final
-
     else:
-        # 🔹 CAS CLASSE ENTIÈRE
+        # CAS CLASSE OU ANNÉE ENTIÈRE
         for vp in variables_prix:
             prix_normal = vp.prix
             variable_id = vp.id_variable_id
 
-            # élèves avec réduction
             reductions = Eleve_reduction_prix.objects.filter(
                 id_variable_id=variable_id,
                 id_annee_id=annee,
-                id_classe_active_id=classe,
+                id_classe_active_id=int(classe) if classe and classe.isdigit() else None,
                 id_campus_id=campus,
                 id_cycle_actif_id=cycle,
                 id_eleve_id__in=eleves_inscrits
@@ -580,40 +569,21 @@ def dashboard_data(request):
             nb_total_eleves = len(eleves_inscrits)
             nb_sans_reduction = nb_total_eleves - nb_reduction
 
-            # total sans réduction
             total_sans_reduction = prix_normal * nb_sans_reduction
+            total_avec_reduction = sum(
+                prix_normal - (prix_normal * red.pourcentage / 100) for red in reductions
+            )
+            total_attendu += total_sans_reduction + total_avec_reduction
 
-            # total avec réduction
-            total_avec_reduction = 0
-            for red in reductions:
-                montant_reduit = prix_normal - ((prix_normal * red.pourcentage) / 100)
-                total_avec_reduction += montant_reduit
-
-            # total variable
-            total_attendu += (total_sans_reduction + total_avec_reduction)
-
-    # ===============================
     # 🔵 RESTE A PAYER
-    # ===============================
     reste_a_payer = total_attendu - total_paye
 
-    # ===============================
     # 🔵 BANQUES
-    # ===============================
-    banques = paiements.values('id_banque__banque').annotate(
-        total=Sum('montant')
-    )
+    banques = paiements.values('id_banque__banque').annotate(total=Sum('montant'))
 
-    # ===============================
-    # 🔵 VARIABLES GRAPH
-    # ===============================
-    variables_data = paiements.values(
-        'id_variable__variable'
-    ).annotate(total=Sum('montant'))
+    # 🔵 VARIABLES POUR GRAPH
+    variables_data = paiements.values('id_variable__variable').annotate(total=Sum('montant'))
 
-    # ===============================
-    # 🔵 REPONSE JSON
-    # ===============================
     return JsonResponse({
         'success': True,
         'stats': {

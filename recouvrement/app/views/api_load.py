@@ -659,9 +659,10 @@ def get_trimestres_by_classe_active(request):
     return JsonResponse({'success': True, 'trimestres': data})
 
 
-def get_variables_by_trimestre(request):
 
-    annee_trimestre_id = request.GET.get('id_trimestre')  # 🔥 c'est maintenant id_annee_trimestre
+def get_variables_by_trimestre(request):
+    # 🔹 Paramètres
+    annee_trimestre_id = request.GET.get('id_trimestre')  # id_annee_trimestre
     classe_id = request.GET.get('id_classe')
     annee_id = request.GET.get('id_annee')
     campus_id = request.GET.get('id_campus')
@@ -673,15 +674,10 @@ def get_variables_by_trimestre(request):
             'error': 'Paramètres manquants'
         }, status=400)
 
-    # ==============================
-    # 1️⃣ RECUPERER DIRECTEMENT Annee_trimestre
-    # ==============================
+    # 🔹 Récupérer le trimestre
     annee_trimestre = Annee_trimestre.objects.filter(
         id_trimestre=annee_trimestre_id
     ).select_related('trimestre').first()
-
-    print("====DEBUG Annee_trimestre trouvé====")
-    print(annee_trimestre)
 
     if not annee_trimestre:
         return JsonResponse({
@@ -689,49 +685,31 @@ def get_variables_by_trimestre(request):
             'error': 'Trimestre invalide'
         }, status=400)
 
-    # ==============================
-    # 2️⃣ VARIABLE PRIX
-    # ==============================
+    # 🔹 Récupérer les VariablePrix liées
     variable_prix_qs = VariablePrix.objects.filter(
         id_annee_trimestre_id=annee_trimestre_id,
         id_classe_active_id=classe_id,
         id_annee_id=annee_id,
         id_campus_id=campus_id,
         id_cycle_actif_id=cycle_id
-    ).select_related('id_variable', 'id_variable__id_variable_categorie')
+    ).select_related('id_variable', 'id_variable__id_variable_categorie') \
+     .order_by('id_variable_id')
 
-    print("====DEBUG VariablePrix filtrées====")
-    print(list(variable_prix_qs.values(
-        'id_variable_id','id_annee_trimestre_id','id_classe_active_id',
-        'id_annee_id','id_campus_id','id_cycle_actif_id','prix'
-    )))
-
-    if not variable_prix_qs.exists():
-        return JsonResponse({
-            'success': False,
-            'error': 'Aucune configuration trouvée'
-        })
-
-    # ==============================
-    # 3️⃣ VARIABLES
-    # ==============================
-    variables_data = []
-    for vp in variable_prix_qs:
-        variable = vp.id_variable
-        variables_data.append({
-            'id_variable': variable.id_variable,
-            'nom_variable': variable.variable,
-            'categorie': variable.id_variable_categorie.nom,
+    # 🔹 Préparer la liste des variables avec prix
+    variables_data = [
+        {
+            'id_variable': vp.id_variable.id_variable,
+            'nom_variable': vp.id_variable.variable,
+            'categorie': vp.id_variable.id_variable_categorie.nom,
             'prix': vp.prix
-        })
+        }
+        for vp in variable_prix_qs
+    ]
 
-    # ==============================
-    # 4️⃣ REPONSE
-    # ==============================
     return JsonResponse({
         'success': True,
         'annee_trimestre': {
-            'id': annee_trimestre.id_trimestre,   # ✅ CORRIGÉ
+            'id': annee_trimestre.id_trimestre,
             'trimestre': annee_trimestre.trimestre.trimestre,
             'etat': annee_trimestre.etat_trimestre,
             'debut': annee_trimestre.debut,

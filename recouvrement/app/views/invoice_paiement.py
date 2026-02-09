@@ -17,7 +17,7 @@ from django.http import JsonResponse
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from django.contrib.staticfiles import finders
 from django.db.models import Sum
-import os
+import socket
 
 
 def generate_invoice(request, id_paiement):
@@ -470,16 +470,6 @@ def style_tableau_standard():
     ])
 
 
-from django.http import HttpResponse
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-from reportlab.lib.units import mm
-from reportlab.lib import colors
-from django.contrib.staticfiles import finders
-import socket
-import os
 
 def generate_facture_paiement(request):
     try:
