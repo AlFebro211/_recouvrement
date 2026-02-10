@@ -923,6 +923,7 @@ def get_penalites(request):
 
     for p in penalites:
         data.append({
+            'id_penalite_regle': p.id_penalite_regle,
             'annee': str(p.id_annee) if p.id_annee else '',
             'campus': str(p.id_campus) if p.id_campus else '',
             'cycle': str(p.id_cycle_actif) if p.id_cycle_actif else '',
@@ -931,7 +932,160 @@ def get_penalites(request):
             'trimestre': str(p.id_annee_trimestre) if p.id_annee_trimestre else '',
             'type_penalite': p.type_penalite,
             'valeur': p.valeur,
-            'plafond': p.plafond if p.plafond else ''
+            'plafond': p.plafond if p.plafond else '',
+            'actif': p.actif
         })
 
     return JsonResponse({'success': True, 'penalites': data})
+
+@csrf_exempt
+def toggle_penalite_actif(request):
+    if request.method == 'POST':
+        penalite_id = request.POST.get('id_penalite')
+        actif = request.POST.get('actif') == 'true'
+
+        try:
+            penalite = PenaliteConfig.objects.get(id_penalite_regle=penalite_id)
+            penalite.actif = actif
+            penalite.save()
+            return JsonResponse({'success': True})
+        except PenaliteConfig.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Pénalité non trouvée'})
+    return JsonResponse({'success': False, 'error': 'Méthode non autorisée'})
+
+from django.http import JsonResponse
+from django.db.models import Q
+
+def eleves_en_penalite(request):
+
+    id_campus   = request.GET.get('id_campus')
+    id_cycle    = request.GET.get('id_cycle')
+    id_classe   = request.GET.get('classe')
+    annee       = request.GET.get('annee')
+    variable_id = request.GET.get('variable')
+    trimestre   = request.GET.get('trimestre')
+
+    if not annee:
+        return JsonResponse({'success': False, 'error': 'Veuillez sélectionner une année.'})
+
+    # ================================
+    # FILTRE INSCRIPTION ELEVE
+    # ================================
+    filtre_eleve = Q(id_annee_id=annee, status=True)
+
+    if id_campus:
+        filtre_eleve &= Q(id_campus_id=id_campus)
+
+    if id_cycle:
+        filtre_eleve &= Q(id_classe_cycle_id=id_cycle)
+
+    if id_classe:
+        filtre_eleve &= Q(id_classe_id=id_classe)
+
+    if trimestre:
+        filtre_eleve &= Q(id_trimestre_id=trimestre)
+
+    # IMPORTANT : select_related pour performance
+    inscriptions = Eleve_inscription.objects.filter(
+        filtre_eleve
+    ).select_related('id_eleve')
+
+    # ================================
+    # FILTRE CONFIG PENALITE
+    # ================================
+    filtre_config = Q(id_annee_id=annee, actif=True)
+
+    if variable_id:
+        filtre_config &= Q(id_variable_id=variable_id)
+
+    if trimestre:
+        filtre_config &= Q(id_annee_trimestre_id=trimestre)
+
+    if id_campus:
+        filtre_config &= Q(id_campus_id=id_campus)
+
+    if id_cycle:
+        filtre_config &= Q(id_cycle_actif_id=id_cycle)
+
+    configs = PenaliteConfig.objects.filter(filtre_config)
+
+    resultats = []
+
+    # ================================
+    # LOGIQUE PENALITE
+    # ================================
+    for config in configs:
+
+        db_obj = VariableDatebutoire.objects.filter(
+            id_variable=config.id_variable,
+            id_annee=config.id_annee,
+            id_campus=config.id_campus,
+            id_cycle_actif=config.id_cycle_actif
+        ).first()
+
+        if not db_obj:
+            continue
+
+        eleves_concernes = inscriptions.filter(
+            id_campus=config.id_campus,
+            id_classe_cycle=config.id_cycle_actif
+        )
+
+        for insc in eleves_concernes:
+
+            eleve = insc.id_eleve   # ✅ LE BON OBJET ELEVE
+
+            # ================= DEROGATION
+            derog = VariableDerogation.objects.filter(
+                id_eleve=eleve,
+                id_variable=config.id_variable,
+                id_annee_id=annee
+            ).first()
+
+            date_limite = derog.date_derogation if derog else db_obj.date_butoire
+
+            # ================= PAIEMENT
+            paiement = Paiement.objects.filter(
+                id_eleve=eleve,
+                id_variable=config.id_variable,
+                id_annee_id=annee,
+                status=True
+            ).order_by('date_paie').first()
+
+            if paiement and paiement.date_paie and paiement.date_paie <= date_limite:
+                continue
+
+            # ================= PRIX
+            prix_obj = VariablePrix.objects.filter(
+                id_variable=config.id_variable,
+                id_annee_id=annee,
+                id_campus=config.id_campus,
+                id_cycle_actif=config.id_cycle_actif
+            ).first()
+
+            montant_base = prix_obj.prix if prix_obj else 0
+
+            reduc = Eleve_reduction_prix.objects.filter(
+                id_eleve=eleve,
+                id_variable=config.id_variable
+            ).first()
+
+            if reduc:
+                montant_base -= (montant_base * reduc.pourcentage / 100)
+
+            # ================= PENALITE
+            if config.type_penalite == 'FORFAIT':
+                montant_p = config.valeur
+            else:
+                montant_p = (montant_base * config.valeur / 100)
+                if config.plafond:
+                    montant_p = min(montant_p, config.plafond)
+
+            resultats.append({
+                'eleve': f"{eleve.nom} {eleve.prenom}",
+                'variable': config.id_variable.variable,
+                'date_limite': date_limite.strftime('%d/%m/%Y'),
+                'montant_penalite': round(montant_p, 2)
+            })
+
+    return JsonResponse({'success': True, 'eleves': resultats})

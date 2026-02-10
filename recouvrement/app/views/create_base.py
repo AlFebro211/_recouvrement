@@ -230,6 +230,17 @@ def ajouter_penalite(request):
         'variable_list': variables_list,
     })
 
+def eleves_penalite(request):
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'eleves_en_penalite_form': True,
+        'form_type': 'eleves_en_penalite_form',
+        'annees': Annee.objects.all(),
+        'classes': Classe_active.objects.all(),
+        'trimestres': ['Trimestre 1','Trimestre 2','Trimestre 3','Trimestre 4','Trimestre 5'],
+        'variables': Variable.objects.all(),
+    })
+
+
 def historique(request):
     return render(request, 'recouvrement/index_recouvrement.html', {
         'historique_financier_form': True,
@@ -477,112 +488,110 @@ def dashboard(request):
 
 
 
+from django.db.models import Sum
+from django.http import JsonResponse
+
 def dashboard_data(request):
     annee = request.GET.get('annee')
-    classe = request.GET.get('classe')
-    eleve = request.GET.get('eleve')
-    trimestre = request.GET.get('trimestre')
-    variable = request.GET.get('variable')
+    classe_id = request.GET.get('classe')
+    eleve_id = request.GET.get('eleve')
+    trimestre_id = request.GET.get('trimestre')
+    variable_id = request.GET.get('variable')
 
     if not annee:
         return JsonResponse({'success': False})
 
-    # 🔵 BASE QUERY PAIEMENTS
-    paiements = Paiement.objects.filter(id_annee_id=annee, status=True)
+    # =======================
+    # Récupération classe si existante
+    # =======================
+    classe_active = None
+    campus_id = None
+    cycle_id = None
+    if classe_id and classe_id.isdigit():
+        classe_active = Classe_active.objects.filter(id_classe_active=int(classe_id)).first()
+        if classe_active:
+            campus_id = classe_active.id_campus_id
+            cycle_id = classe_active.cycle_id_id
 
-    if classe and classe.isdigit():
-        paiements = paiements.filter(id_classe_active_id=int(classe))
-    if eleve and eleve.isdigit():
-        paiements = paiements.filter(id_eleve_id=int(eleve))
-    if variable and variable.isdigit():
-        paiements = paiements.filter(id_variable_id=int(variable))
+    # =======================
+    # Élèves actifs selon filtres
+    # =======================
+    eleves = Eleve_inscription.objects.filter(id_annee_id=annee, status=True)
+    if classe_active:
+        eleves = eleves.filter(
+            id_classe_id=classe_active.classe_id_id,
+            id_campus_id=campus_id,
+            id_classe_cycle_id=cycle_id
+        )
+    if eleve_id and eleve_id.isdigit():
+        eleves = eleves.filter(id_eleve_id=int(eleve_id))
 
-    # 🔵 STATS DE BASE
+    eleves_ids = list(eleves.values_list('id_eleve_id', flat=True))
+
+    # =======================
+    # Variables selon filtre
+    # =======================
+    variables_prix = VariablePrix.objects.filter(id_annee_id=annee)
+    if classe_active:
+        variables_prix = variables_prix.filter(id_classe_active_id=classe_active.id_classe_active)
+    if variable_id and variable_id.isdigit():
+        variables_prix = variables_prix.filter(id_variable_id=int(variable_id))
+    if trimestre_id and trimestre_id.isdigit():
+        variables_prix = variables_prix.filter(id_annee_trimestre_id=int(trimestre_id))
+
+    # =======================
+    # Paiements filtrés
+    # =======================
+    paiements = Paiement.objects.filter(
+        id_annee_id=annee,
+        status=True,
+        id_eleve_id__in=eleves_ids,
+        id_variable_id__in=variables_prix.values_list('id_variable', flat=True)
+    )
+
     total_paye = paiements.aggregate(total=Sum('montant'))['total'] or 0
     total_transactions = paiements.count()
 
-    # 🔵 CONTEXTE CLASSE
-    classe_active = None
-    campus = None
-    cycle = None
-    if classe and classe.isdigit():
-        classe_active = Classe_active.objects.filter(id_classe_active=int(classe)) \
-            .select_related('id_campus', 'cycle_id').first()
-        if classe_active:
-            campus = classe_active.id_campus_id
-            cycle = classe_active.cycle_id_id
+    # Paiements rejetés
+    paiements_rejetes = Paiement.objects.filter(
+        id_annee_id=annee,
+        is_rejected=True,
+        id_eleve_id__in=eleves_ids,
+        id_variable_id__in=variables_prix.values_list('id_variable', flat=True)
+    )
+    total_rejete = paiements_rejetes.count()
 
-    # 🔵 ÉLÈVES INSCRITS
-    eleves_inscrits = Eleve_inscription.objects.filter(id_annee_id=annee, status=1)
-    if classe_active:
-        eleves_inscrits = eleves_inscrits.filter(
-            id_classe_id=int(classe),
-            id_campus_id=campus,
-            id_classe_cycle_id=cycle
-        )
-    eleves_inscrits = list(eleves_inscrits.values_list('id_eleve_id', flat=True))
-
-    # 🔥 CALCUL TOTAL ATTENDU
+    # Montant attendu et dettes
     total_attendu = 0
-    variables_prix = VariablePrix.objects.filter(id_annee_id=annee)
-    if classe_active:
-        variables_prix = variables_prix.filter(
-            id_classe_active_id=int(classe),
-            id_campus_id=campus,
-            id_cycle_actif_id=cycle
-        )
-    if variable and variable.isdigit():
-        variables_prix = variables_prix.filter(id_variable=int(variable))
+    eleves_en_dette_set = set()
 
-    if eleve and eleve.isdigit():
-        # CAS ÉLÈVE SPÉCIFIQUE
-        for vp in variables_prix:
-            prix_normal = vp.prix
+    for vp in variables_prix:
+        prix = vp.prix
+        for e_id in eleves_ids:
             reduction = Eleve_reduction_prix.objects.filter(
                 id_variable_id=vp.id_variable_id,
-                id_eleve_id=int(eleve),
-                id_annee_id=annee,
-                id_classe_active_id=int(classe) if classe and classe.isdigit() else None,
-                id_campus_id=campus,
-                id_cycle_actif_id=cycle
+                id_eleve_id=e_id,
+                id_annee_id=annee
             ).first()
-            montant_final = prix_normal
+
+            attendu = prix
             if reduction:
-                montant_final -= (prix_normal * reduction.pourcentage) / 100
-            total_attendu += montant_final
-    else:
-        # CAS CLASSE OU ANNÉE ENTIÈRE
-        for vp in variables_prix:
-            prix_normal = vp.prix
-            variable_id = vp.id_variable_id
+                attendu -= (prix * reduction.pourcentage)/100
 
-            reductions = Eleve_reduction_prix.objects.filter(
-                id_variable_id=variable_id,
+            total_attendu += attendu
+
+            total_paye_eleve = Paiement.objects.filter(
+                id_variable_id=vp.id_variable_id,
+                id_eleve_id=e_id,
                 id_annee_id=annee,
-                id_classe_active_id=int(classe) if classe and classe.isdigit() else None,
-                id_campus_id=campus,
-                id_cycle_actif_id=cycle,
-                id_eleve_id__in=eleves_inscrits
-            )
+                status=True,
+                is_rejected=False
+            ).aggregate(total=Sum('montant'))['total'] or 0
 
-            nb_reduction = reductions.count()
-            nb_total_eleves = len(eleves_inscrits)
-            nb_sans_reduction = nb_total_eleves - nb_reduction
+            if total_paye_eleve < attendu:
+                eleves_en_dette_set.add(e_id)
 
-            total_sans_reduction = prix_normal * nb_sans_reduction
-            total_avec_reduction = sum(
-                prix_normal - (prix_normal * red.pourcentage / 100) for red in reductions
-            )
-            total_attendu += total_sans_reduction + total_avec_reduction
-
-    # 🔵 RESTE A PAYER
-    reste_a_payer = total_attendu - total_paye
-
-    # 🔵 BANQUES
-    banques = paiements.values('id_banque__banque').annotate(total=Sum('montant'))
-
-    # 🔵 VARIABLES POUR GRAPH
-    variables_data = paiements.values('id_variable__variable').annotate(total=Sum('montant'))
+    reste_a_payer = max(total_attendu - total_paye, 0)
 
     return JsonResponse({
         'success': True,
@@ -591,9 +600,206 @@ def dashboard_data(request):
             'total_paye': total_paye,
             'total_attendu': total_attendu,
             'reste_a_payer': reste_a_payer,
-            'eleves_en_dette': 0,
-            'total_rejete': 0
-        },
-        'banques': list(banques),
-        'variables': list(variables_data),
+            'eleves_en_dette': len(eleves_en_dette_set),
+            'total_rejete': total_rejete
+        }
+    })
+
+from django.db.models import Sum
+from django.http import JsonResponse
+
+def dashboard_details(request):
+    annee = request.GET.get('annee')
+    classe_id = request.GET.get('classe')
+    variable_id = request.GET.get('variable')
+    type_stat = request.GET.get('type')
+    eleve_id = request.GET.get('eleve')
+    trimestre_id = request.GET.get('trimestre')
+
+    if not annee:
+        return JsonResponse({'success': False, 'rows': []})
+
+    rows = []
+    title = ""
+
+    # =======================
+    # Classe active
+    # =======================
+    classe_active = None
+    campus_id = None
+    cycle_id = None
+    if classe_id and classe_id.isdigit():
+        classe_active = Classe_active.objects.filter(id_classe_active=int(classe_id)).first()
+        if classe_active:
+            campus_id = classe_active.id_campus_id
+            cycle_id = classe_active.cycle_id_id
+
+    # =======================
+    # Élèves
+    # =======================
+    eleves = Eleve_inscription.objects.filter(id_annee_id=annee, status=True)
+    if classe_active:
+        eleves = eleves.filter(
+            id_classe_id=classe_active.classe_id_id,
+            id_campus_id=campus_id,
+            id_classe_cycle_id=cycle_id
+        )
+    if eleve_id and eleve_id.isdigit():
+        eleves = eleves.filter(id_eleve_id=int(eleve_id))
+
+    # =======================
+    # Variables
+    # =======================
+    variables_prix = VariablePrix.objects.filter(id_annee_id=annee)
+    if classe_active:
+        variables_prix = variables_prix.filter(id_classe_active_id=classe_active.id_classe_active)
+    if variable_id and variable_id.isdigit():
+        variables_prix = variables_prix.filter(id_variable_id=int(variable_id))
+    if trimestre_id and trimestre_id.isdigit():
+        variables_prix = variables_prix.filter(id_annee_trimestre_id=int(trimestre_id))
+
+    def get_classe_nom(obj):
+        c = obj.id_classe_active
+        return f"{c.id_campus.campus} - {c.cycle_id.cycle_id.cycle} - {c.classe_id.classe} {c.groupe or ''}"
+
+    # =======================
+    # Construction des stats
+    # =======================
+    if type_stat == "dette":
+        title = "Élèves en dette"
+        for vp in variables_prix:
+            prix = vp.prix
+            for e in eleves:
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee
+                ).first()
+                attendu = prix
+                if reduction:
+                    attendu -= (prix * reduction.pourcentage)/100
+                total_paye = Paiement.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee,
+                    status=True,
+                    is_rejected=False
+                ).aggregate(total=Sum('montant'))['total'] or 0
+                reste = attendu - total_paye
+                if reste > 0:
+                    rows.append({
+                        "classe": get_classe_nom(vp),
+                        "nom": f"{e.id_eleve.nom} {e.id_eleve.prenom}",
+                        "variable": vp.id_variable.variable,
+                        "total": reste
+                    })
+
+    elif type_stat == "reste":
+        title = "Reste à payer par variable"
+        for vp in variables_prix:
+            reste_global = 0
+            prix = vp.prix
+            for e in eleves:
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee
+                ).first()
+                attendu = prix
+                if reduction:
+                    attendu -= (prix * reduction.pourcentage)/100
+                total_paye = Paiement.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee,
+                    status=True,
+                    is_rejected=False
+                ).aggregate(total=Sum('montant'))['total'] or 0
+                reste_global += max(attendu - total_paye, 0)
+            rows.append({
+                "classe": get_classe_nom(vp),
+                "variable": vp.id_variable.variable,
+                "total": reste_global
+            })
+
+    elif type_stat == "transactions":
+        title = "Nombre de paiements par variable"
+        for vp in variables_prix:
+            qs = Paiement.objects.filter(
+                id_variable_id=vp.id_variable_id,
+                id_annee_id=annee,
+                status=True,
+                is_rejected=False
+            )
+            if classe_active:
+                qs = qs.filter(id_classe_active_id=classe_active.id_classe_active)
+            rows.append({
+                "classe": get_classe_nom(vp),
+                "variable": vp.id_variable.variable,
+                "total": qs.count()
+            })
+
+    elif type_stat == "paye":
+        title = "Montants payés"
+        for vp in variables_prix:
+            for e in eleves:
+                paiements_qs = Paiement.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee,
+                    status=True,
+                    is_rejected=False
+                )
+                if classe_active:
+                    paiements_qs = paiements_qs.filter(id_classe_active_id=classe_active.id_classe_active)
+                total_montant = paiements_qs.aggregate(total=Sum('montant'))['total'] or 0
+                if total_montant > 0:
+                    rows.append({
+                        "classe": get_classe_nom(vp),
+                        "nom": f"{e.id_eleve.nom} {e.id_eleve.prenom}",
+                        "variable": vp.id_variable.variable,
+                        "total": total_montant
+                    })
+
+    elif type_stat == "attendu":
+        title = "Montant attendu par variable"
+        for vp in variables_prix:
+            total_attendu = 0
+            prix = vp.prix
+            for e in eleves:
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee
+                ).first()
+                if reduction:
+                    total_attendu += prix - (prix * reduction.pourcentage)/100
+                else:
+                    total_attendu += prix
+            rows.append({
+                "classe": get_classe_nom(vp),
+                "variable": vp.id_variable.variable,
+                "total": total_attendu
+            })
+
+    elif type_stat == "rejet":
+        title = "Paiements rejetés"
+        for vp in variables_prix:
+            qs = Paiement.objects.filter(
+                id_variable_id=vp.id_variable_id,
+                id_annee_id=annee,
+                is_rejected=True
+            )
+            if classe_active:
+                qs = qs.filter(id_classe_active_id=classe_active.id_classe_active)
+            rows.append({
+                "classe": get_classe_nom(vp),
+                "variable": vp.id_variable.variable,
+                "total": qs.count()
+            })
+
+    return JsonResponse({
+        'success': True,
+        'title': title,
+        'rows': rows
     })

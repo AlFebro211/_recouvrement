@@ -1,4 +1,5 @@
 <style>
+  
   .footer-text {
     font-style: italic;
     color: aqua;
@@ -243,6 +244,11 @@
   <button id="openModal" class="bottom-nav-item">
     <span class="bottom-nav-icon">➕</span>Assigner une pénalité
   </button>
+  <!-- eleves _en penalite -->
+  {% elif eleves_en_penalite_form %}
+  <button id="openModal" class="bottom-nav-item">
+    <span class="bottom-nav-icon">➕</span>Eleves en pénalité
+  </button>
   <!-- form historique financier  -->
   {% elif historique_financier_form %}
   <button id="openModal" class="bottom-nav-item">
@@ -310,9 +316,9 @@
     <span class="bottom-nav-icon">➕</span>Selectionner ici pour visualiser les inscrits
   </button>
   {%  else %}
-  <nav class="bottom-navbar">
+  <!-- <nav class="bottom-navbar"> -->
     <p class="footer-text">&copy; <span id="year"></span> ICTGroup. Tous droits réservés.</p>
-  </nav>
+  <!-- </nav> -->
   <!-- form_select_bulletin -->
   {% endif %}
   

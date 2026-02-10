@@ -46,6 +46,9 @@ urlpatterns =[
    path('ajouter_penalite/', views.ajouter_penalite, name='ajouter_penalite'),
    path('save_penalite/', views.save_penalite, name='save_penalite'),
    path('get_penalites/', views.get_penalites, name='get_penalites'),
+   path('eleves_penalite/', views.eleves_penalite, name='eleves_penalite'),
+   path('eleves_en_penalite/', views.eleves_en_penalite, name='eleves_en_penalite'),
+   path('toggle_penalite_actif/', views.toggle_penalite_actif, name='toggle_penalite_actif'),
    path('historique/', views.historique, name='historique'),
    path('historique_financier/', views.historique_financier, name='historique_financier'),
    path('generate_historique_pdf/', views.generate_historique_pdf, name='generate_historique_pdf'),
@@ -58,6 +61,7 @@ urlpatterns =[
    path('generate_facture_paiement/', views.generate_facture_paiement, name='generate_facture_paiement'),
    path('dashboard/', views.dashboard, name='dashboard'),
    path('dashboard-data/', views.dashboard_data, name='dashboard_data'),
+   path('dashboard-details/', views.dashboard_details, name='dashboard_details'),
    
 
 

@@ -483,6 +483,19 @@
     background-color: var(--accent-color); /* badge visible sur fond clair */
     color: #fff;
 }
+/* Scroll horizontal intelligent pour petits écrans */
+.table-responsive {
+    width: 100%;
+    overflow-x: auto;      /* ✅ scroll horizontal */
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Empêche les colonnes de se casser */
+.table-responsive table {
+    min-width: 900px;   /* ajuste selon ton tableau */
+    white-space: nowrap;
+}
 
 
 
@@ -942,6 +955,48 @@
                             </button>
                             <button type="button" class="btn btn-primary" id="btn-afficher-dette">
                                 <i class="fas fa-plus-circle"></i> Afficher les dettes
+                            </button>
+                        </div>
+                    <!-- eleves en penalites filltrage -->
+                    {% elif form_type == 'eleves_en_penalite_form' %}
+                        <h2>Formulaire de filtrage des élèves en pénalité</h2>
+                        <div class="form-row">
+                            <div class="form-group col-md-3">
+                                <label>Année</label>
+                                <select id="hf-annee" class="form-control">
+                                    <option value="">-- Choisir une année --</option>
+                                    {% for annee in annees %}
+                                        <option value="{{ annee.id_annee }}">{{ annee.annee }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="form-group col-md-3">
+                                <label>Classe</label>
+                                <select id="hf-classe" class="form-control">
+                                    <option value="">-- Choisir une classe --</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group col-md-3">
+                                <label>Trimestre</label>
+                                <select id="hf-trimestre" class="form-control">
+                                    <option value="">-- Choisir un trimestre --</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label>Variable</label>
+                                <select id="hf-variable" class="form-control">
+                                    <option value="">-- Choisir une variable --</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-actions mt-4">
+                            <button type="button" class="btn btn-cancel" id="cancelBtn">
+                                <span class="emoji-icon">❌</span> Annuler
+                            </button>
+                            <button type="button" class="btn btn-primary" id="btn-afficher-eleves-penalite">
+                                <i class="fas fa-plus-circle"></i> Afficher les eleves
                             </button>
                         </div>
   
@@ -3491,60 +3546,55 @@ $('#filter_classe').on('change', function () {
     <!-- penalites -->
    <script>
 $(document).ready(function () {
-    if (window.location.pathname === '/ajouter_penalite/') {
+    if (window.location.pathname === '/ajouter_penalite/' || window.location.pathname === '/liste_penalite/') {
 
         let selectedCampusId = null;
         let selectedCycleId = null;
 
+        // ==========================
+        // Charger les classes selon année
+        // ==========================
         $('#id_id_annee').on('change', function () {
             const anneeId = $(this).val();
-
-            $('#id_id_classe_active').html('<option value="">------</option>');
-            $('#field-id_id_classe_active').hide();
-
+            $('#id_id_classe_active').html('<option value="">------</option>').hide();
             if (!anneeId) return;
 
             $.ajax({
                 url: '/store_annee_session/',
                 type: 'POST',
-                data: {
-                    id_annee: anneeId,
-                    csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
-                },
+                data: { id_annee: anneeId, csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val() },
                 success: function () {
                     fetch(`/get_classes_actives/${anneeId}/`)
                         .then(res => res.json())
                         .then(data => {
                             if (!data.success) return;
-
                             data.classes.forEach(c => {
                                 $('#id_id_classe_active').append(
-                                    `<option value="${c.id_classe_active}"
-                                        data-campus-id="${c.id_campus}"
-                                        data-cycle-id="${c.id_cycle}">
+                                    `<option value="${c.id_classe_active}" data-campus-id="${c.id_campus}" data-cycle-id="${c.id_cycle}">
                                         ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
                                     </option>`
                                 );
                             });
-                            $('#field-id_id_classe_active').show();
+                            $('#id_id_classe_active').show();
                         });
                 }
             });
         });
 
+        // ==========================
+        // Mettre à jour campus et cycle lors de la sélection de la classe
+        // ==========================
         $('#id_id_classe_active').on('change', function () {
             const opt = $(this).find(':selected');
-            const classeId = $(this).val();
-            const anneeId = $('#id_id_annee').val();
-
             selectedCampusId = opt.data('campus-id');
             selectedCycleId = opt.data('cycle-id');
 
             $('#id_id_campus').val(selectedCampusId);
             $('#id_id_cycle_actif').val(selectedCycleId);
 
-            $('#id_id_annee_trimestre').html('<option value="">------</option>');
-            $('#field-id_id_annee_trimestre').hide();
+            $('#id_id_annee_trimestre').html('<option value="">------</option>').hide();
+            const classeId = $(this).val();
+            const anneeId = $('#id_id_annee').val();
 
             if (!classeId) return;
 
@@ -3552,79 +3602,38 @@ $(document).ready(function () {
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success) return;
-
                     data.trimestres.forEach(t => {
-                        $('#id_id_annee_trimestre').append(
-                            `<option value="${t.id}">${t.nom} (${t.etat})</option>`
-                        );
+                        $('#id_id_annee_trimestre').append(`<option value="${t.id}">${t.nom} (${t.etat})</option>`);
                     });
-                    $('#field-id_id_annee_trimestre').show();
+                    $('#id_id_annee_trimestre').show();
                 });
         });
 
+        // ==========================
+        // Variables selon trimestre
+        // ==========================
         $('#id_id_annee_trimestre').on('change', function () {
             const trimestreId = $(this).val();
             const classeId = $('#id_id_classe_active').val();
             const anneeId = $('#id_id_annee').val();
 
-            $('#id_id_variable').html('<option value="">------</option>');
-            $('#field-id_id_variable').hide();
-
+            $('#id_id_variable').html('<option value="">------</option>').hide();
             if (!trimestreId) return;
 
             fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
                 .then(res => res.json())
                 .then(data => {
                     if (!data.success) return;
-
                     data.variables.forEach(v => {
-                        $('#id_id_variable').append(
-                            `<option value="${v.id_variable}">${v.nom_variable}</option>`
-                        );
+                        $('#id_id_variable').append(`<option value="${v.id_variable}">${v.nom_variable}</option>`);
                     });
-                    $('#field-id_id_variable').show();
+                    $('#id_id_variable').show();
                 });
         });
 
-        $('#id_type_penalite').on('change', function () {
-            if ($(this).val() === 'POURCENTAGE') {
-                $('#field-id_plafond').show();
-            } else {
-                $('#field-id_plafond').hide();
-                $('#id_plafond').val('');
-            }
-        });
-
-        $('#savePenaliteBtn').off('click').on('click', function (e) {
-            e.preventDefault();
-
-            let form = $('#variablePrixForm'); 
-            
-            let formData = form.serializeArray();
-            formData.push({ name: 'id_campus', value: selectedCampusId });
-            formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
-
-            $.ajax({
-                url: "/save_penalite/",
-                type: 'POST',
-                data: formData,
-                success: function (response) {
-                    if (response.success) {
-                        alert(' Pénalité enregistrée avec succès !');
-                        $('#modalContainer').fadeOut();
-                        window.location.reload();
-                    } else {
-                        alert('Erreur : ' + (response.error || 'Veuillez vérifier les champs.'));
-                        console.error("Détails :", response.details);
-                    }
-                },
-                error: function (xhr) {
-                    alert('Erreur critique : Impossible de joindre le serveur.');
-                    console.error(xhr.responseText);
-                }
-            });
-        });
-
+        // ==========================
+        // Afficher le tableau des pénalités
+        // ==========================
         function loadPenalites() {
             fetch("/get_penalites/")
                 .then(res => res.json())
@@ -3637,51 +3646,75 @@ $(document).ready(function () {
                     let rows = data.penalites.map(p => `
                         <tr>
                             <td>${p.annee || ''}</td>
-                            <td>${[p.campus, p.cycle, p.classe].filter(Boolean).join(' - ')}</td>
+                            <td>${[p.cycle, p.classe].filter(Boolean).join(' - ')}</td>
                             <td>${p.variable || ''}</td>
                             <td>${p.trimestre || ''}</td>
                             <td>${p.type_penalite || ''}</td>
                             <td>${p.valeur || ''}</td>
                             <td>${p.plafond || ''}</td>
+                            <td>
+                                <input type="checkbox" class="toggle-actif" data-id="${p.id_penalite_regle}" ${p.actif ? 'checked' : ''}>
+                            </td>
+                            <td>
+                                <button class="edit-penalite btn btn-sm btn-warning" data-id="${p.id_penalite_regle}">Modifier</button>
+                            </td>
                         </tr>
                     `).join('');
 
-                    let tableHTML = `
-                        <div class="col-md-12">
-                            <div style="background-color: darkgrey; max-height: 500px; overflow-y: auto;" class="card">
-                                <div class="table-header">
-                                    <h3>Liste des pénalités créées</h3>
-                                </div>
-                                <div class="card-body">
-                                    <div class="table-responsive">
-                                        <table class="table table-bordered table-hover text-center shadow-sm">
-                                            <thead class="bg-primary text-white">
-                                                <tr>
-                                                    <th>Année</th>
-                                                    <th>Classe (Campus - Cycle)</th>
-                                                    <th>Variable</th>
-                                                    <th>Trimestre</th>
-                                                    <th>Type</th>
-                                                    <th>Valeur</th>
-                                                    <th>Plafond</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                ${rows}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
+                    const tableHTML = `
+                        <div style="max-height:500px; overflow-y:auto;" class="card shadow-sm">
+                            <div class="table-header p-3">
+                                <h3>Liste des pénalités créées</h3>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-bordered table-hover text-center">
+                                    <thead class="bg-primary text-white">
+                                        <tr>
+                                            <th>Année</th>
+                                            <th>Classe (Campus - Cycle)</th>
+                                            <th>Variable</th>
+                                            <th>Trimestre</th>
+                                            <th>Type</th>
+                                            <th>Valeur</th>
+                                            <th>Plafond</th>
+                                            <th>Actif</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
                             </div>
                         </div>
                     `;
 
-                    const container = document.getElementById('penaliteContainer');
-                    if(container) container.innerHTML = tableHTML;
+                    $('#penaliteContainer').html(tableHTML);
 
+                    // ==========================
+                    // Gestion du toggle actif
+                    // ==========================
+                    $('.toggle-actif').off('change').on('change', function () {
+                        const id = $(this).data('id');
+                        const actif = $(this).is(':checked');
+
+                        $.ajax({
+                            url: '/toggle_penalite_actif/',
+                            type: 'POST',
+                            data: {
+                                id_penalite: id,
+                                actif: actif,
+                                csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+                            },
+                            success: function (res) {
+                                if (!res.success) alert('Erreur lors de la mise à jour de la pénalité.');
+                            },
+                            error: function () {
+                                alert('Erreur serveur, impossible de changer le statut.');
+                            }
+                        });
+                    });
                 })
                 .catch(err => {
-                    console.error('Erreur chargement pénalités :', err);
+                    console.error(err);
                     $('#penaliteContainer').html('<p style="color:red;">Impossible de charger les pénalités.</p>');
                 });
         }
@@ -3689,10 +3722,254 @@ $(document).ready(function () {
         // Appel initial
         loadPenalites();
     }
+    // =====================================================
+    
+});
+</script>
+<!-- PAGE : ELEVE EN PENALITE -->
+ <script>
+$(document).ready(function () {
+
+    if (window.location.pathname === '/eleves_penalite/') {
+
+        let currentCampusId = "";
+        let currentCycleId = "";
+
+        // =====================================
+        // 1️⃣ Charger les classes selon année
+        // =====================================
+        $('#hf-annee').on('change', function () {
+
+            const anneeId = $(this).val();
+
+            $('#hf-classe').html('<option value="">------</option>').hide();
+            $('#hf-trimestre').html('<option value="">------</option>').hide();
+            $('#hf-variable').html('<option value="">------</option>').hide();
+
+            if (!anneeId) return;
+
+            fetch(`/get_classes_actives/${anneeId}/`)
+            .then(res => res.json())
+            .then(data => {
+
+                if (!data.success) return;
+
+                data.classes.forEach(c => {
+
+                    $('#hf-classe').append(`
+                        <option value="${c.id_classe_active}" 
+                                data-campus="${c.id_campus}" 
+                                data-cycle="${c.id_cycle}">
+                            ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
+                        </option>
+                    `);
+                });
+
+                $('#hf-classe').show();
+            });
+
+        });
+
+
+        // =====================================
+        // 2️⃣ Classe sélectionnée
+        // =====================================
+        $('#hf-classe').on('change', function () {
+
+            const opt = $(this).find(':selected');
+
+            currentCampusId = opt.data('campus') || "";
+            currentCycleId = opt.data('cycle') || "";
+
+            const classeId = $(this).val();
+            const anneeId = $('#hf-annee').val();
+
+            $('#hf-trimestre').html('<option value="">------</option>').hide();
+            $('#hf-variable').html('<option value="">------</option>').hide();
+
+            if (!classeId) return;
+
+            fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${currentCampusId}&id_cycle=${currentCycleId}`)
+            .then(res => res.json())
+            .then(data => {
+
+                if (!data.success) return;
+
+                data.trimestres.forEach(t => {
+                    $('#hf-trimestre').append(`
+                        <option value="${t.id}">
+                            ${t.nom} (${t.etat})
+                        </option>
+                    `);
+                });
+
+                $('#hf-trimestre').show();
+            });
+
+        });
+
+
+        // =====================================
+        // 3️⃣ Variables selon trimestre
+        // =====================================
+        $('#hf-trimestre').on('change', function () {
+
+            const trimestreId = $(this).val();
+            const classeId = $('#hf-classe').val();
+            const anneeId = $('#hf-annee').val();
+
+            $('#hf-variable').html('<option value="">------</option>').hide();
+
+            if (!trimestreId) return;
+
+            fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${currentCampusId}&id_cycle=${currentCycleId}`)
+            .then(res => res.json())
+            .then(data => {
+
+                if (!data.success) return;
+
+                data.variables.forEach(v => {
+                    $('#hf-variable').append(`
+                        <option value="${v.id_variable}">
+                            ${v.nom_variable}
+                        </option>
+                    `);
+                });
+
+                $('#hf-variable').show();
+            });
+
+        });
+
+
+
+        // =====================================
+        // 4️⃣ AFFICHER ELEVE PENALITE
+        // =====================================
+        $('#btn-afficher-eleves-penalite').on('click', function () {
+
+            const annee = $('#hf-annee').val();
+
+            if (!annee) {
+                alert("L'année est obligatoire.");
+                return;
+            }
+
+            const classe = $('#hf-classe').val() || "";
+            const trimestre = $('#hf-trimestre').val() || "";
+            const variable = $('#hf-variable').val() || "";
+
+            const url = `/eleves_en_penalite/?annee=${annee}&classe=${classe}&trimestre=${trimestre}&variable=${variable}&id_campus=${currentCampusId}&id_cycle=${currentCycleId}`;
+
+            $('#penaliteContainer').html(`
+                <div class="text-center p-4">
+                    <div class="spinner-border text-primary"></div>
+                    <p>Chargement des pénalités...</p>
+                </div>
+            `);
+
+            fetch(url)
+            .then(res => res.json())
+            .then(data => {
+
+                if (!data.success) {
+                    alert("Erreur : " + data.error);
+                    return;
+                }
+
+                let rows = "";
+                let total = 0;
+                let count = data.eleves.length;
+
+                data.eleves.sort((a,b)=>
+                    (parseInt(b.montant_penalite)||0) - (parseInt(a.montant_penalite)||0)
+                );
+
+                if(count === 0){
+
+                    rows = `<tr>
+                        <td colspan="4" class="text-center text-muted">
+                            Aucun élève en pénalité trouvé.
+                        </td>
+                    </tr>`;
+
+                }else{
+
+                    data.eleves.forEach(e=>{
+
+                        const montant = parseInt(e.montant_penalite)||0;
+                        total += montant;
+
+                        rows += `
+                            <tr>
+                                <td class="fw-bold">${e.eleve}</td>
+                                <td>${e.variable}</td>
+                                <td>${e.date_limite}</td>
+                                <td class="text-danger text-end fw-bold">
+                                    ${montant.toLocaleString()} FBu
+                                </td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                $('#penaliteContainer').html(`
+
+                    <div class="card shadow-lg mt-3 border-0">
+
+                        <div class="table-header">
+                            📌 Liste des élèves en pénalité
+                            <span class="badge bg-danger">${count}</span>
+                        </div>
+
+                        <div class="card-body" style="max-height:420px; overflow-y:auto;">
+                            <table class="table table-hover table-striped align-middle">
+                                <thead class="table-dark sticky-top">
+                                    <tr>
+                                        <th>Élève</th>
+                                        <th>Frais</th>
+                                        <th>Échéance</th>
+                                        <th class="text-end">Pénalité</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>${rows}</tbody>
+
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="3" class="text-end">
+                                            💰 TOTAL PÉNALITÉ
+                                        </th>
+                                        <th class="text-danger text-end fw-bold">
+                                            ${total.toLocaleString()} FBu
+                                        </th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                `);
+
+                const modalEl = document.getElementById('modalPenalite');
+                if(modalEl){
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if(modal) modal.hide();
+                }
+
+            })
+            .catch(err=>{
+                console.error(err);
+                alert("Erreur de connexion serveur.");
+            });
+
+        });
+
+    }
 
 });
-
 </script>
+
+
 <!-- historiques financier -->
 <script>
 $(document).ready(function () {
@@ -4123,7 +4400,6 @@ $(document).ready(function () {
 });
 });
 </script>
-<!-- Dashboard -->
 
 
 

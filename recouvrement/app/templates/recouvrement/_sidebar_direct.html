@@ -85,16 +85,25 @@
         <!-- Item 3 penalite -->
         <div class="menu-item">
             <a href="#" class="menu-link">
-                <span class="icon-wrapper">💰</span>
+                <!-- Menu principal : avertissement / pénalités -->
+                <span class="icon-wrapper"><i class="fas fa-exclamation-triangle"></i></span>
                 <span class="menu-text">Gestion des pénalités</span>
                 <i class="fas fa-chevron-right arrow-icon"></i>
             </a>
             <div class="submenu">
-                <!-- Créer / configurer les pénalités -->
+                <!-- Sous-menu : configurer une pénalité -->
                 <div class="menu-item">
                     <a href="{% url 'ajouter_penalite' %}" class="submenu-link">
-                        <span class="icon-wrapper">📝</span>
+                        <span class="icon-wrapper"><i class="fas fa-file-invoice-dollar"></i></span>
                         <span class="menu-text">Configurer une pénalité</span>
+                    </a>
+                </div>
+                <div class="menu-item">
+                    <a href="{% url 'eleves_penalite' %}" class="submenu-link">
+                        <span class="icon-wrapper">
+                            <i class="fas fa-user-clock"></i>
+                        </span>
+                        <span class="menu-text">Élèves en pénalité</span>
                     </a>
                 </div>
             </div>

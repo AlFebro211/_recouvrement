@@ -15,50 +15,47 @@
         <select id="trimestreFilter"><option value="">Trimestre</option></select>
         <select id="variableFilter"><option value="">Variable</option></select>
         <select id="eleveFilter"><option value="">Élève</option></select>
-
-        <!-- <button id="applyFilter">Appliquer</button> -->
     </div>
 
     <!-- CARTES STATS -->
     <div class="dashboard-cards">
-        <div class="card blue">
+        <div class="card blue stat-card" data-type="transactions">
             <h4>Total Paiements</h4>
             <p id="totalPaiement">0</p>
         </div>
-        <div class="card green">
+        <div class="card green stat-card" data-type="paye">
             <h4>Montant Payé</h4>
             <p id="montantPaye">0</p>
         </div>
-        <div class="card purple">
+        <div class="card purple stat-card" data-type="attendu">
             <h4>Total Attendu</h4>
             <p id="totalAttendu">0</p>
         </div>
-        <div class="card orange">
+        <div class="card orange stat-card" data-type="reste">
             <h4>Reste à Payer</h4>
             <p id="restePaye">0</p>
         </div>
-        <div class="card red">
+        <div class="card red stat-card" data-type="dette">
             <h4>Élèves en Dette</h4>
             <p id="elevesDette">0</p>
         </div>
-        <div class="card gray">
+        <div class="card gray stat-card" data-type="rejet">
             <h4>Paiements Rejetés</h4>
             <p id="totalRejete">0</p>
         </div>
     </div>
+</div>
 
-    <!-- GRAPHIQUES -->
-    <!-- <div class="charts">
-        <div class="chart-box">
-            <canvas id="paiementChart"></canvas>
+<!-- MODAL DETAILS STATS -->
+<div id="statsModal" class="stats-modal">
+    <div class="stats-modal-content">
+        <div class="stats-modal-header">
+            <h3 id="modalTitle">Détails</h3>
+            <span id="closeModal">&times;</span>
         </div>
-        <div class="chart-box">
-            <canvas id="classeChart"></canvas>
-        </div>
-        <div class="chart-box">
-            <canvas id="evolutionChart"></canvas>
-        </div>
-    </div> -->
+
+        <div id="modalBody"></div>
+    </div>
 </div>
 
 <style>
@@ -67,12 +64,17 @@
     --accent-color: #dc2626;
     --card-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
 }
+
+/* DASHBOARD */
 .dashboard { margin-left:300px; padding:25px; max-width:calc(100% - 300px); font-family:sans-serif; }
 .filter-box { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:25px; }
 .filter-box select, .filter-box button { padding:8px 12px; border-radius:8px; border:1px solid #ddd; }
 .filter-box button { background:var(--primary-color); color:white; cursor:pointer; font-weight:bold; }
+
+/* CARDS */
 .dashboard-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; margin-bottom:30px; }
-.card { padding:20px; border-radius:12px; color:white; box-shadow:var(--card-shadow); }
+.card { padding:20px; border-radius:12px; color:white; box-shadow:var(--card-shadow); cursor:pointer; transition: transform .2s; }
+.card:hover { transform: translateY(-4px); }
 .card h4 { margin:0; font-size:14px; opacity:0.9; }
 .card p { margin:10px 0 0; font-size:24px; font-weight:bold; }
 .blue { background:linear-gradient(135deg,var(--primary-color),#1d4ed8); }
@@ -81,172 +83,314 @@
 .red { background:linear-gradient(135deg,#dc2626,#b91c1c); }
 .orange { background:linear-gradient(135deg,#f97316,#ea580c); }
 .gray { background:linear-gradient(135deg,#6b7280,#4b5563); }
-.charts { margin-top:30px; display:flex; flex-wrap:wrap; gap:20px; }
-.chart-box { flex:1 1 450px; background:white; padding:15px; border-radius:12px; box-shadow:var(--card-shadow); min-height:300px; }
+
+/* MODAL */
+.stats-modal{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.5);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+}
+.stats-modal-content{
+    background:white;
+    width:600px;
+    max-height:80vh;
+    overflow:auto;
+    border-radius:12px;
+    padding:20px;
+    animation:fadeIn .3s ease;
+}
+.stats-modal-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-bottom:1px solid #eee;
+    margin-bottom:15px;
+}
+#closeModal{
+    font-size:22px;
+    cursor:pointer;
+}
+@keyframes fadeIn{
+    from{transform:scale(.9);opacity:0;}
+    to{transform:scale(1);opacity:1;}
+}
+
 </style>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-let paiementChart, classeChart, evolutionChart;
-let selectedCampusId = null;
-let selectedCycleId = null;
-
 $(document).ready(function(){
 
-    // =========================
-    // 🔵 ANNÉE
-    // =========================
-    $('#anneeFilter').on('change', function(){
-        const anneeId = $(this).val();
-        loadClasses(anneeId);
-    });
+    // ==========================
+    // RESET DASHBOARD
+    // ==========================
+    function resetDashboard(){
+        $('#totalPaiement,#montantPaye,#totalAttendu,#restePaye,#elevesDette,#totalRejete').text('0');
+    }
 
-    // =========================
-    // 🔵 CLASSES
-    // =========================
+    // ==========================
+    // LOAD CLASSES
+    // ==========================
     function loadClasses(anneeId){
-        $('#classeFilter, #trimestreFilter, #variableFilter, #eleveFilter').html('<option value="">Chargement...</option>');
-        selectedCampusId = null;
-        selectedCycleId = null;
+
+        $('#classeFilter').html('<option value="">Classe</option>');
+        $('#trimestreFilter').html('<option value="">Trimestre</option>');
+        $('#variableFilter').html('<option value="">Variable</option>');
+        $('#eleveFilter').html('<option value="">Élève</option>');
 
         if(!anneeId){
-            $('#classeFilter, #trimestreFilter, #variableFilter, #eleveFilter').html('<option value="">--</option>');
-            loadDashboard(); // actualisation si rien n'est choisi
+            resetDashboard();
             return;
         }
 
-        $.ajax({
-            url: '/store_annee_session/',
-            type: 'POST',
-            data: {id_annee: anneeId, csrfmiddlewaretoken:$('input[name=csrfmiddlewaretoken]').val()},
-            success: function(){
-                fetch(`/get_classes_actives/${anneeId}/`)
-                .then(res=>res.json())
-                .then(data=>{
-                    $('#classeFilter').html('<option value="">Classe</option>');
-                    $('#trimestreFilter').html('<option value="">Trimestre</option>');
-                    $('#variableFilter').html('<option value="">Variable</option>');
-                    $('#eleveFilter').html('<option value="">Élève</option>');
+        fetch(`/get_classes_actives/${anneeId}/`)
+        .then(res=>res.json())
+        .then(data=>{
 
-                    if(data.success){
-                        data.classes.forEach(c=>{
-                            $('#classeFilter').append(
-                                `<option value="${c.id_classe_active}" data-campus-id="${c.id_campus}" data-cycle-id="${c.id_cycle}">${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}</option>`
-                            );
-                        });
-                    }
-                    loadDashboard(); // mise à jour après chargement des classes
+            if(data.success){
+
+                data.classes.forEach(c=>{
+
+                    $('#classeFilter').append(`
+                        <option value="${c.id_classe_active}"
+                            data-campus-id="${c.id_campus}"
+                            data-cycle-id="${c.id_cycle}">
+                            ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
+                        </option>
+                    `);
+
                 });
+
             }
+
         });
+
     }
 
-    // =========================
-    // 🔵 CLASSE -> TRIMESTRES, VARIABLES, ÉLÈVES
-    // =========================
+    // ==========================
+    // ANNEE CHANGE
+    // ==========================
+    $('#anneeFilter').on('change', function(){
+
+        const anneeId = $(this).val();
+
+        resetDashboard();
+        loadClasses(anneeId);
+        loadDashboard();
+
+    });
+
+    // ==========================
+    // CLASSE CHANGE
+    // ==========================
     $('#classeFilter').on('change', function(){
+
         const opt = $(this).find(':selected');
-        selectedCampusId = opt.data('campus-id');
-        selectedCycleId = opt.data('cycle-id');
+
+        // 🔥 IMPORTANT : on récupère les ID (pas les noms)
+        const selectedCampusId = opt.data('campus-id');
+        const selectedCycleId = opt.data('cycle-id');
 
         const classeId = $(this).val();
         const anneeId = $('#anneeFilter').val();
 
-        $('#trimestreFilter, #variableFilter, #eleveFilter').html('<option value="">Chargement...</option>');
+        $('#trimestreFilter').html('<option value="">Trimestre</option>');
+        $('#variableFilter').html('<option value="">Variable</option>');
+        $('#eleveFilter').html('<option value="">Élève</option>');
 
-        if(!classeId){ loadDashboard(); return; }
+        if(!classeId){
+            loadDashboard();
+            return;
+        }
 
-        // 🔹 Trimestres
+        // ======================
+        // FETCH TRIMESTRES
+        // ======================
         fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
         .then(res=>res.json())
         .then(data=>{
-            $('#trimestreFilter').html('<option value="">Trimestre</option>');
+
             if(data.success){
+
                 data.trimestres.forEach(t=>{
-                    $('#trimestreFilter').append(`<option value="${t.id}">${t.nom} (${t.etat})</option>`);
+                    $('#trimestreFilter').append(`<option value="${t.id}">${t.nom}</option>`);
                 });
+
             }
-            loadDashboard(); // mise à jour après chargement des trimestres
+
+            loadDashboard();
+
         });
 
-        // 🔹 Élèves
+        // ======================
+        // FETCH ELEVES
+        // ======================
         fetch(`/get_pupils_registred_classe/?id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${classeId}&id_annee=${anneeId}`)
         .then(res=>res.json())
         .then(data=>{
-            $('#eleveFilter').html('<option value="">Élève</option>');
+
             if(data.success){
+
                 data.data.forEach(e=>{
                     $('#eleveFilter').append(`<option value="${e.id_eleve}">${e.nom_complet}</option>`);
                 });
+
             }
-            loadDashboard(); // mise à jour après chargement des élèves
+
         });
+
     });
 
-    // =========================
-    // 🔵 TRIMESTRE -> VARIABLES
-    // =========================
+    // ==========================
+    // TRIMESTRE CHANGE
+    // ==========================
     $('#trimestreFilter').on('change', function(){
+
         const trimestreId = $(this).val();
-        const classeId = $('#classeFilter').val();
         const anneeId = $('#anneeFilter').val();
 
-        $('#variableFilter').html('<option value="">Chargement...</option>');
+        const classeOpt = $('#classeFilter').find(':selected');
 
-        if(!trimestreId || !classeId){ loadDashboard(); return; }
+        const selectedCampusId = classeOpt.data('campus-id');
+        const selectedCycleId = classeOpt.data('cycle-id');
+        const classeId = $('#classeFilter').val();
 
+        $('#variableFilter').html('<option value="">Variable</option>');
+
+        if(!trimestreId){
+            loadDashboard();
+            return;
+        }
+
+        // 🔥 FETCH VARIABLES RESTAURÉ
         fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
         .then(res=>res.json())
         .then(data=>{
-            $('#variableFilter').html('<option value="">Variable</option>');
+
             if(data.success){
+
                 data.variables.forEach(v=>{
                     $('#variableFilter').append(`<option value="${v.id_variable}">${v.nom_variable}</option>`);
                 });
+
             }
-            loadDashboard(); // mise à jour après chargement des variables
+
+            loadDashboard();
+
         });
+
     });
 
-    // =========================
-    // 🔵 CHANGEMENT VARIABLE OU ÉLÈVE
-    // =========================
-    $('#variableFilter, #eleveFilter').on('change', function(){
-        loadDashboard(); // mise à jour immédiate
-    });
+    // ==========================
+    // AUTRES FILTRES
+    // ==========================
+    $('#variableFilter,#eleveFilter').on('change', loadDashboard);
 
-    // =========================
-    // 🔵 FONCTION LOAD DASHBOARD
-    // =========================
+    // ==========================
+    // LOAD DASHBOARD DATA
+    // ==========================
     function loadDashboard(){
-        const annee = $('#anneeFilter').val();
-        const classe = $('#classeFilter').val();
-        const eleve = $('#eleveFilter').val();
-        const trimestre = $('#trimestreFilter').val();
-        const variable = $('#variableFilter').val();
 
-        if(!annee) return;
+        const annee = $('#anneeFilter').val();
+        const classe = $('#classeFilter').val() || '';
+        const eleve = $('#eleveFilter').val() || '';
+        const trimestre = $('#trimestreFilter').val() || '';
+        const variable = $('#variableFilter').val() || '';
+
+        if(!annee){
+            resetDashboard();
+            return;
+        }
 
         fetch(`/dashboard-data/?annee=${annee}&classe=${classe}&eleve=${eleve}&trimestre=${trimestre}&variable=${variable}`)
         .then(res=>res.json())
         .then(data=>{
+
             if(!data.success){
-                $('#totalPaiement,#montantPaye,#totalAttendu,#restePaye,#elevesDette,#totalRejete').text('0');
+                resetDashboard();
                 return;
             }
 
             const stats = data.stats;
+
             $('#totalPaiement').text(stats.total_transactions || 0);
             $('#montantPaye').text(stats.total_paye || 0);
             $('#totalAttendu').text(stats.total_attendu || 0);
             $('#restePaye').text(stats.reste_a_payer || 0);
             $('#elevesDette').text(stats.eleves_en_dette || 0);
             $('#totalRejete').text(stats.total_rejete || 0);
+
         });
+
     }
+$('.stat-card').on('click', function(){
+
+    const type = $(this).data('type');
+    const annee = $('#anneeFilter').val();
+    const classe = $('#classeFilter').val() || '';
+    const eleve = $('#eleveFilter').val() || '';
+    const trimestre = $('#trimestreFilter').val() || '';
+    const variable = $('#variableFilter').val() || '';
+
+    if(!annee) return;
+
+    $('#modalTitle').text('Chargement...');
+    $('#modalBody').html('Chargement...');
+    $('#statsModal').css('display','flex');
+
+    fetch(`/dashboard-details/?type=${type}&annee=${annee}&classe=${classe}&eleve=${eleve}&trimestre=${trimestre}&variable=${variable}`)
+    .then(res=>res.json())
+    .then(data=>{
+
+        if(!data.success || !data.rows.length){
+            $('#modalBody').html('Aucune donnée');
+            return;
+        }
+
+        $('#modalTitle').text(data.title);
+
+        const showEleve = type === 'dette' || type === 'paye';
+
+        let html = `<table style="width:100%;border-collapse:collapse">
+            <tr>
+                <th style="text-align:left;border-bottom:1px solid #ddd">Classe</th>
+                ${showEleve ? '<th style="text-align:left;border-bottom:1px solid #ddd">Élève</th>' : ''}
+                <th style="text-align:left;border-bottom:1px solid #ddd">Variable</th>
+                <th style="text-align:right;border-bottom:1px solid #ddd">Total</th>
+            </tr>`;
+
+        data.rows.forEach(r => {
+            html += `<tr>
+                <td>${r.classe}</td>
+                ${showEleve ? `<td>${r.nom || '-'}</td>` : ''}
+                <td>${r.variable || '-'}</td>
+                <td style="text-align:right">${r.total}</td>
+            </tr>`;
+        });
+
+        html += '</table>';
+        $('#modalBody').html(html);
+
+    });
 
 });
 
+
+    // CLOSE MODAL
+    $('#closeModal').on('click', ()=>$('#statsModal').hide());
+
+    $('#statsModal').on('click', function(e){
+        if(e.target.id==='statsModal') $(this).hide();
+    });
+
+});
 </script>
