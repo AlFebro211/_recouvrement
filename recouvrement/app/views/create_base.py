@@ -510,8 +510,8 @@ def dashboard_data(request):
     if classe_id and classe_id.isdigit():
         classe_active = Classe_active.objects.filter(id_classe_active=int(classe_id)).first()
         if classe_active:
-            campus_id = classe_active.id_campus_id
-            cycle_id = classe_active.cycle_id_id
+            campus_id = classe_active.id_campus
+            cycle_id = classe_active.cycle_id
 
     # =======================
     # Élèves actifs selon filtres
@@ -519,7 +519,7 @@ def dashboard_data(request):
     eleves = Eleve_inscription.objects.filter(id_annee_id=annee, status=True)
     if classe_active:
         eleves = eleves.filter(
-            id_classe_id=classe_active.classe_id_id,
+            id_classe_id=classe_active.id_classe_active,
             id_campus_id=campus_id,
             id_classe_cycle_id=cycle_id
         )
@@ -569,7 +569,7 @@ def dashboard_data(request):
         prix = vp.prix
         for e_id in eleves_ids:
             reduction = Eleve_reduction_prix.objects.filter(
-                id_variable_id=vp.id_variable_id,
+                id_variable_id=vp.id_variable,
                 id_eleve_id=e_id,
                 id_annee_id=annee
             ).first()
@@ -581,7 +581,7 @@ def dashboard_data(request):
             total_attendu += attendu
 
             total_paye_eleve = Paiement.objects.filter(
-                id_variable_id=vp.id_variable_id,
+                id_variable_id=vp.id_variable,
                 id_eleve_id=e_id,
                 id_annee_id=annee,
                 status=True,
@@ -631,8 +631,8 @@ def dashboard_details(request):
     if classe_id and classe_id.isdigit():
         classe_active = Classe_active.objects.filter(id_classe_active=int(classe_id)).first()
         if classe_active:
-            campus_id = classe_active.id_campus_id
-            cycle_id = classe_active.cycle_id_id
+            campus_id = classe_active.id_campus
+            cycle_id = classe_active.cycle_id
 
     # =======================
     # Élèves
@@ -640,7 +640,7 @@ def dashboard_details(request):
     eleves = Eleve_inscription.objects.filter(id_annee_id=annee, status=True)
     if classe_active:
         eleves = eleves.filter(
-            id_classe_id=classe_active.classe_id_id,
+            id_classe_id=classe_active.id_classe_active,
             id_campus_id=campus_id,
             id_classe_cycle_id=cycle_id
         )
@@ -652,7 +652,7 @@ def dashboard_details(request):
     # =======================
     variables_prix = VariablePrix.objects.filter(id_annee_id=annee)
     if classe_active:
-        variables_prix = variables_prix.filter(id_classe_active_id=classe_active.id_classe_active)
+        variables_prix = variables_prix.filter(id_classe_active=classe_active.id_classe_active)
     if variable_id and variable_id.isdigit():
         variables_prix = variables_prix.filter(id_variable_id=int(variable_id))
     if trimestre_id and trimestre_id.isdigit():

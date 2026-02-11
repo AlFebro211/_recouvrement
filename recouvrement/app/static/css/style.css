@@ -1519,3 +1519,49 @@ body.sidebar-active .main-content {
     margin: 0 auto;
 }
 
+/* Formulaire compact et aligné sur une ligne */
+.form-grid {
+    display: flex;
+    gap: 15px; /* espace entre les selects */
+    flex-wrap: wrap; /* passe en ligne suivante si trop petit */
+    margin-bottom: 1rem;
+}
+
+.form-grid .form-group {
+    flex: 1; /* chaque select prend un tiers */
+    min-width: 150px; /* largeur mini pour mobile */
+}
+
+.form-grid label {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+    display: block;
+    color: var(--text-dark);
+}
+
+.form-grid select.form-control {
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    transition: all 0.3s;
+}
+
+.form-grid select.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.2);
+    background-color: white;
+}
+
+/* Responsive: passe en colonne sur mobile */
+@media (max-width: 768px) {
+    .form-grid {
+        flex-direction: column;
+    }
+
+    .form-grid .form-group {
+        width: 100%;
+    }
+}

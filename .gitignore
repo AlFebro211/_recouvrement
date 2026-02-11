@@ -17,7 +17,6 @@ db.sqlite3
 *.log
 media/
 staticfiles/
-
 # Clés et configurations sensibles
 .env
 config/settings_local.py

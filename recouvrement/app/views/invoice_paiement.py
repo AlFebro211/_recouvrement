@@ -1,5 +1,6 @@
 
 
+from urllib import request
 from django.http import HttpResponse
 from django.contrib.auth.decorators import login_required
 from app.models import Paiement, Institution,Eleve_inscription,Campus,Eleve,Classe_active,Classe_cycle_actif,Annee
@@ -378,14 +379,13 @@ def generate_fiche_paie_eleve(request):
         # --- LOGO ---
         logo_path = finders.find('assets/img/MonEcoleApp-logo.png')
         logo_img = Image(logo_path, width=25*mm, height=25*mm) if logo_path and os.path.exists(logo_path) else ""
+        institution = Institution.objects.first()
 
         # --- HEADER ---
         header_data = [[
             logo_img,
             [
-                # Paragraph("<b>UNIVERSITE DU LAC TANGANYIKA</b>", ParagraphStyle('H1', fontSize=12, alignment=TA_CENTER)),
-                # Paragraph('"ULT"', ParagraphStyle('H2', fontSize=10, alignment=TA_CENTER)),
-                # Spacer(1, 3*mm),
+                Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", fontSize=9, alignment=TA_CENTER ),
                 Paragraph(f"CAMPUS : {campus_nom}", ParagraphStyle('H3', fontSize=9, alignment=TA_CENTER)),
                 Paragraph(f"CLASSE : {classe_info}", ParagraphStyle('H3', fontSize=9, alignment=TA_CENTER)),
             ],
@@ -471,21 +471,28 @@ def style_tableau_standard():
 
 
 
+from django.http import HttpResponse
+from django.conf import settings
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+import os
+
 def generate_facture_paiement(request):
     try:
         id_paiement = request.GET.get('id_paiement')
 
+        # Récupération paiement
         paiement = Paiement.objects.select_related(
-            'id_eleve',
-            'id_variable',
-            'id_campus',
-            'id_classe_active',
-            'id_classe_active__classe_id',
+            'id_eleve', 'id_variable', 'id_campus',
+            'id_classe_active', 'id_classe_active__classe_id',
             'id_annee'
         ).get(id_paiement=id_paiement)
 
         eleve = paiement.id_eleve
-
         campus_nom = paiement.id_campus.campus if paiement.id_campus else "N/A"
         nom_classe = paiement.id_classe_active.classe_id.classe if paiement.id_classe_active else ""
         groupe = paiement.id_classe_active.groupe or ""
@@ -493,53 +500,45 @@ def generate_facture_paiement(request):
         annee_txt = paiement.id_annee.annee if paiement.id_annee else "N/A"
 
         # =========================
-        # MODE POS ?
+        # Logo dynamique via Institution ou fallback par défaut
         # =========================
-        mode_pos = request.GET.get("pos")
-        is_pos = True if mode_pos == "1" else False
+        institution = Institution.objects.first()
+        logo_path = None
 
-        # ==================================================
-        # 🧾 IMPRESSION POS DIRECTE (PAS DE PDF)
-        # ==================================================
-        if is_pos:
+        if institution and institution.logo_ecole:
+            logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
+            logo_path = os.path.normpath(logo_path)
+            if not os.path.exists(logo_path):
+                logo_path = None
 
-            ticket = f"""
-            {campus_nom}
-            Classe : {classe_info}
-            Année : {annee_txt}
-            ------------------------------
-            RECU DE PAIEMENT
-            ------------------------------
-            Eleve : {eleve.nom} {eleve.prenom}
-            Motif : {paiement.id_variable.variable}
-            Date  : {paiement.date_paie.strftime('%d/%m/%Y')}
+        # # Logo par défaut
+        # if not logo_path:
+        #     logo_path = os.path.join(settings.BASE_DIR, 'static/assets/img/MonEcoleApp-logo.png')
+        #     logo_path = os.path.normpath(logo_path)
+        #     if not os.path.exists(logo_path):
+        #         print("⚠️ Logo par défaut introuvable ! Vérifie le chemin :", logo_path)
+        #         logo_path = None
 
-            TOTAL : {paiement.montant} Fbu
-
-            Merci pour votre paiement
-
-
-            """
-
-            POS_IP = "192.168.1.50"   # ⚠️ CHANGE avec IP réelle du POS
-            PORT = 9100
-
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((POS_IP, PORT))
-            s.send(ticket.encode('utf-8'))
-            s.close()
-
-            return HttpResponse("IMPRESSION POS OK")
-
-        # ==================================================
-        # 📄 SINON → GENERER PDF (CODE ORIGINAL)
-        # ==================================================
+        # =========================
+        # Mode POS ou A4
+        # =========================
+        is_pos = request.GET.get("pos") == "1"
 
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = f'inline; filename="Facture_{eleve.nom}.pdf"'
 
-        pagesize = A4
-        margin = 15*mm
+        if is_pos:
+            pagesize = (80*mm, 300*mm)
+            margin = 5*mm
+            font_title = 11
+            font_text = 9
+            logo_size = 20*mm
+        else:
+            pagesize = A4
+            margin = 15*mm
+            font_title = 14
+            font_text = 11
+            logo_size = 30*mm
 
         doc = SimpleDocTemplate(
             response,
@@ -551,63 +550,100 @@ def generate_facture_paiement(request):
         )
 
         elements = []
-        styles = getSampleStyleSheet()
 
-        title_style = ParagraphStyle(
-            "title",
-            alignment=TA_CENTER,
-            fontSize=14,
-            spaceAfter=4
-        )
+        # Styles
+        title_style = ParagraphStyle("title", alignment=TA_CENTER, fontSize=font_title, spaceAfter=4, leading=font_title+2)
+        small_center = ParagraphStyle("small_center", alignment=TA_CENTER, fontSize=font_text, leading=font_text+2)
+        footer_style = ParagraphStyle("footer", alignment=TA_CENTER, fontSize=font_text-1)
+        left_style = ParagraphStyle("left", alignment=TA_LEFT, fontSize=font_text, leading=font_text+2)
 
-        small_center = ParagraphStyle(
-            "small_center",
-            alignment=TA_CENTER,
-            fontSize=10
-        )
-
-        logo_path = finders.find('assets/img/MonEcoleApp-logo.png')
+        # =========================
+        # HEADER avec logo
+        # =========================
         if logo_path and os.path.exists(logo_path):
-            elements.append(Image(logo_path, width=25*mm, height=25*mm))
+            elements.append(Image(logo_path, width=logo_size, height=logo_size))
+            elements.append(Spacer(1,2*mm))
 
-        elements.append(Paragraph(f"<b>{campus_nom}</b>", title_style))
+        # Infos école et campus
+        elements.append(Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style))
+        elements.append(Paragraph(f"Campus : {campus_nom}", small_center))
         elements.append(Paragraph(f"Classe : {classe_info}", small_center))
         elements.append(Paragraph(f"Année académique : {annee_txt}", small_center))
         elements.append(Spacer(1,4*mm))
 
+        # =========================
+        # TITRE REÇU
+        # =========================
         elements.append(Paragraph("<b>REÇU DE PAIEMENT</b>", title_style))
         elements.append(Spacer(1,3*mm))
 
+        # =========================
+        # INFOS ÉLÈVE (toujours à gauche)
+        # =========================
         info_data = [
             ["Élève :", f"{eleve.nom} {eleve.prenom}"],
             ["Motif :", paiement.id_variable.variable],
             ["Date :", paiement.date_paie.strftime('%d/%m/%Y')],
         ]
 
-        info_table = Table(info_data, colWidths=[60*mm,110*mm])
+        info_table = Table(
+            info_data,
+            colWidths=[25*mm, 45*mm] if is_pos else [60*mm, 110*mm]
+        )
         info_table.setStyle(TableStyle([
-            ('FONTSIZE',(0,0),(-1,-1),11),
+            ('FONTSIZE',(0,0),(-1,-1),font_text),
             ('BOTTOMPADDING',(0,0),(-1,-1),3),
+            ('ALIGN',(0,0),(-1,-1),'LEFT'),
         ]))
-
         elements.append(info_table)
         elements.append(Spacer(1,5*mm))
 
+        # =========================
+        # TABLEAU MONTANT
+        # =========================
         data = [
             ["Motif", "Montant"],
-            [paiement.id_variable.variable,
-             f"{paiement.montant:,} Fbu".replace(',', ' ')]
+            [paiement.id_variable.variable, f"{paiement.montant:,} FBu".replace(',', ' ')]
         ]
-
-        table = Table(data, colWidths=[120*mm,60*mm])
+        table = Table(
+            data,
+            colWidths=[45*mm,25*mm] if is_pos else [120*mm,60*mm]
+        )
         table.setStyle(TableStyle([
             ('GRID',(0,0),(-1,-1),0.5,colors.black),
             ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#eeeeee")),
-            ('ALIGN',(1,0),(1,-1),'RIGHT'),
-            ('FONTSIZE',(0,0),(-1,-1),11),
+            ('ALIGN',(0,0),(0,0),'LEFT'),
+            ('ALIGN',(1,1),(1,1),'RIGHT'),
+            ('FONTSIZE',(0,0),(-1,-1),font_text),
+            ('BOTTOMPADDING',(0,0),(-1,-1),3),
         ]))
-
         elements.append(table)
+        elements.append(Spacer(1,5*mm))
+
+        # =========================
+        # TOTAL
+        # =========================
+        total_data = [["TOTAL", f"{paiement.montant:,} FBu".replace(',', ' ')]]
+        total_table = Table(
+            total_data,
+            colWidths=[45*mm,25*mm] if is_pos else [120*mm,60*mm]
+        )
+        total_table.setStyle(TableStyle([
+            ('LINEABOVE',(0,0),(-1,0),1,colors.black),
+            ('ALIGN',(0,0),(0,0),'LEFT'),
+            ('ALIGN',(1,0),(1,0),'RIGHT'),
+            ('FONTSIZE',(0,0),(-1,-1),font_text+1),
+            ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#f2f2f2")),
+            ('TEXTCOLOR',(0,0),(-1,-1),colors.HexColor("#d9534f")),
+            ('BOTTOMPADDING',(0,0),(-1,-1),5),
+        ]))
+        elements.append(total_table)
+        elements.append(Spacer(1,10*mm))
+
+        # =========================
+        # FOOTER
+        # =========================
+        elements.append(Paragraph("Merci pour votre paiement", footer_style))
 
         doc.build(elements)
         return response
@@ -615,7 +651,7 @@ def generate_facture_paiement(request):
     except Exception as e:
         return HttpResponse(f"Erreur technique : {str(e)}", status=500)
 
-
+# logos/ecole/eibu_yxQIjf2.PNG
 
 def generate_historique_pdf(request):
     try:
@@ -698,9 +734,12 @@ def generate_historique_pdf(request):
         elements.append(Spacer(1, 4*mm))
 
         # Header
+        institution = Institution.objects.first()
         header_table = Table(
             [[
+                Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style),
                 Paragraph(
+
                     f"<b>Campus :</b> {campus_txt}<br/><b>Classe :</b> {classe_info}<br/><b>Élève :</b> {eleve_txt}",
                     left_style
                 ),
@@ -875,11 +914,12 @@ def generate_dette_pdf(request):
         # 🔹 Logo
         logo_path = finders.find('assets/img/logo.png')
         logo_img = Image(logo_path, width=30*mm, height=30*mm) if logo_path and os.path.exists(logo_path) else Paragraph("", styles['Normal'])
-
+        institution = Institution.objects.first()
         # 🔹 Entête améliorée
         header_data = [[
             logo_img,
             [
+                Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style),
                 Paragraph(f"CAMPUS : {campus_txt}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
                 Paragraph(f"CLASSE : {classe_info}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
                 Paragraph(f"Trimestre : {id_trimestre or 'Tous'}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
