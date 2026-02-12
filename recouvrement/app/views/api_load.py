@@ -1089,3 +1089,98 @@ def eleves_en_penalite(request):
             })
 
     return JsonResponse({'success': True, 'eleves': resultats})
+
+from django.http import JsonResponse
+from app.models import Eleve_reduction_prix, VariableDerogation
+
+
+def suivi_reduction_derogation_data(request):
+
+    type_filter = request.GET.get('type')
+    annee = request.GET.get('annee')
+    classe = request.GET.get('classe')
+    eleve = request.GET.get('eleve')
+    variable = request.GET.get('variable')
+
+    rows = []
+
+    # ========================
+    # REDUCTIONS
+    # ========================
+    if type_filter in ['reduction', 'all', '']:
+
+        reductions = Eleve_reduction_prix.objects.filter(id_annee=annee)
+
+        if classe:
+            reductions = reductions.filter(id_classe_active=classe)
+        if eleve:
+            reductions = reductions.filter(id_eleve=eleve)
+        if variable:
+            reductions = reductions.filter(id_variable=variable)
+
+        for r in reductions:
+            rows.append({
+                'id': r.id_reduction_prix,
+                'type': 'reduction',
+                'eleve': f'{r.id_eleve.nom} {r.id_eleve.prenom}',
+                'classe': str(r.id_classe_active.classe_id),
+                'variable': r.id_variable.variable,
+                'statut': f'{r.pourcentage}',
+            })
+
+    # ========================
+    # DEROGATIONS
+    # ========================
+    if type_filter in ['derogation', 'all', '']:
+
+        derogations = VariableDerogation.objects.filter(id_annee=annee)
+
+        if classe:
+            derogations = derogations.filter(id_classe_active=classe)
+        if eleve:
+            derogations = derogations.filter(id_eleve=eleve)
+        if variable:
+            derogations = derogations.filter(id_variable=variable)
+
+        for d in derogations:
+            rows.append({
+                'id': d.id_derogation,
+                'type': 'derogation',
+                'eleve': f'{d.id_eleve.nom} {d.id_eleve.prenom}',
+                'classe': str(d.id_classe_active.classe_id),
+                'variable': d.id_variable.variable,
+                'statut': str(d.date_derogation),
+            })
+
+    return JsonResponse({'success': True, 'rows': rows})
+
+from django.http import JsonResponse
+from app.models import VariableDatebutoire
+
+def get_dates_butoire(request):
+    try:
+        dates = VariableDatebutoire.objects.select_related(
+            "id_variable",
+            "id_classe_active"
+        )
+
+        rows = []
+        for d in dates:
+            rows.append({
+                "id": d.id_datebutoire,
+                "classe": str(d.id_classe_active),
+                "trimestre": str(d.trimestre) if hasattr(d, "trimestre") else None,
+                "variable": d.id_variable.variable,
+                "date_butoire": d.date_butoire.strftime("%Y-%m-%d")
+            })
+
+        return JsonResponse({
+            "success": True,
+            "rows": rows
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        })

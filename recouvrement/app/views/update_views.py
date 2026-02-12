@@ -314,3 +314,60 @@ def update_paiement(request, id_paiement):
             'success': False,
             'error': f'Erreur update paiement : {str(e)}'
         })
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from app.models import Eleve_reduction_prix, VariableDerogation
+
+
+# ===============================
+# UPDATE REDUCTION
+# ===============================
+@require_POST
+def suivi_reduction_update(request, id):
+
+    try:
+        reduction = Eleve_reduction_prix.objects.get(id_reduction_prix=id)
+
+        statut = request.POST.get('statut')
+
+        if not statut:
+            return JsonResponse({'success': False, 'error': 'Valeur vide.'})
+
+        reduction.pourcentage = statut
+        reduction.save()
+
+        return JsonResponse({'success': True})
+
+    except Eleve_reduction_prix.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Réduction introuvable.'})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ===============================
+# UPDATE DEROGATION
+# ===============================
+@require_POST
+def suivi_derogation_update(request, id):
+
+    try:
+        derogation = VariableDerogation.objects.get(id_derogation=id)
+
+        statut = request.POST.get('statut')
+
+        if not statut:
+            return JsonResponse({'success': False, 'error': 'Valeur vide.'})
+
+        derogation.date_derogation = statut
+        derogation.save()
+
+        return JsonResponse({'success': True})
+
+    except VariableDerogation.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Dérogation introuvable.'})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+

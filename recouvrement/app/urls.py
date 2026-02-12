@@ -62,7 +62,13 @@ urlpatterns =[
    path('dashboard/', views.dashboard, name='dashboard'),
    path('dashboard-data/', views.dashboard_data, name='dashboard_data'),
    path('dashboard-details/', views.dashboard_details, name='dashboard_details'),
-   
+   path('suivi-reduction-derogation/',views.suivi_reduction_derogation,name='suivi_reduction_derogation'),
+   path('suivi-reduction-derogation-data/',views.suivi_reduction_derogation_data,name='suivi_reduction_derogation-data'),
+   path('suivi-reduction-update/<int:id>/', views.suivi_reduction_update, name='suivi_reduction_update'),
+   path('suivi-derogation-update/<int:id>/', views.suivi_derogation_update, name='suivi_derogation_update'),
+   path('get_date_butoires/',views.get_dates_butoire,name='get_date_butoires'),
+
+
 
 
    

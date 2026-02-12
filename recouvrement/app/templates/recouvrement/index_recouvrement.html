@@ -842,7 +842,6 @@
                         <div class="form-row">
                             {% for field in form_penalite %}
                                 {% if field.name == 'id_campus' or field.name == 'id_cycle_actif' %}
-                                    {# On utilise render_field pour garder la cohérence #}
                                     <div style="display:none;">
                                         {% render_field field %}
                                     </div>
@@ -1435,8 +1434,84 @@
     </div>
 </div>
 {% endif %}
+{% if form_type == 'suivi_reduction_derogation_form' %}
+
+<div class="card mb-3 p-3">
+
+    <div class="form-grid">
+
+        <!-- 🔥 Choix affichage -->
+        <div class="form-group">
+            <label>Type d'affichage</label>
+            <select id="filter_type" class="form-control">
+                <option value="">------</option>
+                <option value="reduction">Élèves en réduction</option>
+                <option value="derogation">Élèves en dérogation</option>
+                <option value="all">Réductions & Dérogations</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Année scolaire</label>
+            <select id="filter_annee" class="form-control">
+                <option value="">------</option>
+                {% for annee in annees %}
+                    <option value="{{ annee.id_annee }}">{{ annee.annee }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Classe</label>
+            <select id="filter_classe" class="form-control">
+                <option value="">------</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Variable</label>
+            <select id="filter_variable" class="form-control">
+                <option value="">------</option>
+                {% for variable in variables %}
+                    <option value="{{ variable.id_variable }}">{{ variable.variable }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Élève</label>
+            <select id="filter_eleve" class="form-control">
+                <option value="">------</option>
+            </select>
+        </div>
+
+    </div>
+
+</div>
 
 
+<!-- 🔥 TABLEAU DYNAMIQUE -->
+<div class="card mb-3" id="suivi_list" style="display:none;">
+    <div class="card-body">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Élève</th>
+                    <th>Classe</th>
+                    <th>Variable</th>
+                    <th>Statut</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+{% endif %}
+<!-- CONTENEUR DU TABLEAU -->
+       
         <div class="table-container mt-4" id="hf-result-container">
             <!-- Le tableau d'hist. financier sera injecté ici par JS  -->
         </div>
@@ -1444,6 +1519,8 @@
             <!-- Le tableau des dettes antérieures sera injecté ici par JS  -->
         </div>
         <div id="penaliteContainer" class="table-container"></div>
+        <div id="dateButoireContainer" class="table-container"></div>
+        
 
 
 
@@ -1967,7 +2044,7 @@
     </script>
     <!-- ====== prix/variables -->
     
-    <script>
+<script>
 $(document).ready(function() {
     if (window.location.pathname.includes("create_variable_prix")) {
         $('#field-id_classe_active, #field-id_annee_trimestre, #field-id_variable, #field-prix, #saveBtn').hide();
@@ -2110,7 +2187,7 @@ $(document).ready(function() {
 
     <!-- ====== derogation / datebutoire script ! -->
 
-    <script>
+<script>
         let selectedAnneeId = null;
         let selectedCampusId = null;
         let selectedCycleId = null;
@@ -2261,69 +2338,6 @@ $(document).ready(function() {
                         $('#tab_paiement_list tbody').empty().append(`<tr><td colspan="6">Erreur serveur.</td></tr>`);
                     });
             }
-
-            // function getPaiementTable() {
-            //     if (!selectedAnneeId || !selectedCampusId || !selectedCycleId || !selectedClasseId) {
-            //         $('#tab_paiement_valider tbody').empty().append(`<tr><td colspan="6">Veuillez sélectionner une classe.</td></tr>`);
-            //         return;
-            //     }
-            //     $('#generate_fiche_paie_classe').on('click', function() {
-            //     if (!selectedAnneeId || !selectedCampusId || !selectedCycleId || !selectedClasseId) {
-            //         alert('Veuillez sélectionner une année, un campus, un cycle et une classe.');
-            //         return;
-            //     }
-
-            //     console.log(`✅ Génération de la fiche de paie pour id_annee=${selectedAnneeId}, id_campus=${selectedCampusId}, id_cycle=${selectedCycleId}, id_classe_active=${selectedClasseId}`);
-
-            //     // Construire l'URL avec les paramètres
-            //     const url = `/generate_fiche_paie_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
-
-            //     // Rediriger pour télécharger le PDF
-            //     window.location.href = url;
-            //    });
-
-            //     const url = `/get_paiements_validated/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
-            //     fetch(url)
-            //         .then(response => response.json())
-            //         .then(data => {
-            //             const tbody = $('#tab_paiement_valider tbody');
-            //             tbody.empty();
-
-            //             if (data.success) {
-            //                 if (data.data.length > 0) {
-            //                     data.data.forEach(p => {
-            //                         tbody.append(`
-                                        
-            //                             <tr id="row-paiement-${p.id_paiement}">
-            //                                 <td>${p.eleve_nom} ${p.eleve_prenom}</td>
-            //                                 <td>${p.variable}</td>
-            //                                 <td>${p.montant} Fbu</td>
-            //                                 <td>
-            //                                     <button style ="color:white" class=" btn btn-primary btn-generate" data-id="${p.id_paiement}">
-            //                                         Réçu de cette variable
-            //                                     </button>
-            //                                 </td>
-            //                             </tr>
-            //                         `);
-            //                     });
-            //                 } else {
-            //                     tbody.append(`<tr><td colspan="6">Aucun paiement trouvé déjà validé !</td></tr>`);
-            //                 }
-            //             } else {
-            //                 alert(data.error || "Erreur lors du chargement des paiements.");
-            //                 tbody.append(`<tr><td colspan="6">Erreur lors du chargement.</td></tr>`);
-            //             }
-
-            //             // Attacher l'événement aux boutons "Générer"
-            //             attachGenerateButtonEvents();
-            //         })
-            //         .catch(err => {
-            //             console.error('❌ Erreur lors du chargement des paiements :', err);
-            //             alert("Erreur serveur: " + err);
-            //             $('#tab_paiement_valider tbody').empty().append(`<tr><td colspan="6">Erreur serveur.</td></tr>`);
-            //         });
-            // }
-            
             function getPaiementTable() {
                 if (!selectedAnneeId || !selectedCampusId || !selectedCycleId || !selectedClasseId) {
                     $('#tab_paiement_valider tbody')
@@ -2575,38 +2589,38 @@ $(document).ready(function() {
                 });
             });
             function updateEleveDropdown() {
-            var dropdown = $('#id_id_eleve')[0]; 
-            const pupilsUrl = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
-            
-            fetch(pupilsUrl)
-                .then(response => response.json())
-                .then(responseData => {
-                    if (!responseData.success) {
-                        alert(responseData.error || "Erreur lors du chargement des élèves.");
-                        $('#field-id_eleve').hide();
-                        return;
-                    }
-                    const data = responseData.data || []; 
-                    dropdown.innerHTML = '<option value="">------</option>';
-                    if (data.length > 0) {
-                        data.forEach(item => {
-                            let option = document.createElement("option");
-                            option.value = item.id_eleve;
-                            option.textContent = item.nom_complet; 
-                            dropdown.appendChild(option);
-                        });
-                        $('#field-id_eleve').show();
-                    } else {
-                        alert('Aucun élève trouvé pour cette classe.');
-                        $('#field-id_eleve').hide();
-                    }
+                var dropdown = $('#id_id_eleve')[0]; 
+                const pupilsUrl = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+                
+                fetch(pupilsUrl)
+                    .then(response => response.json())
+                    .then(responseData => {
+                        if (!responseData.success) {
+                            alert(responseData.error || "Erreur lors du chargement des élèves.");
+                            $('#field-id_eleve').hide();
+                            return;
+                        }
+                        const data = responseData.data || []; 
+                        dropdown.innerHTML = '<option value="">------</option>';
+                        if (data.length > 0) {
+                            data.forEach(item => {
+                                let option = document.createElement("option");
+                                option.value = item.id_eleve;
+                                option.textContent = item.nom_complet; 
+                                dropdown.appendChild(option);
+                            });
+                            $('#field-id_eleve').show();
+                        } else {
+                            alert('Aucun élève trouvé pour cette classe.');
+                            $('#field-id_eleve').hide();
+                        }
 
-                    $('#tab_variable_list').hide();
-                })
-                .catch(error => {
-                    alert('Erreur lors du chargement des élèves.');
-                });
-        }
+                        $('#tab_variable_list').hide();
+                    })
+                    .catch(error => {
+                        alert('Erreur lors du chargement des élèves.');
+                    });
+            }
 
 
             $('#id_id_eleve').on('change', function() {
@@ -2695,112 +2709,332 @@ $(document).ready(function() {
 
         window.open(url, '_blank');
     };
-    </script>
+</script>
     
 
     <!-- ====== reduction date! -->
 
-    <script>
-        $(document).ready(function() {
-         if (window.location.pathname.includes("create_variable_reduction")) {
-         
-            let selectedAnneeId = null;
-            let selectedCampusId = null;
-            let selectedCycleId = null;
-            let selectedClasseId = null;
-            let selectedEleveId = null;
-            let modal = document.getElementById("modalContainer");
-    
-            $('#field-id_classe_active').hide();
-            $('#field-id_eleve').hide();
-            $('#tab_variable_list').hide(); 
-            $('#id_id_annee').on('change', function() {
-                selectedAnneeId = $(this).val();
-                if (!selectedAnneeId) {
-                    $('#field-id_classe_active').hide();
-                    $('#field-id_eleve').hide();
-                    $('#tab_variable_list').hide();
-                    selectedCampusId = null;
-                    selectedCycleId = null;
-                    selectedClasseId = null;
-                    selectedEleveId = null;
-                    return;
-                }
+<script>
+    $(document).ready(function() {
+        if (window.location.pathname.includes("create_variable_reduction")) {
+        
+        let selectedAnneeId = null;
+        let selectedCampusId = null;
+        let selectedCycleId = null;
+        let selectedClasseId = null;
+        let selectedEleveId = null;
+        let modal = document.getElementById("modalContainer");
 
-                $.ajax({
-                    url: '/store_annee_session/',
-                    type: 'POST',
-                    data: {
-                        'id_annee': selectedAnneeId,
-                        'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            updateClasseDropdown(selectedAnneeId);
-                        } else {
-                            alert('Erreur : ' + response.error);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        alert('Une erreur est survenue lors de l\'enregistrement de l\'année.');
-                    }
-                });
-            });
-
-            function updateClasseDropdown(anneeId) {
-                var dropdown = $('#id_id_classe_active')[0];
-                fetch('/get_classes_actives/' + anneeId + '/')
-                    .then(response => response.json())
-                    .then(responseData => {
-                        if (!responseData.success && responseData.error) {
-                            alert('Erreur : ' + responseData.error);
-                            return;
-                        }
-                        const data = responseData.classes || [];
-                        dropdown.innerHTML = '<option value="">------</option>';
-                        if (data.length > 0) {
-                            data.forEach(item => {
-                                let option = document.createElement("option");
-                                option.value = item.id_classe_active;
-                                option.textContent = `${item.campus_nom} - ${item.cycle_nom} - ${item.classe_nom}${item.groupe ? ' (' + item.groupe + ')' : ''}`;
-                                option.dataset.campusId = item.id_campus;
-                                option.dataset.cycleId = item.id_cycle;
-                                dropdown.appendChild(option);
-                            });
-                            $('#field-id_classe_active').show();
-                        } else {
-                            alert(responseData.message || 'Aucune classe active trouvée pour cette année scolaire.');
-                            $('#field-id_classe_active').hide();
-                        }
-                        $('#field-id_eleve').hide();
-                        $('#tab_variable_list').hide();
-                    })
-                    .catch(error => {
-                        alert('Erreur lors du chargement des classes.');
-                    });
+        $('#field-id_classe_active').hide();
+        $('#field-id_eleve').hide();
+        $('#tab_variable_list').hide(); 
+        $('#id_id_annee').on('change', function() {
+            selectedAnneeId = $(this).val();
+            if (!selectedAnneeId) {
+                $('#field-id_classe_active').hide();
+                $('#field-id_eleve').hide();
+                $('#tab_variable_list').hide();
+                selectedCampusId = null;
+                selectedCycleId = null;
+                selectedClasseId = null;
+                selectedEleveId = null;
+                return;
             }
 
-            $('#id_id_classe_active').on('change', function() {
-                selectedClasseId = $(this).val();
-                if (selectedClasseId) {
-                    const selectedOption = $(this).find('option:selected');
-                    selectedCampusId = selectedOption.data('campusId');
-                    selectedCycleId = selectedOption.data('cycleId');
-                
-                    updateEleveDropdown();
-                } else {
-                    $('#field-id_eleve').hide();
-                    $('#tab_variable_list').hide();
-                    selectedCampusId = null;
-                    selectedCycleId = null;
-                    selectedEleveId = null;
+            $.ajax({
+                url: '/store_annee_session/',
+                type: 'POST',
+                data: {
+                    'id_annee': selectedAnneeId,
+                    'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        updateClasseDropdown(selectedAnneeId);
+                    } else {
+                        alert('Erreur : ' + response.error);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Une erreur est survenue lors de l\'enregistrement de l\'année.');
                 }
             });
+        });
 
-            function updateEleveDropdown() {
-            var dropdown = $('#id_id_eleve')[0]; 
-            const pupilsUrl = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+        function updateClasseDropdown(anneeId) {
+            var dropdown = $('#id_id_classe_active')[0];
+            fetch('/get_classes_actives/' + anneeId + '/')
+                .then(response => response.json())
+                .then(responseData => {
+                    if (!responseData.success && responseData.error) {
+                        alert('Erreur : ' + responseData.error);
+                        return;
+                    }
+                    const data = responseData.classes || [];
+                    dropdown.innerHTML = '<option value="">------</option>';
+                    if (data.length > 0) {
+                        data.forEach(item => {
+                            let option = document.createElement("option");
+                            option.value = item.id_classe_active;
+                            option.textContent = `${item.campus_nom} - ${item.cycle_nom} - ${item.classe_nom}${item.groupe ? ' (' + item.groupe + ')' : ''}`;
+                            option.dataset.campusId = item.id_campus;
+                            option.dataset.cycleId = item.id_cycle;
+                            dropdown.appendChild(option);
+                        });
+                        $('#field-id_classe_active').show();
+                    } else {
+                        alert(responseData.message || 'Aucune classe active trouvée pour cette année scolaire.');
+                        $('#field-id_classe_active').hide();
+                    }
+                    $('#field-id_eleve').hide();
+                    $('#tab_variable_list').hide();
+                })
+                .catch(error => {
+                    alert('Erreur lors du chargement des classes.');
+                });
+        }
+
+        $('#id_id_classe_active').on('change', function() {
+            selectedClasseId = $(this).val();
+            if (selectedClasseId) {
+                const selectedOption = $(this).find('option:selected');
+                selectedCampusId = selectedOption.data('campusId');
+                selectedCycleId = selectedOption.data('cycleId');
             
+                updateEleveDropdown();
+            } else {
+                $('#field-id_eleve').hide();
+                $('#tab_variable_list').hide();
+                selectedCampusId = null;
+                selectedCycleId = null;
+                selectedEleveId = null;
+            }
+        });
+
+        function updateEleveDropdown() {
+        var dropdown = $('#id_id_eleve')[0]; 
+        const pupilsUrl = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+        
+        fetch(pupilsUrl)
+            .then(response => response.json())
+            .then(responseData => {
+                if (!responseData.success) {
+                    alert(responseData.error || "Erreur lors du chargement des élèves.");
+                    $('#field-id_eleve').hide();
+                    return;
+                }
+                const data = responseData.data || []; 
+                dropdown.innerHTML = '<option value="">------</option>';
+                if (data.length > 0) {
+                    data.forEach(item => {
+                        let option = document.createElement("option");
+                        option.value = item.id_eleve;
+                        option.textContent = item.nom_complet; 
+                        dropdown.appendChild(option);
+                    });
+                    $('#field-id_eleve').show();
+                } else {
+                    alert('Aucun élève trouvé pour cette classe.');
+                    $('#field-id_eleve').hide();
+                }
+
+                $('#tab_variable_list').hide();
+            })
+            .catch(error => {
+                alert('Erreur lors du chargement des élèves.');
+            });
+    }
+
+
+        $('#id_id_eleve').on('change', function() {
+            selectedEleveId = $(this).val();
+            if (selectedEleveId) {
+                modal.style.display = 'none'; 
+                $('#tab_variable_list').show(); 
+            } else {
+                $('#tab_variable_list').hide();
+            }
+        });
+
+        $(document).on('click', '.validate-btn', function(e) {
+            e.preventDefault();
+            var variableId = $(this).data('id');
+            var row = $('#row-variable-' + variableId);
+            var pourcent = row.find('input[type="number"]'); 
+            var pourcent = pourcent.val();
+
+            if (!pourcent) {
+                alert('Veuillez saisir le pourcentage.');
+                return;
+            }
+
+            var formData = {
+                'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val(),
+                'id_annee': selectedAnneeId,
+                'id_campus': selectedCampusId,
+                'id_cycle_actif': selectedCycleId,
+                'id_classe_active': selectedClasseId,
+                'id_eleve': selectedEleveId,
+                'id_variable': variableId,
+                'pourcentage': pourcent
+            };
+            $.ajax({
+                url: '/save_variable_reduction/',
+                type: 'POST',
+                data: formData,
+                success: function(response) {
+                    if (response.success) {
+                        alert('Réduction parametrée avec succès !');
+                        window.location.href = "{% url 'create_derogation_classe' %}";
+
+                    } else {
+                        alert('Erreur : ' + response.error);
+                        window.location.href = "{% url 'create_derogation_classe' %}";
+
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Une erreur est survenue lors de l\'enregistrement.');
+                    // window.location.href = "{% url 'create_derogation_classe' %}";
+
+                }
+            });
+        });
+
+
+
+        $('#cancelBtn, #cancelBtnForm').on('click', function() {
+            $('#modalContainer').modal('hide');
+        });
+    }
+    });
+</script>
+    <!-- ======== Ajout des paiements -->
+<script>
+$(document).ready(function() {
+    if (window.location.pathname === "/") {
+        $('#field-id_classe_active').hide();
+        $('#field-id_eleve').hide();
+        $('#field-id_variable').hide();
+        // $('#field-id_banque').hide();
+        $('#field-id_compte').hide();
+        $('#field-montant').hide();
+        $('#field-bordereau').hide();
+        $('#field-date_paie').hide();
+        $('#saveBtn').hide();
+
+        let selectedAnneeId = null;
+        let selectedCampusId = null;
+        let selectedCycleId = null;
+        let selectedClasseId = null;
+        let selectedEleveId = null;
+
+        $('#id_id_annee').on('change', function() {
+            selectedAnneeId = $(this).val();
+            if (!selectedAnneeId) {
+                $('#field-id_classe_active').hide();
+                $('#field-id_eleve').hide();
+                $('#field-id_variable').hide();
+                // $('#field-id_banque').hide();
+                $('#field-id_compte').hide();
+                $('#field-montant').hide();
+                $('#field-bordereau').hide();
+                $('#field-date_paie').hide();
+                $('#saveBtn').hide();
+                selectedCampusId = null;
+                selectedCycleId = null;
+                selectedClasseId = null;
+                selectedEleveId = null;
+                return;
+            }
+
+            $.ajax({
+                url: '/store_annee_session/',
+                type: 'POST',
+                data: {
+                    'id_annee': selectedAnneeId,
+                    'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
+                },
+                success: function(response) {
+                    if (response.success) {
+                        updateClasseDropdown(selectedAnneeId);
+                        loadPaiements(); 
+                    } else {
+                        alert('Erreur : ' + response.error);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    alert('Une erreur est survenue lors de l\'enregistrement de l\'année.');
+                }
+            });
+        });
+
+        function updateClasseDropdown(anneeId) {
+            var dropdown = $('#id_id_classe_active')[0];
+            fetch('/get_classes_actives/' + anneeId + '/')
+                .then(response => response.json())
+                .then(responseData => {
+                    if (!responseData.success && responseData.error) {
+                        alert('Erreur : ' + responseData.error);
+                        return;
+                    }
+                    const data = responseData.classes || [];
+                    dropdown.innerHTML = '<option value="">------</option>';
+                    if (data.length > 0) {
+                        data.forEach(item => {
+                            let option = document.createElement("option");
+                            option.value = item.id_classe_active;
+                            option.textContent = `${item.campus_nom} - ${item.cycle_nom} - ${item.classe_nom}${item.groupe ? ' (' + item.groupe + ')' : ''}`;
+                            option.dataset.campusId = item.id_campus;
+                            option.dataset.cycleId = item.id_cycle;
+                            dropdown.appendChild(option);
+                        });
+                        $('#field-id_classe_active').show();
+                    } else {
+                        alert(responseData.message || 'Aucune classe active trouvée pour cette année scolaire.');
+                        $('#field-id_classe_active').hide();
+                    }
+                    $('#field-id_eleve').hide();
+                    $('#field-id_variable').hide();
+                    // $('#field-id_banque').hide();
+                    $('#field-id_compte').hide();
+                    $('#field-montant').hide();
+                    $('#field-bordereau').hide();
+                    $('#field-date_paie').hide();
+                    $('#saveBtn').hide();
+                })
+                .catch(error => {
+                    alert('Erreur lors du chargement des classes.');
+                });
+            }
+
+        $('#id_id_classe_active').on('change', function() {
+            selectedClasseId = $(this).val();
+            if (selectedClasseId) {
+                const selectedOption = $(this).find('option:selected');
+                selectedCampusId = selectedOption.data('campusId');
+                selectedCycleId = selectedOption.data('cycleId');
+            
+                updateEleveDropdown();
+            } else {
+                $('#field-id_eleve').hide();
+                $('#field-id_variable').hide();
+                // $('#field-id_banque').hide();
+                $('#field-id_compte').hide();
+                $('#field-montant').hide();
+                $('#field-bordereau').hide();
+                $('#field-date_paie').hide();
+                $('#saveBtn').hide();
+                selectedCampusId = null;
+                selectedCycleId = null;
+                selectedClasseId = null;
+                selectedEleveId = null;
+            }
+        });
+
+        function updateEleveDropdown() {
+            var dropdown = $('#id_id_eleve')[0];
+            const pupilsUrl = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
             fetch(pupilsUrl)
                 .then(response => response.json())
                 .then(responseData => {
@@ -2809,13 +3043,13 @@ $(document).ready(function() {
                         $('#field-id_eleve').hide();
                         return;
                     }
-                    const data = responseData.data || []; 
+                    const data = responseData.data || [];
                     dropdown.innerHTML = '<option value="">------</option>';
                     if (data.length > 0) {
                         data.forEach(item => {
                             let option = document.createElement("option");
                             option.value = item.id_eleve;
-                            option.textContent = item.nom_complet; 
+                            option.textContent = item.nom_complet;
                             dropdown.appendChild(option);
                         });
                         $('#field-id_eleve').show();
@@ -2823,728 +3057,510 @@ $(document).ready(function() {
                         alert('Aucun élève trouvé pour cette classe.');
                         $('#field-id_eleve').hide();
                     }
-
-                    $('#tab_variable_list').hide();
                 })
                 .catch(error => {
                     alert('Erreur lors du chargement des élèves.');
                 });
         }
+        $('#id_id_eleve').on('change', function() {
+            selectedEleveId = $(this).val();
+            if (!selectedEleveId) {
+                $('#field-id_variable').hide();
+                return;
+            }
 
+            fetch(`/get_variables_restant_a_payer/?id_eleve=${selectedEleveId}&id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe=${selectedClasseId}`)
+                .then(res => res.json())
+                .then(data => {
+                    const dropdown = $('#id_id_variable')[0];
+                    dropdown.innerHTML = '<option value="">------</option>';
 
-            $('#id_id_eleve').on('change', function() {
-                selectedEleveId = $(this).val();
-                if (selectedEleveId) {
-                    modal.style.display = 'none'; 
-                    $('#tab_variable_list').show(); 
-                } else {
-                    $('#tab_variable_list').hide();
-                }
-            });
-
-            $(document).on('click', '.validate-btn', function(e) {
-                e.preventDefault();
-                var variableId = $(this).data('id');
-                var row = $('#row-variable-' + variableId);
-                var pourcent = row.find('input[type="number"]'); 
-                var pourcent = pourcent.val();
-
-                if (!pourcent) {
-                    alert('Veuillez saisir le pourcentage.');
-                    return;
-                }
-
-                var formData = {
-                    'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val(),
-                    'id_annee': selectedAnneeId,
-                    'id_campus': selectedCampusId,
-                    'id_cycle_actif': selectedCycleId,
-                    'id_classe_active': selectedClasseId,
-                    'id_eleve': selectedEleveId,
-                    'id_variable': variableId,
-                    'pourcentage': pourcent
-                };
-                $.ajax({
-                    url: '/save_variable_reduction/',
-                    type: 'POST',
-                    data: formData,
-                    success: function(response) {
-                        if (response.success) {
-                            alert('Réduction parametrée avec succès !');
-                            window.location.href = "{% url 'create_derogation_classe' %}";
-
-                        } else {
-                            alert('Erreur : ' + response.error);
-                            window.location.href = "{% url 'create_derogation_classe' %}";
-
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        alert('Une erreur est survenue lors de l\'enregistrement.');
-                       // window.location.href = "{% url 'create_derogation_classe' %}";
-
-                    }
-                });
-            });
-
-
-
-            $('#cancelBtn, #cancelBtnForm').on('click', function() {
-                $('#modalContainer').modal('hide');
-            });
-        }
-        });
-    </script>
-    <!-- ======== Ajout des paiements -->
-    <script>
-    $(document).ready(function() {
-        if (window.location.pathname === "/") {
-            $('#field-id_classe_active').hide();
-            $('#field-id_eleve').hide();
-            $('#field-id_variable').hide();
-            // $('#field-id_banque').hide();
-            $('#field-id_compte').hide();
-            $('#field-montant').hide();
-            $('#field-bordereau').hide();
-            $('#field-date_paie').hide();
-            $('#saveBtn').hide();
-
-            let selectedAnneeId = null;
-            let selectedCampusId = null;
-            let selectedCycleId = null;
-            let selectedClasseId = null;
-            let selectedEleveId = null;
-
-            $('#id_id_annee').on('change', function() {
-                selectedAnneeId = $(this).val();
-                if (!selectedAnneeId) {
-                    $('#field-id_classe_active').hide();
-                    $('#field-id_eleve').hide();
-                    $('#field-id_variable').hide();
-                    // $('#field-id_banque').hide();
-                    $('#field-id_compte').hide();
-                    $('#field-montant').hide();
-                    $('#field-bordereau').hide();
-                    $('#field-date_paie').hide();
-                    $('#saveBtn').hide();
-                    selectedCampusId = null;
-                    selectedCycleId = null;
-                    selectedClasseId = null;
-                    selectedEleveId = null;
-                    return;
-                }
-
-                $.ajax({
-                    url: '/store_annee_session/',
-                    type: 'POST',
-                    data: {
-                        'id_annee': selectedAnneeId,
-                        'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            updateClasseDropdown(selectedAnneeId);
-                            loadPaiements(); 
-                        } else {
-                            alert('Erreur : ' + response.error);
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        alert('Une erreur est survenue lors de l\'enregistrement de l\'année.');
-                    }
-                });
-            });
-
-            function updateClasseDropdown(anneeId) {
-                var dropdown = $('#id_id_classe_active')[0];
-                fetch('/get_classes_actives/' + anneeId + '/')
-                    .then(response => response.json())
-                    .then(responseData => {
-                        if (!responseData.success && responseData.error) {
-                            alert('Erreur : ' + responseData.error);
-                            return;
-                        }
-                        const data = responseData.classes || [];
-                        dropdown.innerHTML = '<option value="">------</option>';
-                        if (data.length > 0) {
-                            data.forEach(item => {
-                                let option = document.createElement("option");
-                                option.value = item.id_classe_active;
-                                option.textContent = `${item.campus_nom} - ${item.cycle_nom} - ${item.classe_nom}${item.groupe ? ' (' + item.groupe + ')' : ''}`;
-                                option.dataset.campusId = item.id_campus;
-                                option.dataset.cycleId = item.id_cycle;
-                                dropdown.appendChild(option);
-                            });
-                            $('#field-id_classe_active').show();
-                        } else {
-                            alert(responseData.message || 'Aucune classe active trouvée pour cette année scolaire.');
-                            $('#field-id_classe_active').hide();
-                        }
-                        $('#field-id_eleve').hide();
+                    if (data.success && data.variables.length > 0) {
+                        data.variables.forEach(v => {
+                            const option = document.createElement('option');
+                            option.value = v.id_variable;
+                            option.textContent = `${v.nom_variable} - ${v.reste_a_payer.toLocaleString()}`;
+                            dropdown.appendChild(option);
+                        });
+                        $('#field-id_variable').show();
+                    } else {
                         $('#field-id_variable').hide();
-                        // $('#field-id_banque').hide();
-                        $('#field-id_compte').hide();
-                        $('#field-montant').hide();
-                        $('#field-bordereau').hide();
-                        $('#field-date_paie').hide();
-                        $('#saveBtn').hide();
-                    })
-                    .catch(error => {
-                        alert('Erreur lors du chargement des classes.');
-                    });
-                }
-
-            $('#id_id_classe_active').on('change', function() {
-                selectedClasseId = $(this).val();
-                if (selectedClasseId) {
-                    const selectedOption = $(this).find('option:selected');
-                    selectedCampusId = selectedOption.data('campusId');
-                    selectedCycleId = selectedOption.data('cycleId');
-                
-                    updateEleveDropdown();
-                } else {
-                    $('#field-id_eleve').hide();
-                    $('#field-id_variable').hide();
-                    // $('#field-id_banque').hide();
-                    $('#field-id_compte').hide();
-                    $('#field-montant').hide();
-                    $('#field-bordereau').hide();
-                    $('#field-date_paie').hide();
-                    $('#saveBtn').hide();
-                    selectedCampusId = null;
-                    selectedCycleId = null;
-                    selectedClasseId = null;
-                    selectedEleveId = null;
-                }
-            });
-
-            function updateEleveDropdown() {
-                var dropdown = $('#id_id_eleve')[0];
-                const pupilsUrl = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
-                fetch(pupilsUrl)
-                    .then(response => response.json())
-                    .then(responseData => {
-                        if (!responseData.success) {
-                            alert(responseData.error || "Erreur lors du chargement des élèves.");
-                            $('#field-id_eleve').hide();
-                            return;
-                        }
-                        const data = responseData.data || [];
-                        dropdown.innerHTML = '<option value="">------</option>';
-                        if (data.length > 0) {
-                            data.forEach(item => {
-                                let option = document.createElement("option");
-                                option.value = item.id_eleve;
-                                option.textContent = item.nom_complet;
-                                dropdown.appendChild(option);
-                            });
-                            $('#field-id_eleve').show();
-                        } else {
-                            alert('Aucun élève trouvé pour cette classe.');
-                            $('#field-id_eleve').hide();
-                        }
-                    })
-                    .catch(error => {
-                        alert('Erreur lors du chargement des élèves.');
-                    });
-            }
-            $('#id_id_eleve').on('change', function() {
-                selectedEleveId = $(this).val();
-                if (!selectedEleveId) {
-                    $('#field-id_variable').hide();
-                    return;
-                }
-
-                fetch(`/get_variables_restant_a_payer/?id_eleve=${selectedEleveId}&id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe=${selectedClasseId}`)
-                    .then(res => res.json())
-                    .then(data => {
-                        const dropdown = $('#id_id_variable')[0];
-                        dropdown.innerHTML = '<option value="">------</option>';
-
-                        if (data.success && data.variables.length > 0) {
-                            data.variables.forEach(v => {
-                                const option = document.createElement('option');
-                                option.value = v.id_variable;
-                                option.textContent = `${v.nom_variable} - ${v.reste_a_payer.toLocaleString()}`;
-                                dropdown.appendChild(option);
-                            });
-                            $('#field-id_variable').show();
-                        } else {
-                            $('#field-id_variable').hide();
-                            alert('Aucune variable avec solde restant pour cet élève.');
-                        }
-                    })
-                    .catch(err => {
-                        console.error(err);
-                        alert('Erreur lors de la récupération des variables.');
-                    });
-            });
-
-
-            // $('#id_id_eleve').on('change', function() {
-            //     selectedEleveId = $(this).val();
-            //     if (selectedEleveId) {
-            //         $('#field-id_variable').show();
-            //     } else {
-            //         $('#field-id_variable').hide();
-            //         // $('#field-id_banque').hide();
-            //         $('#field-id_compte').hide();
-            //         $('#field-montant').hide();
-            //         $('#field-bordereau').hide();
-            //         $('#field-date_paie').hide();
-            //         $('#saveBtn').hide();
-            //     }
-            // });
-
-            $('#id_id_variable').on('change', function() {
-                if ($(this).val()) {
-                    $('#field-id_banque').show();
-                } else {
-                    // $('#field-id_banque').hide();
-                    $('#field-id_compte').hide();
-                    $('#field-montant').hide();
-                    $('#field-bordereau').hide();
-                    $('#field-date_paie').hide();
-                    $('#saveBtn').hide();
-                }
-            });
-
-            // $('#id_id_banque').on('change', function() {
-            //     var banqueId = $(this).val();
-            //     if (banqueId) {
-            //         updateCompteDropdown(banqueId);
-            //     } else {
-            //         $('#field-id_compte').hide();
-            //         $('#field-montant').hide();
-            //         $('#field-bordereau').hide();
-            //         $('#field-date_paie').hide();
-            //         $('#saveBtn').hide();
-            //     }
-            // });
-            function updateCompteDropdown(banqueId) {
-                var dropdown = $('#id_id_compte')[0];
-                fetch('/get_comptes_banque/' + banqueId + '/')
-                    .then(response => response.json())
-                    .then(responseData => {
-                        if (!responseData.success && responseData.error) {
-                            alert('Erreur : ' + responseData.error);
-                            return;
-                        }
-                        const data = responseData.comptes || [];
-                        dropdown.innerHTML = '<option value="">------</option>';
-                        if (data.length > 0) {
-                            data.forEach(item => {
-                                let option = document.createElement("option");
-                                option.value = item.id_compte;
-                                option.textContent = item.compte;
-                                dropdown.appendChild(option);
-                            });
-                            $('#field-id_compte').show();
-                        } else {
-                            alert('Aucun compte trouvé pour cette banque.');
-                            $('#field-id_compte').hide();
-                        }
-                        $('#field-montant').show();
-                        $('#field-bordereau').show();
-                        $('#field-date_paie').show();
-                    })
-                    .catch(error => {
-                        alert('Erreur lors du chargement des comptes.');
-                    });
-            }
-
-            function checkFormValidity() {
-                var montant = $('#id_montant').val().trim();
-                var datePaie = $('#id_date_paie').val().trim();
-                var banque = $('#id_id_banque').val();
-                var compte = $('#id_id_compte').val();
-                var variable = $('#id_id_variable').val();
-                var bordereau = $('#id_bordereau')[0].files.length > 0;
-
-                if (montant && parseFloat(montant) > 0 && datePaie && banque && compte && variable) {
-                    $('#saveBtn').show();
-                } else {
-                    $('#saveBtn').hide();
-                }
-            }
-
-            $('#id_montant, #id_date_paie, #id_id_banque, #id_id_compte, #id_id_variable, #id_bordereau').on('input change', checkFormValidity);
-
-            $('#variablePrixForm').on('submit', function(e) {
-                e.preventDefault();
-                var formData = new FormData(this);
-
-            
-                $.ajax({
-                    url: '/save_paiement/',
-                    type: 'POST',
-                    data: formData,
-                    processData: false,
-                    contentType: false,
-                    success: function(response) {
-                        if (response.success) {
-                            alert('Paiement enregistré avec succès !');
-                            $('#modalContainer').modal('hide');
-                            loadPaiements();
-                            window.location.href = "{% url 'ajouter_paiement' %}";
-                        } else {
-                            let errorMsg = response.error;
-                            if (response.details) {
-                                try {
-                                    const errors = JSON.parse(response.details);
-                                    errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
-                                } catch (e) {
-                                    console.error('Erreur lors du parsing des erreurs :', e);
-                                }
-                            }
-                            alert('Erreur : ' + errorMsg);
-                            // let errorMsg = response.error;
-                            // if (response.details) {
-                            //     try {
-                            //         const errors = JSON.parse(response.details);
-                            //         errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
-                            //     } catch (e) {
-                            //         console.error('Erreur lors du parsing des erreurs :', e);
-                            //     }
-                            // }
-                            // alert('Erreur : ' + errorMsg);
-                            // window.location.href = "{% url 'ajouter_paiement' %}";
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                    
-                        alert('Une erreur est survenue lors de l\'enregistrement.');
+                        alert('Aucune variable avec solde restant pour cet élève.');
                     }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert('Erreur lors de la récupération des variables.');
                 });
-            });
+        });
 
-            $('#cancelBtn, #cancelBtnForm').on('click', function() {
-                $('#modalContainer').modal('hide');
-            });
+
+        // $('#id_id_eleve').on('change', function() {
+        //     selectedEleveId = $(this).val();
+        //     if (selectedEleveId) {
+        //         $('#field-id_variable').show();
+        //     } else {
+        //         $('#field-id_variable').hide();
+        //         // $('#field-id_banque').hide();
+        //         $('#field-id_compte').hide();
+        //         $('#field-montant').hide();
+        //         $('#field-bordereau').hide();
+        //         $('#field-date_paie').hide();
+        //         $('#saveBtn').hide();
+        //     }
+        // });
+
+        $('#id_id_variable').on('change', function() {
+            if ($(this).val()) {
+                $('#field-id_banque').show();
+            } else {
+                // $('#field-id_banque').hide();
+                $('#field-id_compte').hide();
+                $('#field-montant').hide();
+                $('#field-bordereau').hide();
+                $('#field-date_paie').hide();
+                $('#saveBtn').hide();
+            }
+        });
+
+        // $('#id_id_banque').on('change', function() {
+        //     var banqueId = $(this).val();
+        //     if (banqueId) {
+        //         updateCompteDropdown(banqueId);
+        //     } else {
+        //         $('#field-id_compte').hide();
+        //         $('#field-montant').hide();
+        //         $('#field-bordereau').hide();
+        //         $('#field-date_paie').hide();
+        //         $('#saveBtn').hide();
+        //     }
+        // });
+        function updateCompteDropdown(banqueId) {
+            var dropdown = $('#id_id_compte')[0];
+            fetch('/get_comptes_banque/' + banqueId + '/')
+                .then(response => response.json())
+                .then(responseData => {
+                    if (!responseData.success && responseData.error) {
+                        alert('Erreur : ' + responseData.error);
+                        return;
+                    }
+                    const data = responseData.comptes || [];
+                    dropdown.innerHTML = '<option value="">------</option>';
+                    if (data.length > 0) {
+                        data.forEach(item => {
+                            let option = document.createElement("option");
+                            option.value = item.id_compte;
+                            option.textContent = item.compte;
+                            dropdown.appendChild(option);
+                        });
+                        $('#field-id_compte').show();
+                    } else {
+                        alert('Aucun compte trouvé pour cette banque.');
+                        $('#field-id_compte').hide();
+                    }
+                    $('#field-montant').show();
+                    $('#field-bordereau').show();
+                    $('#field-date_paie').show();
+                })
+                .catch(error => {
+                    alert('Erreur lors du chargement des comptes.');
+                });
         }
-    });
-    </script>
+
+        function checkFormValidity() {
+            var montant = $('#id_montant').val().trim();
+            var datePaie = $('#id_date_paie').val().trim();
+            var banque = $('#id_id_banque').val();
+            var compte = $('#id_id_compte').val();
+            var variable = $('#id_id_variable').val();
+            var bordereau = $('#id_bordereau')[0].files.length > 0;
+
+            if (montant && parseFloat(montant) > 0 && datePaie && banque && compte && variable) {
+                $('#saveBtn').show();
+            } else {
+                $('#saveBtn').hide();
+            }
+        }
+
+        $('#id_montant, #id_date_paie, #id_id_banque, #id_id_compte, #id_id_variable, #id_bordereau').on('input change', checkFormValidity);
+
+        $('#variablePrixForm').on('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(this);
+
+        
+            $.ajax({
+                url: '/save_paiement/',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        alert('Paiement enregistré avec succès !');
+                        $('#modalContainer').modal('hide');
+                        loadPaiements();
+                        window.location.href = "{% url 'ajouter_paiement' %}";
+                    } else {
+                        let errorMsg = response.error;
+                        if (response.details) {
+                            try {
+                                const errors = JSON.parse(response.details);
+                                errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
+                            } catch (e) {
+                                console.error('Erreur lors du parsing des erreurs :', e);
+                            }
+                        }
+                        alert('Erreur : ' + errorMsg);
+                        // let errorMsg = response.error;
+                        // if (response.details) {
+                        //     try {
+                        //         const errors = JSON.parse(response.details);
+                        //         errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
+                        //     } catch (e) {
+                        //         console.error('Erreur lors du parsing des erreurs :', e);
+                        //     }
+                        // }
+                        // alert('Erreur : ' + errorMsg);
+                        // window.location.href = "{% url 'ajouter_paiement' %}";
+                    }
+                },
+                error: function(xhr, status, error) {
+                
+                    alert('Une erreur est survenue lors de l\'enregistrement.');
+                }
+            });
+        });
+
+        $('#cancelBtn, #cancelBtnForm').on('click', function() {
+            $('#modalContainer').modal('hide');
+        });
+    }
+});
+</script>
     <!-- get paiments  + modification + suppression-->
 <script>
 $(document).ready(function () {
+    if (window.location.pathname === "/") {
 
-    let selectedAnneeId = '';
-    let selectedClasseId = '';
-    let selectedEleveId = '';
+        let selectedAnneeId = '';
+        let selectedClasseId = '';
+        let selectedEleveId = '';
 
-    /* ==============================
-       CSRF TOKEN
-    ============================== */
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.startsWith(name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
+        /* ==============================
+        CSRF TOKEN
+        ============================== */
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.startsWith(name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
                 }
             }
+            return cookieValue;
         }
-        return cookieValue;
+
+        /* ==========================
+            CHANGEMENT ANNÉE
+        ========================== */
+        $('#filter_annee').on('change', function () {
+
+            selectedAnneeId = $(this).val();
+            selectedClasseId = '';
+            selectedEleveId = '';
+
+            $('#filter_classe').html('<option value="">------</option>');
+            $('#filter_eleve').html('<option value="">------</option>');
+
+            if (!selectedAnneeId) {
+                $('#paiement_list').hide();
+                return;
+            }
+
+            loadClasses(selectedAnneeId);
+            loadPaiements();
+        });
+
+        $('#filter_classe').on('change', function () {
+            selectedClasseId = $(this).val();
+            selectedEleveId = '';
+
+            $('#filter_eleve').html('<option value="">------</option>');
+
+            loadEleves(selectedClasseId);
+            loadPaiements();
+        });
+
+        $('#filter_eleve').on('change', function () {
+            selectedEleveId = $(this).val();
+            loadPaiements();
+        });
+
+        /* ==========================
+            LOAD CLASSES
+        ========================== */
+        /* ==========================
+        LOAD CLASSES
+    ========================== */
+    function loadClasses(anneeId) {
+        var dropdown = $('#filter_classe')[0];
+        dropdown.innerHTML = '<option value="">------</option>';
+
+        fetch(`/get_classes_actives/${anneeId}/`)
+            .then(res => res.json())
+            .then(res => {
+                if (!res.success) return;
+                res.classes.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c.id_classe_active;
+                    option.textContent = `${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}${c.groupe ? ' (' + c.groupe + ')' : ''}`;
+                    option.dataset.campusId = c.id_campus;
+                    option.dataset.cycleId = c.id_cycle;
+                    dropdown.appendChild(option);
+                });
+            })
+            .catch(err => alert('Erreur lors du chargement des classes.'));
     }
 
     /* ==========================
-        CHANGEMENT ANNÉE
+        LOAD ELEVES
     ========================== */
-    $('#filter_annee').on('change', function () {
+    function loadEleves() {
+        if (!selectedAnneeId || !selectedClasseId || !selectedCampusId || !selectedCycleId) return;
 
-        selectedAnneeId = $(this).val();
-        selectedClasseId = '';
-        selectedEleveId = '';
+        var dropdown = $('#filter_eleve')[0];
+        dropdown.innerHTML = '<option value="">------</option>';
 
-        $('#filter_classe').html('<option value="">------</option>');
-        $('#filter_eleve').html('<option value="">------</option>');
+        const url = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
 
-        if (!selectedAnneeId) {
-            $('#paiement_list').hide();
+        fetch(url)
+            .then(res => res.json())
+            .then(res => {
+                if (!res.success) {
+                    alert(res.error || 'Erreur lors du chargement des élèves.');
+                    return;
+                }
+                (res.data || []).forEach(e => {
+                    const option = document.createElement('option');
+                    option.value = e.id_eleve;
+                    option.textContent = e.nom_complet;
+                    dropdown.appendChild(option);
+                });
+            })
+            .catch(err => alert('Erreur lors du chargement des élèves.'));
+    }
+
+    /* ==========================
+        ON CHANGE CLASSE
+    ========================== */
+    $('#filter_classe').on('change', function () {
+        selectedClasseId = $(this).val();
+
+        if (!selectedClasseId) {
+            $('#filter_eleve').html('<option value="">------</option>');
             return;
         }
 
-        loadClasses(selectedAnneeId);
-        loadPaiements();
+        const selectedOption = $(this).find('option:selected');
+        selectedCampusId = selectedOption.data('campusId');
+        selectedCycleId = selectedOption.data('cycleId');
+
+        loadEleves();  // ✅ ici on a toutes les données nécessaires
     });
 
-    $('#filter_classe').on('change', function () {
-        selectedClasseId = $(this).val();
-        selectedEleveId = '';
+        /* ==========================
+            LOAD PAIEMENTS
+        ========================== */
+        function loadPaiements() {
 
-        $('#filter_eleve').html('<option value="">------</option>');
+            if (!selectedAnneeId) return;
 
-        loadEleves(selectedClasseId);
-        loadPaiements();
-    });
+            $('#paiement_list').show();
 
-    $('#filter_eleve').on('change', function () {
-        selectedEleveId = $(this).val();
-        loadPaiements();
-    });
-
-    /* ==========================
-        LOAD CLASSES
-    ========================== */
-    /* ==========================
-    LOAD CLASSES
-========================== */
-function loadClasses(anneeId) {
-    var dropdown = $('#filter_classe')[0];
-    dropdown.innerHTML = '<option value="">------</option>';
-
-    fetch(`/get_classes_actives/${anneeId}/`)
-        .then(res => res.json())
-        .then(res => {
-            if (!res.success) return;
-            res.classes.forEach(c => {
-                const option = document.createElement('option');
-                option.value = c.id_classe_active;
-                option.textContent = `${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}${c.groupe ? ' (' + c.groupe + ')' : ''}`;
-                option.dataset.campusId = c.id_campus;
-                option.dataset.cycleId = c.id_cycle;
-                dropdown.appendChild(option);
+            const params = new URLSearchParams({
+                id_annee: selectedAnneeId,
+                id_classe_active: selectedClasseId || '',
+                id_eleve: selectedEleveId || ''
             });
-        })
-        .catch(err => alert('Erreur lors du chargement des classes.'));
-}
 
-/* ==========================
-    LOAD ELEVES
-========================== */
-function loadEleves() {
-    if (!selectedAnneeId || !selectedClasseId || !selectedCampusId || !selectedCycleId) return;
+            fetch(`/get_paiements_for_add_page/?${params}`)
+                .then(res => res.json())
+                .then(res => {
 
-    var dropdown = $('#filter_eleve')[0];
-    dropdown.innerHTML = '<option value="">------</option>';
+                    const tbody = $('#paiement_list tbody');
+                    tbody.empty();
 
-    const url = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+                    if (!res.success || res.data.length === 0) {
+                        tbody.append(`<tr><td colspan="6" class="text-center">Aucun paiement trouvé</td></tr>`);
+                        return;
+                    }
 
-    fetch(url)
-        .then(res => res.json())
-        .then(res => {
-            if (!res.success) {
-                alert(res.error || 'Erreur lors du chargement des élèves.');
-                return;
-            }
-            (res.data || []).forEach(e => {
-                const option = document.createElement('option');
-                option.value = e.id_eleve;
-                option.textContent = e.nom_complet;
-                dropdown.appendChild(option);
-            });
-        })
-        .catch(err => alert('Erreur lors du chargement des élèves.'));
-}
+                    res.data.forEach(p => {
 
-/* ==========================
-    ON CHANGE CLASSE
-========================== */
-$('#filter_classe').on('change', function () {
-    selectedClasseId = $(this).val();
+                        tbody.append(`
+                            <tr id="row-paiement-${p.id}">
+                                <td>${p.eleve}</td>
+                                <td>${p.variable}</td>
 
-    if (!selectedClasseId) {
-        $('#filter_eleve').html('<option value="">------</option>');
-        return;
-    }
+                                <td id="paiement-montant-${p.id}">
+                                    ${p.montant}
+                                </td>
 
-    const selectedOption = $(this).find('option:selected');
-    selectedCampusId = selectedOption.data('campusId');
-    selectedCycleId = selectedOption.data('cycleId');
+                                <td id="paiement-bordereau-${p.id}">
+                                    ${p.bordereau ? `<a href="${p.bordereau}" target="_blank">Voir</a>` : '—'}
+                                </td>
 
-    loadEleves();  // ✅ ici on a toutes les données nécessaires
-});
+                                <td id="paiement-date-${p.id}">
+                                    ${p.date_paie || ''}
+                                </td>
 
-    /* ==========================
-        LOAD PAIEMENTS
-    ========================== */
-    function loadPaiements() {
+                                <td id="paiement-actions-${p.id}">
+                                    <button class="btn btn-sm btn-primary edit-btn-paiement"
+                                            data-id="${p.id}">
+                                            Modifier
+                                    </button>
+                                    <button class="btn btn-sm btn-danger btn-delete"
+                                            data-id="${p.id}">
+                                            Supprimer
+                                    </button>
+                                </td>
+                            </tr>
+                        `);
+                    });
 
-        if (!selectedAnneeId) return;
+                });
+        }
 
-        $('#paiement_list').show();
+        /* ==========================================
+            CLIQUER MODIFIER → MODE EDIT
+        ========================================== */
+        $(document).on('click', '.edit-btn-paiement', function () {
 
-        const params = new URLSearchParams({
-            id_annee: selectedAnneeId,
-            id_classe_active: selectedClasseId || '',
-            id_eleve: selectedEleveId || ''
+            const paiementId = $(this).data('id');
+
+            const montantCell = $('#paiement-montant-' + paiementId);
+            const dateCell = $('#paiement-date-' + paiementId);
+            const bordereauCell = $('#paiement-bordereau-' + paiementId);
+            const actionCell = $('#paiement-actions-' + paiementId);
+
+            const oldMontant = montantCell.text().trim();
+            const oldDate = dateCell.text().trim();
+
+            montantCell.html(
+                `<input type="number" class="form-control edit-montant" value="${oldMontant}">`
+            );
+
+            dateCell.html(
+                `<input type="date" class="form-control edit-date" value="${oldDate}">`
+            );
+
+            bordereauCell.html(
+                `<input type="file" class="form-control edit-bordereau">`
+            );
+
+            actionCell.html(`
+                <button class="btn btn-success btn-confirm"
+                        data-id="${paiementId}">
+                        Confirmer
+                </button>
+
+                <button class="btn btn-secondary btn-cancel"
+                        data-id="${paiementId}">
+                        Annuler
+                </button>
+            `);
         });
 
-        fetch(`/get_paiements_for_add_page/?${params}`)
+        /* ==========================================
+            CONFIRMER MODIFICATION
+        ========================================== */
+        $(document).on('click', '.btn-confirm', function () {
+
+            const paiementId = $(this).data('id');
+
+            const row = $('#row-paiement-' + paiementId);
+
+            const montant = row.find('.edit-montant').val();
+            const date_paie = row.find('.edit-date').val();
+            const bordereau = row.find('.edit-bordereau')[0].files[0];
+
+            let formData = new FormData();
+            formData.append('montant', montant);
+            formData.append('date_paie', date_paie);
+            if (bordereau) {
+                formData.append('bordereau', bordereau);
+            }
+
+            fetch(`/paiement/update/${paiementId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: formData
+            })
             .then(res => res.json())
             .then(res => {
 
-                const tbody = $('#paiement_list tbody');
-                tbody.empty();
-
-                if (!res.success || res.data.length === 0) {
-                    tbody.append(`<tr><td colspan="6" class="text-center">Aucun paiement trouvé</td></tr>`);
+                if (res.success === true) {
+                    alert('Paiement modifié ✅');
+                    loadPaiements();
                     return;
+                } if (res.success === false) {
+
+                    if (res.error) {
+                        alert(res.error);   // 🔥 MESSAGE COMPLET DJANGO
+                    } else if (res.message) {
+                        alert(res.message);
+                    } else {
+                        alert('Une erreur est survenue ❌');
+                    }
                 }
-
-                res.data.forEach(p => {
-
-                    tbody.append(`
-                        <tr id="row-paiement-${p.id}">
-                            <td>${p.eleve}</td>
-                            <td>${p.variable}</td>
-
-                            <td id="paiement-montant-${p.id}">
-                                ${p.montant}
-                            </td>
-
-                            <td id="paiement-bordereau-${p.id}">
-                                ${p.bordereau ? `<a href="${p.bordereau}" target="_blank">Voir</a>` : '—'}
-                            </td>
-
-                            <td id="paiement-date-${p.id}">
-                                ${p.date_paie || ''}
-                            </td>
-
-                            <td id="paiement-actions-${p.id}">
-                                <button class="btn btn-sm btn-primary edit-btn-paiement"
-                                        data-id="${p.id}">
-                                        Modifier
-                                </button>
-                                <button class="btn btn-sm btn-danger btn-delete"
-                                        data-id="${p.id}">
-                                        Supprimer
-                                </button>
-                            </td>
-                        </tr>
-                    `);
-                });
-
             });
-    }
+        });
 
-    /* ==========================================
-        CLIQUER MODIFIER → MODE EDIT
-    ========================================== */
-    $(document).on('click', '.edit-btn-paiement', function () {
+        /* ==========================================
+            ANNULER MODIFICATION
+        ========================================== */
+        $(document).on('click', '.btn-cancel', function () {
+            loadPaiements();
+        });
 
-        const paiementId = $(this).data('id');
+        /* ==========================================
+            SUPPRIMER
+        ========================================== */
+        $(document).on('click', '.btn-delete', function () {
 
-        const montantCell = $('#paiement-montant-' + paiementId);
-        const dateCell = $('#paiement-date-' + paiementId);
-        const bordereauCell = $('#paiement-bordereau-' + paiementId);
-        const actionCell = $('#paiement-actions-' + paiementId);
+            const paiementId = $(this).data('id');
 
-        const oldMontant = montantCell.text().trim();
-        const oldDate = dateCell.text().trim();
+            if (!confirm('Supprimer ce paiement ?')) return;
 
-        montantCell.html(
-            `<input type="number" class="form-control edit-montant" value="${oldMontant}">`
-        );
-
-        dateCell.html(
-            `<input type="date" class="form-control edit-date" value="${oldDate}">`
-        );
-
-        bordereauCell.html(
-            `<input type="file" class="form-control edit-bordereau">`
-        );
-
-        actionCell.html(`
-            <button class="btn btn-success btn-confirm"
-                    data-id="${paiementId}">
-                    Confirmer
-            </button>
-
-            <button class="btn btn-secondary btn-cancel"
-                    data-id="${paiementId}">
-                    Annuler
-            </button>
-        `);
-    });
-
-    /* ==========================================
-        CONFIRMER MODIFICATION
-    ========================================== */
-    $(document).on('click', '.btn-confirm', function () {
-
-        const paiementId = $(this).data('id');
-
-        const row = $('#row-paiement-' + paiementId);
-
-        const montant = row.find('.edit-montant').val();
-        const date_paie = row.find('.edit-date').val();
-        const bordereau = row.find('.edit-bordereau')[0].files[0];
-
-        let formData = new FormData();
-        formData.append('montant', montant);
-        formData.append('date_paie', date_paie);
-        if (bordereau) {
-            formData.append('bordereau', bordereau);
-        }
-
-        fetch(`/paiement/update/${paiementId}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            },
-            body: formData
-        })
-        .then(res => res.json())
-        .then(res => {
-
-            if (res.success === true) {
-                alert('Paiement modifié ✅');
-                loadPaiements();
-                return;
-            } if (res.success === false) {
-
-                if (res.error) {
-                    alert(res.error);   // 🔥 MESSAGE COMPLET DJANGO
-                } else if (res.message) {
-                    alert(res.message);
-                } else {
-                    alert('Une erreur est survenue ❌');
+            fetch(`/delete_paiement/${paiementId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken')
                 }
-            }
+            })
+            .then(res => res.json())
+            .then(res => {
+
+                if (res.success) {
+                    alert('Paiement supprimé ✅');
+                    loadPaiements();
+                }
+            });
         });
-    });
-
-    /* ==========================================
-        ANNULER MODIFICATION
-    ========================================== */
-    $(document).on('click', '.btn-cancel', function () {
-        loadPaiements();
-    });
-
-    /* ==========================================
-        SUPPRIMER
-    ========================================== */
-    $(document).on('click', '.btn-delete', function () {
-
-        const paiementId = $(this).data('id');
-
-        if (!confirm('Supprimer ce paiement ?')) return;
-
-        fetch(`/delete_paiement/${paiementId}/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken')
-            }
-        })
-        .then(res => res.json())
-        .then(res => {
-
-            if (res.success) {
-                alert('Paiement supprimé ✅');
-                loadPaiements();
-            }
-        });
-    });
+    }
 
 });
 </script>
 
     <!-- penalites -->
-   <script>
+<script>
 $(document).ready(function () {
     if (window.location.pathname === '/ajouter_penalite/' || window.location.pathname === '/liste_penalite/') {
 
@@ -3629,6 +3645,38 @@ $(document).ready(function () {
                     });
                     $('#id_id_variable').show();
                 });
+        });
+        $('#savePenaliteBtn').off('click').on('click', function (e) {
+            e.preventDefault();
+
+            // On cible le formulaire principal du modal
+            let form = $('#variablePrixForm'); 
+            
+            let formData = form.serializeArray();
+            formData.push({ name: 'id_campus', value: selectedCampusId });
+            formData.push({ name: 'id_cycle_actif', value: selectedCycleId });
+
+            $.ajax({
+                url: "/save_penalite/",
+                type: 'POST',
+                data: formData,
+                // Le token sera trouvé car il est au début de #variablePrixForm
+                success: function (response) {
+                    if (response.success) {
+                        alert('✅ Pénalité enregistrée avec succès !');
+                        $('#modalContainer').fadeOut();
+                        window.location.reload();
+                    } else {
+                        // Affiche l'erreur spécifique retournée par save_api.py
+                        alert('❌ Erreur : ' + (response.error || 'Veuillez vérifier les champs.'));
+                        console.error("Détails :", response.details);
+                    }
+                },
+                error: function (xhr) {
+                    alert('❌ Erreur critique : Impossible de joindre le serveur.');
+                    console.error(xhr.responseText);
+                }
+            });
         });
 
         // ==========================
@@ -4395,9 +4443,256 @@ $(document).ready(function () {
 });
 });
 </script>
+<!-- suivis reduction et derogation -->
+<script>
+$(document).ready(function() {
+    if (window.location.pathname !== '/suivi-reduction-derogation/') return;
 
+    function resetTable() {
+        $('#suivi_list tbody').html('');
+        $('#suivi_list').hide();
+    }
 
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                if(c.trim().startsWith(name+'=')){
+                    cookieValue = decodeURIComponent(c.trim().substring(name.length+1));
+                }
+            });
+        }
+        return cookieValue;
+    }
 
+    // ==========================
+    // LOAD CLASSES
+    // ==========================
+    $('#filter_annee').on('change', function() {
+        const anneeId = $(this).val();
+        $('#filter_classe').html('<option value="">------</option>');
+        $('#filter_eleve').html('<option value="">------</option>');
+        resetTable();
+        if (!anneeId) return;
+
+        fetch(`/get_classes_actives/${anneeId}/`)
+        .then(res => res.json())
+        .then(data => {
+            if(data.success){
+                data.classes.forEach(c=>{
+                    $('#filter_classe').append(`
+                        <option value="${c.id_classe_active}" data-campus-id="${c.id_campus}" data-cycle-id="${c.id_cycle}">
+                            ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
+                        </option>
+                    `);
+                });
+            }
+        });
+        loadTable();
+    });
+
+    // ==========================
+    // LOAD ELEVES
+    // ==========================
+    $('#filter_classe').on('change', function() {
+        const opt = $(this).find(':selected');
+        const selectedCampusId = opt.data('campus-id');
+        const selectedCycleId = opt.data('cycle-id');
+        const classeId = $(this).val();
+        const anneeId = $('#filter_annee').val();
+
+        $('#filter_eleve').html('<option value="">------</option>');
+
+        if (!classeId) return;
+
+        fetch(`/get_pupils_registred_classe/?id_annee=${anneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${classeId}`)
+        .then(res => res.json())
+        .then(data => {
+            if(data.success){
+                data.data.forEach(e=>{
+                    $('#filter_eleve').append(`<option value="${e.id_eleve}">${e.nom_complet}</option>`);
+                });
+            }
+        });
+
+        loadTable();
+    });
+
+    // ==========================
+    // LOAD TABLE
+    // ==========================
+    function loadTable() {
+        const type = $('#filter_type').val() || '';
+        const annee = $('#filter_annee').val() || '';
+        const classe = $('#filter_classe').val() || '';
+        const eleve = $('#filter_eleve').val() || '';
+        const variable = $('#filter_variable').val() || '';
+
+        if (!annee) {
+            resetTable();
+            return;
+        }
+
+        let statutTitle = 'Statut';
+        if(type === 'reduction') statutTitle = 'Pourcentage (%)';
+        else if(type === 'derogation') statutTitle = 'Date de dérogation';
+        $('#suivi_list thead th:nth-child(5)').text(statutTitle);
+
+        fetch(`/suivi-reduction-derogation-data/?type=${type}&annee=${annee}&classe=${classe}&eleve=${eleve}&variable=${variable}`)
+        .then(res => res.json())
+        .then(data => {
+            const tbody = $('#suivi_list tbody');
+            tbody.html('');
+
+            if(!data.success || !data.rows.length){
+                tbody.html(`<tr><td colspan="6" style="text-align:center; color:red;">Aucune donnée trouvée pour cette combinaison de filtres.</td></tr>`);
+                $('#suivi_list').show();
+                return;
+            }
+
+            data.rows.forEach(r=>{
+                let statutValue = r.statut || '-';
+                tbody.append(`
+                    <tr id="row-${r.type}-${r.id || ''}">
+                        <td>${r.type}</td>
+                        <td>${r.eleve || '-'}</td>
+                        <td>${r.classe || '-'}</td>
+                        <td>${r.variable || '-'}</td>
+                        <td class="cell-statut">${statutValue}</td>
+                        <td class="cell-actions">
+                            <span class="edit-icon" data-id="${r.id}" data-type="${r.type}" style="cursor:pointer;">✏️</span>
+                        </td>
+                    </tr>
+                `);
+            });
+
+            $('#suivi_list').show();
+        });
+    }
+
+    $('#filter_type,#filter_variable,#filter_eleve').on('change', loadTable);
+
+    // ==========================
+    // EDIT INLINE
+    // ==========================
+    $(document).on('click', '.edit-icon', function() {
+        const row = $(this).closest('tr');
+        const type = $(this).data('type');
+        const id = $(this).data('id');
+        const statutCell = row.find('.cell-statut');
+        const actionCell = row.find('.cell-actions');
+
+        const oldValue = statutCell.text().trim();
+
+        if(type === 'reduction'){
+            statutCell.html(`<input type="number" class="form-control edit-statut" value="${oldValue}">`);
+        } else if(type === 'derogation'){
+            statutCell.html(`<input type="date" class="form-control edit-statut" value="${oldValue}">`);
+        }
+
+        actionCell.html(`
+            <button class="btn btn-success btn-sm btn-confirm" data-id="${id}" data-type="${type}">✔️</button>
+            <button class="btn btn-secondary btn-sm btn-cancel">✖️</button>
+        `);
+    });
+
+    $(document).on('click', '.btn-confirm', function() {
+        const row = $(this).closest('tr');
+        const id = $(this).data('id');
+        const type = $(this).data('type');
+        const statutValue = row.find('.edit-statut').val();
+
+        const formData = new FormData();
+        formData.append('statut', statutValue);
+
+        fetch(`/suivi-${type}-update/${id}/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCookie('csrftoken')},
+            body: formData
+        })
+        .then(res => res.json())
+        .then(res => {
+            if(res.success){
+                loadTable();
+            } else {
+                alert(res.error || 'Erreur lors de la modification.');
+            }
+        });
+    });
+
+    $(document).on('click', '.btn-cancel', function(){
+        loadTable();
+    });
+
+});
+</script>
+<!-- get date butoires  -->
+
+<script>
+$(document).ready(function() {
+    const container = document.getElementById("dateButoireContainer");
+    if (!container) return;
+
+    // Afficher le conteneur avec un card style similaire au tableau paiements
+    container.innerHTML = `
+        <div class="col-md-12">
+            <div style="background-color: darkgrey; max-height: 500px; overflow-y: auto;" class="card">
+                <div class="table-header">
+                    <h3>LISTE DES DATES BUTOIRES</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table id="table-dates-butoire" class="table table-bordered table-hover text-center shadow-sm">
+                            <thead class="bg-primary text-white">
+                                <tr>
+                                    <th>Classe</th>
+                                    <th>Trimestre</th>
+                                    <th>Variable</th>
+                                    <th>Date butoire</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="5" style="color:#999;">Chargement des dates butoires...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const tbody = container.querySelector("#table-dates-butoire tbody");
+
+    // Fetch pour récupérer toutes les dates butoires
+    fetch(`/get_date_butoires/`)  // <-- endpoint Django renvoyant toutes les dates
+        .then(res => res.json())
+        .then(data => {
+            if (!data.success || !data.rows.length) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#999;">Aucune date butoire trouvée</td></tr>`;
+                return;
+            }
+
+            // Construire le tableau avec les données
+            tbody.innerHTML = ""; // vider avant d'ajouter
+            data.rows.forEach(row => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${row.classe}</td>
+                    <td>${row.trimestre || '-'}</td>
+                    <td>${row.variable}</td>
+                    <td>${row.date_butoire}</td>
+                    <td><button class="btn btn-sm btn-warning btn-edit" data-id="${row.id}">✏️</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        })
+        .catch(err => {
+            console.error("Erreur fetch date butoire :", err);
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">Erreur lors du chargement</td></tr>`;
+        });
+});
+</script>
 
 </body>
 </html>

@@ -274,6 +274,16 @@ def update_paiement(request):
         'classes': Classe_active.objects.all(),
     })
 
+def suivi_reduction_derogation(request):
+    # page HTML avec formulaire et tableau
+    annees = Annee.objects.all()  # exemple
+    variables = Variable.objects.all()
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'suivi_reduction_derogation_form': True,
+        'form_type': 'suivi_reduction_derogation_form',
+        'annees': annees,
+        'variables': variables,
+    })
 
 @csrf_protect
 def save_paiement(request):
