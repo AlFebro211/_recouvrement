@@ -67,6 +67,14 @@ urlpatterns =[
    path('suivi-reduction-update/<int:id>/', views.suivi_reduction_update, name='suivi_reduction_update'),
    path('suivi-derogation-update/<int:id>/', views.suivi_derogation_update, name='suivi_derogation_update'),
    path('get_date_butoires/',views.get_dates_butoire,name='get_date_butoires'),
+   path('update_date_butoire/<int:id>/', views.update_date_butoire, name='update_date_butoire'),
+   path('situation_journaliere/', views.situation_journaliere, name='situation_journaliere'),
+   path('situation_journaliere_data/', views.situation_journaliere_data, name='situation_journaliere_data'),
+   path('generate_situation_pdf/', views.generate_situation_pdf, name='generate_situation_pdf'),
+   path('update-variable-obligatoire/', views.update_variable_obligatoire, name='update-variable-obligatoire'),
+   
+
+
 
 
 

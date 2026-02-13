@@ -977,3 +977,71 @@ def generate_dette_pdf(request):
 
     except Exception as e:
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
+
+
+def generate_situation_pdf(request):
+    try:
+        date_debut = request.GET.get('date_debut')
+        date_fin = request.GET.get('date_fin')
+
+        if not date_debut or not date_fin:
+            return HttpResponse("Erreur : veuillez fournir les deux dates.", status=400)
+
+        paiements_qs = Paiement.objects.select_related(
+            'id_eleve','id_variable','id_banque','id_compte'
+        ).filter(date_saisie__range=[date_debut, date_fin]).order_by(
+            'id_eleve__nom','id_variable__variable','date_saisie'
+        )
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Situation_Journaliere.pdf"'
+
+        doc = SimpleDocTemplate(response, pagesize=A4, leftMargin=10*mm, rightMargin=10*mm, topMargin=10*mm, bottomMargin=10*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+        small = ParagraphStyle('small', parent=styles['Normal'], fontSize=8, leading=10)
+        title_style = ParagraphStyle('title', fontSize=16, alignment=1, fontName='Helvetica-Bold')
+
+        # Logo
+        logo_path = finders.find('assets/img/logo.png')
+        if logo_path:
+            elements.append(Image(logo_path, width=25*mm, height=25*mm))
+        elements.append(Spacer(1, 4*mm))
+
+        # Titre
+        elements.append(Paragraph("SITUATION JOURNALIERE DES PAIEMENTS", title_style))
+        elements.append(Spacer(1, 4*mm))
+
+        # Tableau
+        data = [["Élève", "Variable", "Montant", "Date paiement", "Compte"]]
+        total_general = 0
+
+        for p in paiements_qs:
+            total_general += p.montant
+            data.append([
+                Paragraph(f"{p.id_eleve.nom} {p.id_eleve.prenom}", small),
+                Paragraph(p.id_variable.variable, small),
+                f"{p.montant:,.0f}",
+                Paragraph(p.date_paie.strftime('%d/%m/%Y'), small),
+                Paragraph(f"{p.id_compte.compte} - {p.id_banque.banque}", small)
+            ])
+
+        # Total général
+        data.append(["", "TOTAL", f"{total_general:,.0f}", "", ""])
+
+        table = Table(data, colWidths=[50*mm, 40*mm, 30*mm, 30*mm, 40*mm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#0d6efd')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('ALIGN', (2,1), (2,-1), 'RIGHT'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#ffc107')),
+        ]))
+
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur PDF : {str(e)}", status=500)

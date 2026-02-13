@@ -998,8 +998,8 @@
                                 <i class="fas fa-plus-circle"></i> Afficher les eleves
                             </button>
                         </div>
-  
                     {% endif %}
+
                 </form>
                 
 
@@ -1070,6 +1070,7 @@
                                         <tr>
                                             <th>Catégorie</th>
                                             <th>Variable</th>
+                                            <th>Obligatoire</th>
                                             <th>Actions</th>
                                         </tr>
                                     </thead>
@@ -1079,6 +1080,9 @@
                                             <tr id="row-variable-{{ variable.id_variable }}">
                                                 <td id="categorie-name-{{ variable.id_variable }}">{{ variable.id_variable_categorie.nom }}</td>
                                                 <td id="variable-name-{{ variable.id_variable }}">{{ variable.variable }}</td>
+                                                <td>
+                                                    <input type="checkbox" class="est-obligatoire" data-id="{{ variable.id_variable }}" {% if variable.estObligatoire %} checked {% endif %}>
+                                                </td>
                                                 <td>
                                                     <a href="#" class="btn btn-sm btn-outline-primary edit-btn-variable" data-id="{{ variable.id_variable }}">
                                                         <i class="fas fa-edit"></i>
@@ -1510,6 +1514,68 @@
 </div>
 
 {% endif %}
+<!-- situation journaliere -->
+{% if form_type == 'situation_journaliere_form' %}
+
+<div class="card shadow-sm">
+    <div class="card-header bg-primary text-white">
+        <h4>📅 Situation journalière des paiements</h4>
+    </div>
+
+    <div class="card-body">
+
+        <!-- FILTRES -->
+        <div class="form-row mb-3 p-3 bg-light rounded">
+            <div class="form-group">
+                <label for="date_debut">Date début</label>
+                <input type="date" id="date_debut" class="form-control">
+            </div>
+
+            <div class="form-group">
+                <label for="date_fin">Date fin</label>
+                <input type="date" id="date_fin" class="form-control">
+            </div>
+
+            <!-- <div class="form-group d-flex align-items-end">
+                <button id="btn-filtrer" class="btn btn-primary w-100">
+                    Filtrer
+                </button>
+            </div> -->
+        </div>
+
+        <!-- TOTAL -->
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+            <div>Total : <span id="total-montant">0</span></div>
+            <button id="btn-download-pdf" class="btn btn-primary">📄 Télécharger PDF</button>
+        </div>
+
+
+        <!-- TABLE -->
+        <div class="table-container mt-3">
+            <div class="table-responsive">
+                <table class="table table-bordered text-center">
+                    <thead>
+                        <tr>
+                            <th>Élève</th>
+                            <th>Variable</th>
+                            <th>Montant</th>
+                            <th>Date paiement</th>
+                            <th>Compte utilisé</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-paiements">
+                        <tr>
+                            <td colspan="4">Chargement...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endif %}
 <!-- CONTENEUR DU TABLEAU -->
        
         <div class="table-container mt-4" id="hf-result-container">
@@ -1755,7 +1821,38 @@
                     }
                 });
             }
+            // --- Gérer la case à cocher estObligatoire ---
+    $(document).on('change', '.est-obligatoire', function() {
+        var checkbox = $(this);
+        var variableId = checkbox.data('id');
+        var estObligatoire = checkbox.is(':checked');
+
+        $.ajax({
+            url: '/update-variable-obligatoire/',
+            type: 'POST',
+            headers: {
+                'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
+            },
+            data: JSON.stringify({
+                'id_variable': variableId,
+                'estObligatoire': estObligatoire
+            }),
+            contentType: 'application/json',
+            success: function(response) {
+                if(response.success){
+                    console.log('Est obligatoire mis à jour :', estObligatoire);
+                } else {
+                    alert('Erreur lors de la mise à jour : ' + response.error);
+                    checkbox.prop('checked', !estObligatoire); // revert si erreur
+                }
+            },
+            error: function() {
+                alert('Erreur serveur lors de la mise à jour.');
+                checkbox.prop('checked', !estObligatoire); // revert si erreur
+            }
         });
+    });
+});
     </script>
     <!-- banque edition script -->
     <script>
@@ -4630,10 +4727,12 @@ $(document).ready(function() {
 
 <script>
 $(document).ready(function() {
+
+    if (window.location.pathname !== '/ajouter_date_butoire/') return;
+
     const container = document.getElementById("dateButoireContainer");
     if (!container) return;
 
-    // Afficher le conteneur avec un card style similaire au tableau paiements
     container.innerHTML = `
         <div class="col-md-12">
             <div style="background-color: darkgrey; max-height: 500px; overflow-y: auto;" class="card">
@@ -4646,14 +4745,13 @@ $(document).ready(function() {
                             <thead class="bg-primary text-white">
                                 <tr>
                                     <th>Classe</th>
-                                    <th>Trimestre</th>
                                     <th>Variable</th>
                                     <th>Date butoire</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="5" style="color:#999;">Chargement des dates butoires...</td></tr>
+                                <tr><td colspan="4" style="color:#999;">Chargement...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -4664,35 +4762,225 @@ $(document).ready(function() {
 
     const tbody = container.querySelector("#table-dates-butoire tbody");
 
-    // Fetch pour récupérer toutes les dates butoires
-    fetch(`/get_date_butoires/`)  // <-- endpoint Django renvoyant toutes les dates
+    // =========================
+    // Charger les données
+    // =========================
+    fetch(`/get_date_butoires/`)
         .then(res => res.json())
         .then(data => {
+
             if (!data.success || !data.rows.length) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#999;">Aucune date butoire trouvée</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="4">Aucune date butoire</td></tr>`;
                 return;
             }
 
-            // Construire le tableau avec les données
-            tbody.innerHTML = ""; // vider avant d'ajouter
+            tbody.innerHTML = "";
+
             data.rows.forEach(row => {
+
                 const tr = document.createElement("tr");
+                tr.id = "row-date-" + row.id;
+
                 tr.innerHTML = `
                     <td>${row.classe}</td>
-                    <td>${row.trimestre || '-'}</td>
                     <td>${row.variable}</td>
-                    <td>${row.date_butoire}</td>
-                    <td><button class="btn btn-sm btn-warning btn-edit" data-id="${row.id}">✏️</button></td>
+                    <td id="date-butoire-${row.id}">${row.date_butoire}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary edit-date-butoire" data-id="${row.id}">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                    </td>
                 `;
+
                 tbody.appendChild(tr);
+            });
+
+        });
+
+// =========================
+// EDIT INLINE AVEC CONFIRM / CANCEL
+// =========================
+$(document).on('click', '.edit-date-butoire', function(e) {
+
+    e.preventDefault();
+
+    const button = $(this);
+    const id = button.data('id');
+
+    const cell = $('#date-butoire-' + id);
+    const currentDate = cell.text().trim();
+
+    // éviter double édition
+    if (cell.find('input').length) return;
+
+    cell.data('old', currentDate);
+
+    cell.html(`
+        <div style="display:flex; gap:5px; align-items:center; justify-content:center;">
+            <input type="date" class="form-control edit-input-date" value="${currentDate}">
+            <button class="btn btn-success btn-sm confirm-edit" data-id="${id}">
+                ✔️
+            </button>
+            <button class="btn btn-danger btn-sm cancel-edit" data-id="${id}">
+                ❌
+            </button>
+        </div>
+    `);
+
+});
+
+
+// =========================
+// CANCEL EDIT
+// =========================
+$(document).on('click', '.cancel-edit', function(){
+
+    const id = $(this).data('id');
+    const cell = $('#date-butoire-' + id);
+
+    const oldValue = cell.data('old');
+
+    cell.html(oldValue);
+});
+
+
+// =========================
+// CONFIRM EDIT
+// =========================
+$(document).on('click', '.confirm-edit', function(){
+
+    const id = $(this).data('id');
+    const cell = $('#date-butoire-' + id);
+
+    const input = cell.find('.edit-input-date');
+    const newDate = input.val();
+    const oldValue = cell.data('old');
+
+    if(!newDate){
+        alert("Date invalide");
+        return;
+    }
+
+    cell.html(`<span style="color:orange;">Enregistrement...</span>`);
+
+    $.ajax({
+        url: `/update_date_butoire/${id}/`,
+        type: 'POST',
+        data: {
+            date_butoire: newDate,
+            csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
+        },
+        success: function(response){
+
+            if(response.success){
+
+                cell.html(`
+                    <span style="color:green;font-weight:bold;">
+                        ${newDate}
+                    </span>
+                `);
+
+            }else{
+                alert(response.error);
+                cell.html(oldValue);
+            }
+        },
+        error:function(){
+            alert("Erreur serveur");
+            cell.html(oldValue);
+        }
+    });
+
+});
+
+
+});
+</script>
+
+<!-- situation journaliere -->
+<script>
+$(document).ready(function(){
+    // On cible les éléments
+    const tbody = $("#tbody-paiements");
+    if (tbody.length === 0) {
+        return; 
+    }
+    const totalBox = $("#total-montant");
+    const dateDebutInput = $("#date_debut");
+    const dateFinInput = $("#date_fin");
+    const pdfButton = $("#btn-download-pdf");
+
+    function loadPaiements(date_debut, date_fin){
+        // 1. On vide et on marque comme "en chargement"
+        tbody.html(`<tr><td colspan="5" class="text-center">Chargement...</td></tr>`);
+        tbody.removeClass("has-data"); // Sécurité pour le bouton PDF
+
+        fetch(`/situation_journaliere_data/?date_debut=${date_debut}&date_fin=${date_fin}`)
+        .then(res => res.json())
+        .then(data => {
+            if(!data.success || !data.rows || data.rows.length === 0){
+                tbody.html(`<tr><td colspan="5" class="text-center">Aucun paiement trouvé</td></tr>`);
+                totalBox.text(0);
+                return;
+            }
+
+            // 2. On a des données : on nettoie et on ajoute la classe de succès
+            tbody.html("");
+            tbody.addClass("has-data"); 
+            totalBox.text(data.total.toLocaleString());
+
+            data.rows.forEach(row => {
+                tbody.append(`
+                    <tr>
+                        <td>${row.eleve}</td>
+                        <td>${row.variable}</td>
+                        <td>${row.montant.toLocaleString()}</td>
+                        <td>${row.date_paie}</td>
+                        <td>${row.compte || '-'}</td>
+                    </tr>
+                `);
             });
         })
         .catch(err => {
-            console.error("Erreur fetch date butoire :", err);
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">Erreur lors du chargement</td></tr>`;
+            console.error("Erreur:", err);
+            tbody.html(`<tr><td colspan="5" class="text-center text-danger">Erreur serveur</td></tr>`);
         });
+    }
+
+    // Gestion du clic PDF
+    pdfButton.on("click", function(e){
+        e.preventDefault();
+
+        // VERSION ROBUSTE DU TEST :
+        // On vérifie simplement si la classe "has-data" est présente sur le tbody
+        if(!tbody.hasClass("has-data")){
+            alert("Veuillez d'abord filtrer les données ou attendre la fin du chargement.");
+            return;
+        }
+
+        const d_debut = dateDebutInput.val();
+        const d_fin = dateFinInput.val();
+
+        const url = `/generate_situation_pdf/?date_debut=${d_debut}&date_fin=${d_fin}`;
+        window.open(url, "_blank");
+    });
+
+    // Reste de votre logique (Initialisation dates, etc.)
+    const today = new Date().toISOString().split('T')[0];
+    if(!dateDebutInput.val()) dateDebutInput.val(today);
+    if(!dateFinInput.val()) dateFinInput.val(today);
+    
+    loadPaiements(dateDebutInput.val(), dateFinInput.val());
+
+    $("#btn-filtrer").on("click", function(e){
+        e.preventDefault();
+        loadPaiements(dateDebutInput.val(), dateFinInput.val());
+    });
 });
 </script>
+
+
+
 
 </body>
 </html>

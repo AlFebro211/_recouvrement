@@ -1,5 +1,8 @@
 
+import json
 from .create_base import *
+from django.views.decorators.http import require_POST
+
 
 
 
@@ -315,10 +318,6 @@ def update_paiement(request, id_paiement):
             'error': f'Erreur update paiement : {str(e)}'
         })
 
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-from app.models import Eleve_reduction_prix, VariableDerogation
-
 
 # ===============================
 # UPDATE REDUCTION
@@ -370,4 +369,52 @@ def suivi_derogation_update(request, id):
 
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+    
 
+
+@require_POST
+def update_date_butoire(request, id):
+
+    try:
+        date_butoire = request.POST.get('date_butoire')
+
+        obj = VariableDatebutoire.objects.get(id_datebutoire=id)
+        obj.date_butoire = date_butoire
+        obj.save()
+
+        return JsonResponse({
+            "success": True
+        })
+
+    except VariableDatebutoire.DoesNotExist:
+        return JsonResponse({
+            "success": False,
+            "error": "Date butoire introuvable"
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        })
+    
+
+@csrf_exempt
+def update_variable_obligatoire(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+            variable_id = data.get('id_variable')
+            est_obligatoire = data.get('estObligatoire', False)
+
+            variable = Variable.objects.get(id_variable=variable_id)
+            variable.estObligatoire = est_obligatoire
+            variable.save()
+
+            return JsonResponse({'success': True})
+        except Variable.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Variable non trouvée'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+
+    return JsonResponse({'success': False, 'error': 'Méthode non autorisée'})

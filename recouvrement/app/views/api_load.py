@@ -1154,9 +1154,6 @@ def suivi_reduction_derogation_data(request):
 
     return JsonResponse({'success': True, 'rows': rows})
 
-from django.http import JsonResponse
-from app.models import VariableDatebutoire
-
 def get_dates_butoire(request):
     try:
         dates = VariableDatebutoire.objects.select_related(
@@ -1184,3 +1181,54 @@ def get_dates_butoire(request):
             "success": False,
             "error": str(e)
         })
+
+
+from datetime import date
+from django.db.models import Sum
+from django.http import JsonResponse
+
+def situation_journaliere_data(request):
+
+    date_debut = request.GET.get('date_debut')
+    date_fin = request.GET.get('date_fin')
+
+    # 🔥 IMPORTANT : convertir les chaines vides en None
+    if not date_debut:
+        date_debut = None
+    if not date_fin:
+        date_fin = None
+
+    paiements = Paiement.objects.filter(
+        status=True,
+        is_rejected=False
+    )
+
+    # =========================
+    # FILTRE DATE
+    # =========================
+    if date_debut and date_fin:
+        paiements = paiements.filter(date_saisie__range=[date_debut, date_fin])
+    else:
+        # ✅ PAR DEFAUT : AUJOURD'HUI
+        today = date.today()
+        paiements = paiements.filter(date_saisie=today)
+
+    total = paiements.aggregate(total=Sum('montant'))['total'] or 0
+
+    rows = []
+    # print("DEBUG paiements trouvés:", paiements)
+
+    for p in paiements.select_related('id_eleve','id_variable'):
+        rows.append({
+            "eleve": str(p.id_eleve),
+            "variable": str(p.id_variable),
+            "montant": p.montant,
+            "compte": str(p.id_compte) if p.id_compte else None,
+            "date_paie": p.date_paie.strftime("%Y-%m-%d"),
+        })
+
+    return JsonResponse({
+        "success": True,
+        "rows": rows,
+        "total": total
+    })

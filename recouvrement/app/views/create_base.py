@@ -284,6 +284,17 @@ def suivi_reduction_derogation(request):
         'annees': annees,
         'variables': variables,
     })
+def situation_journaliere(request):
+    annees = Annee.objects.all()  
+    variables = Variable.objects.all()
+    paiements = Paiement.objects.all()
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'situation_journaliere_form': True,
+        'form_type': 'situation_journaliere_form',
+        'annees': annees,
+        'variables': variables,
+        'paiements': paiements,
+    })
 
 @csrf_protect
 def save_paiement(request):
