@@ -72,12 +72,13 @@ urlpatterns =[
    path('situation_journaliere_data/', views.situation_journaliere_data, name='situation_journaliere_data'),
    path('generate_situation_pdf/', views.generate_situation_pdf, name='generate_situation_pdf'),
    path('update-variable-obligatoire/', views.update_variable_obligatoire, name='update-variable-obligatoire'),
-   
-
-
-
-
-
+   path('export-dashboard-pdf/', views.export_dashboard_pdf, name='export-dashboard-pdf'),
+   path('export-dashboard-excel/',views.export_dashboard_excel,name='export_dashboard_excel'),
+   path('generate_historique_excel/', views.generate_historique_excel, name='generate_historique_excel'),
+   path('generate_dette_excel/', views.generate_dette_excel, name='generate_dette_excel'),
+   path('generate_situation_excel/',views.generate_situation_excel,name='generate_situation_excel'),
+   path('rapport_paiement/',views.rapport_paiement,name='rapport_paiement'),
+   path("rapport-paiements/", views.rapport_paiements, name="rapport_paiements"),
 
    
 ]

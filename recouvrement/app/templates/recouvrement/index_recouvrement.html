@@ -998,7 +998,53 @@
                                 <i class="fas fa-plus-circle"></i> Afficher les eleves
                             </button>
                         </div>
-                    {% endif %}
+                    <!-- rapport general de paiement -->
+                    {% elif form_type == 'rapport_paiement_form' %}
+                        <h2>Formulaire de filtrage des rapports de paiement</h2>
+                        <div class="form-row">
+                            <div class="form-group col-md-3">
+                                    <label>Année</label>
+                                    <select id="hf-annee" class="form-control">
+                                        <option value="">-- Choisir une année --</option>
+                                        {% for annee in annees %}
+                                            <option value="{{ annee.id_annee }}">{{ annee.annee }}</option>
+                                        {% endfor %}
+                                    </select>
+                            </div>
+                            <div class="form-group col-md-3">
+                                    <label>Classe</label>
+                                    <select id="hf-classe" class="form-control">
+                                        <option value="">-- Choisir une classe --</option>
+                                    </select>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label for="date_debut">Date début</label>
+                                <input type="date" id="date_debut" class="form-control">
+                            </div>
+                            
+                            <div class="form-group col-md-3">
+                                <label for="date_fin">Date fin</label>
+                                <input type="date" id="date_fin" class="form-control">
+                            </div>
+                            <div class="form-group col-md-3">
+                                    <label>type de fichier</label>
+                                    <select id="hf-type-fichier" class="form-control">
+                                        <option value="">-- Choisir un type de fichier --</option>
+                                        <option value="pdf">PDF</option>
+                                        <option value="excel">Excel</option>
+                                    </select>
+                            </div>
+                        </div>
+                        <div class="form-actions mt-4">
+                            <button type="button" class="btn btn-cancel" id="cancelBtn">
+                                <span class="emoji-icon">❌</span> Annuler
+                            </button>
+                            <button type="button" class="btn btn-primary" id="btn-telecharger-rapport">
+                                <i class="fas fa-download"></i> telecharger le rapport
+                            </button>
+                        </div>
+
+                        {% endif %}
 
                 </form>
                 
@@ -1547,6 +1593,7 @@
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
             <div>Total : <span id="total-montant">0</span></div>
             <button id="btn-download-pdf" class="btn btn-primary">📄 Télécharger PDF</button>
+            <button id="btn-download-excel" class="btn btn-success">📊 Télécharger Excel</button>
         </div>
 
 
@@ -1601,6 +1648,7 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="{% static 'assets/vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
     <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
     <!-- variable categorie edition script :  -->
     <script>
@@ -4113,432 +4161,517 @@ $(document).ready(function () {
 <!-- historiques financier -->
 <script>
 $(document).ready(function () {
+    if (window.location.pathname === '/historique/') {
 
-    /* =========================
-       1. CHARGER LES CLASSES
-    ========================= */
-    $('#hf-annee').on('change', function () {
-        const anneeId = $(this).val();
-        const classeSelect = $('#hf-classe');
-        const trimestreSelect = $('#hf-trimestre');
-        const eleveSelect = $('#hf-eleve');
+        /* =========================
+        1. CHARGER LES CLASSES
+        ========================= */
+        $('#hf-annee').on('change', function () {
+            const anneeId = $(this).val();
+            const classeSelect = $('#hf-classe');
+            const trimestreSelect = $('#hf-trimestre');
+            const eleveSelect = $('#hf-eleve');
 
-        classeSelect.html('<option value="">-- Chargement des classes... --</option>');
-        trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
-        eleveSelect.html('<option value="">-- Tous les élèves --</option>');
-
-        if (!anneeId) {
-            classeSelect.html('<option value="">-- Choisir une classe --</option>');
-            return;
-        }
-
-        fetch(`/get_classes_actives/${anneeId}/`)
-            .then(res => res.json())
-            .then(res => {
-                let options = '<option value="">-- Choisir une classe --</option>';
-                if (res.success) {
-                    res.classes.forEach(c => {
-                        options += `<option value="${c.id_classe_active}"
-                                    data-campus="${c.id_campus}"
-                                    data-cycle="${c.id_cycle}">
-                                    ${c.campus_nom} - ${c.classe_nom}${c.groupe ? ' ('+c.groupe+')' : ''}</option>`;
-                    });
-                }
-                classeSelect.html(options);
-            })
-            .catch(() => {
-                alert("Erreur réseau chargement classes");
-                classeSelect.html('<option value="">-- Choisir une classe --</option>');
-            });
-    });
-
-    /* =========================
-       2. CLASSE → TRIMESTRES + ÉLÈVES
-    ========================= */
-    $('#hf-classe').on('change', function () {
-        const classeId = $(this).val();
-        const anneeId = $('#hf-annee').val();
-        const opt = $(this).find(':selected');
-        const campusId = opt.data('campus');
-        const cycleId = opt.data('cycle');
-
-        const trimestreSelect = $('#hf-trimestre');
-        const eleveSelect = $('#hf-eleve');
-
-        trimestreSelect.html('<option value="">-- Chargement... --</option>');
-        eleveSelect.html('<option value="">-- Chargement élèves... --</option>');
-
-        if (!classeId) {
+            classeSelect.html('<option value="">-- Chargement des classes... --</option>');
             trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
             eleveSelect.html('<option value="">-- Tous les élèves --</option>');
-            return;
+
+            if (!anneeId) {
+                classeSelect.html('<option value="">-- Choisir une classe --</option>');
+                return;
+            }
+
+            fetch(`/get_classes_actives/${anneeId}/`)
+                .then(res => res.json())
+                .then(res => {
+                    let options = '<option value="">-- Choisir une classe --</option>';
+                    if (res.success) {
+                        res.classes.forEach(c => {
+                            options += `<option value="${c.id_classe_active}"
+                                        data-campus="${c.id_campus}"
+                                        data-cycle="${c.id_cycle}">
+                                        ${c.campus_nom} - ${c.classe_nom}${c.groupe ? ' ('+c.groupe+')' : ''}</option>`;
+                        });
+                    }
+                    classeSelect.html(options);
+                })
+                .catch(() => {
+                    alert("Erreur réseau chargement classes");
+                    classeSelect.html('<option value="">-- Choisir une classe --</option>');
+                });
+        });
+
+        /* =========================
+        2. CLASSE → TRIMESTRES + ÉLÈVES
+        ========================= */
+        $('#hf-classe').on('change', function () {
+            const classeId = $(this).val();
+            const anneeId = $('#hf-annee').val();
+            const opt = $(this).find(':selected');
+            const campusId = opt.data('campus');
+            const cycleId = opt.data('cycle');
+
+            const trimestreSelect = $('#hf-trimestre');
+            const eleveSelect = $('#hf-eleve');
+
+            trimestreSelect.html('<option value="">-- Chargement... --</option>');
+            eleveSelect.html('<option value="">-- Chargement élèves... --</option>');
+
+            if (!classeId) {
+                trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
+                eleveSelect.html('<option value="">-- Tous les élèves --</option>');
+                return;
+            }
+
+            // TRIMESTRES
+            fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${campusId}&id_cycle=${cycleId}`)
+                .then(res => res.json())
+                .then(res => {
+                    let options = '<option value="">-- Choisir un trimestre --</option>';
+                    if (res.success && res.trimestres.length > 0) {
+                        res.trimestres.forEach(t => {
+                            options += `<option value="${t.id}">${t.nom}</option>`;
+                        });
+                    }
+                    trimestreSelect.html(options);
+                })
+                .catch(() => {
+                    trimestreSelect.html('<option value="">-- Erreur chargement --</option>');
+                });
+
+            // ÉLÈVES
+            chargerEleves(classeId, anneeId, campusId, cycleId);
+        });
+
+        /* =========================
+        3. CHARGER LES ÉLÈVES
+        ========================= */
+        function chargerEleves(classeId, anneeId, campusId, cycleId) {
+            const eleveSelect = $('#hf-eleve');
+
+            fetch(`/get_pupils_registred_classe/?id_annee=${anneeId}&id_campus=${campusId}&id_cycle=${cycleId}&id_classe_active=${classeId}`)
+                .then(res => res.json())
+                .then(res => {
+                    let options = '<option value="">-- Tous les élèves --</option>';
+                    if (res.success && res.data.length > 0) {
+                        res.data.forEach(e => {
+                            options += `<option value="${e.id_eleve}">${e.nom_complet}</option>`;
+                        });
+                    }
+                    eleveSelect.html(options);
+                })
+                .catch(() => {
+                    eleveSelect.html('<option value="">-- Erreur chargement élèves --</option>');
+                });
         }
 
-        // TRIMESTRES
-        fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${campusId}&id_cycle=${cycleId}`)
-            .then(res => res.json())
-            .then(res => {
-                let options = '<option value="">-- Choisir un trimestre --</option>';
-                if (res.success && res.trimestres.length > 0) {
-                    res.trimestres.forEach(t => {
-                        options += `<option value="${t.id}">${t.nom}</option>`;
-                    });
-                }
-                trimestreSelect.html(options);
-            })
-            .catch(() => {
-                trimestreSelect.html('<option value="">-- Erreur chargement --</option>');
-            });
+        /* =========================
+        4. CHARGER LES COMPTES BANQUE
+        ========================= */
+        $('#hf-banque-select').on('change', function() {
+            const banqueId = $(this).val();
+            const compteSelect = $('#hf-banque');
 
-        // ÉLÈVES
-        chargerEleves(classeId, anneeId, campusId, cycleId);
-    });
+            if (!banqueId) {
+                compteSelect.html('<option value="">-- Choisir un compte --</option>');
+                return;
+            }
 
-    /* =========================
-       3. CHARGER LES ÉLÈVES
-    ========================= */
-    function chargerEleves(classeId, anneeId, campusId, cycleId) {
-        const eleveSelect = $('#hf-eleve');
+            fetch(`/get_comptes_banque/${banqueId}/`)
+                .then(res => res.json())
+                .then(res => {
+                    let options = '<option value="">-- Choisir un compte --</option>';
+                    if (res.success) {
+                        res.comptes.forEach(c => {
+                            options += `<option value="${c.id_compte}">${c.compte}</option>`;
+                        });
+                    }
+                    compteSelect.html(options);
+                })
+                .catch(() => {
+                    compteSelect.html('<option value="">-- Erreur chargement comptes --</option>');
+                });
+        });
 
-        fetch(`/get_pupils_registred_classe/?id_annee=${anneeId}&id_campus=${campusId}&id_cycle=${cycleId}&id_classe_active=${classeId}`)
-            .then(res => res.json())
-            .then(res => {
-                let options = '<option value="">-- Tous les élèves --</option>';
-                if (res.success && res.data.length > 0) {
-                    res.data.forEach(e => {
-                        options += `<option value="${e.id_eleve}">${e.nom_complet}</option>`;
-                    });
-                }
-                eleveSelect.html(options);
-            })
-            .catch(() => {
-                eleveSelect.html('<option value="">-- Erreur chargement élèves --</option>');
-            });
-    }
+        /* =========================
+        FILTRER ET AFFICHER LE RAPPORT
+        ========================= */
+        $('#hf-filtrer-btn').on('click', function() {
+            const params = {
+                annee: $('#hf-annee').val(),
+                classe: $('#hf-classe').val(),
+                trimestre: $('#hf-trimestre').val(),
+                eleve: $('#hf-eleve').val(),
+                compte: $('#hf-banque').val()
+            };
 
-    /* =========================
-       4. CHARGER LES COMPTES BANQUE
-    ========================= */
-    $('#hf-banque-select').on('change', function() {
-        const banqueId = $(this).val();
-        const compteSelect = $('#hf-banque');
+            if (!params.annee || !params.classe) {
+                return alert("Veuillez choisir l'année et la classe.");
+            }
 
-        if (!banqueId) {
-            compteSelect.html('<option value="">-- Choisir un compte --</option>');
-            return;
-        }
+            $('#modalContainer').hide();
+            $('#hf-result-container').html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-3x"></i><br>Chargement...</div>');
 
-        fetch(`/get_comptes_banque/${banqueId}/`)
-            .then(res => res.json())
-            .then(res => {
-                let options = '<option value="">-- Choisir un compte --</option>';
-                if (res.success) {
-                    res.comptes.forEach(c => {
-                        options += `<option value="${c.id_compte}">${c.compte}</option>`;
-                    });
-                }
-                compteSelect.html(options);
-            })
-            .catch(() => {
-                compteSelect.html('<option value="">-- Erreur chargement comptes --</option>');
-            });
-    });
+            $.ajax({
+                url: '/historique_financier/',
+                type: 'GET',
+                data: params,
+                success: function(res) {
+        if (res.success && res.rapport.length > 0) {
 
-    /* =========================
-       FILTRER ET AFFICHER LE RAPPORT
-    ========================= */
-    $('#hf-filtrer-btn').on('click', function() {
-        const params = {
-            annee: $('#hf-annee').val(),
-            classe: $('#hf-classe').val(),
-            trimestre: $('#hf-trimestre').val(),
-            eleve: $('#hf-eleve').val(),
-            compte: $('#hf-banque').val()
-        };
-
-        if (!params.annee || !params.classe) {
-            return alert("Veuillez choisir l'année et la classe.");
-        }
-
-        $('#modalContainer').hide();
-        $('#hf-result-container').html('<div class="text-center py-5"><i class="fas fa-spinner fa-spin fa-3x"></i><br>Chargement...</div>');
-
-        $.ajax({
-            url: '/historique_financier/',
-            type: 'GET',
-            data: params,
-            success: function(res) {
-    if (res.success && res.rapport.length > 0) {
-
-        let html = `
-        <div id="rapport-header">
-            <h4><i class="fas fa-file-invoice-dollar"></i> Rapport Financier</h4>
-            <button id="btn-download-pdf" class="btn btn-danger">
-                <i class="fas fa-file-pdf"></i> Télécharger PDF
+            let html = `
+            <div id="rapport-header">
+                <h4><i class="fas fa-file-invoice-dollar"></i> Rapport Financier</h4>
+                <button id="btn-download-pdf" class="btn btn-danger">
+                    <i class="fas fa-file-pdf"></i> Télécharger PDF
+                </button>
+                <button id="btn-download-excel" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> Télécharger Excel
             </button>
-        </div>
+            </div>
 
-        <div class="table-responsive">
-        <table id="rapport-table" class="table table-striped table-bordered table-hover align-middle">
-            <thead>
+            <div class="table-responsive">
+            <table id="rapport-table" class="table table-striped table-bordered table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Élève</th>
+                        <th>Variable</th>
+                        <th>Montant payé</th>
+                        <th>Date paiement</th>
+                        <th>Banque / Compte</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            res.rapport.forEach(r => {
+                html += `
                 <tr>
-                    <th>Élève</th>
-                    <th>Variable</th>
-                    <th>Montant payé</th>
-                    <th>Date paiement</th>
-                    <th>Banque / Compte</th>
-                </tr>
-            </thead>
-            <tbody>`;
+                    <td><strong>${r.eleve}</strong></td>
+                    <td>${r.variable}</td>
+                    <td class="text-end fw-bold text-success">
+                        ${Number(r.montant).toLocaleString()}
+                    </td>
+                    <td>${r.date_paie}</td>
+                    <td>${r.banque_compte}</td>
+                </tr>`;
+            });
 
-        res.rapport.forEach(r => {
             html += `
-            <tr>
-                <td><strong>${r.eleve}</strong></td>
-                <td>${r.variable}</td>
-                <td class="text-end fw-bold text-success">
-                    ${Number(r.montant).toLocaleString()}
-                </td>
-                <td>${r.date_paie}</td>
-                <td>${r.banque_compte}</td>
-            </tr>`;
-        });
+                </tbody>
+                <tfoot>
+                    <tr class="table-warning fw-bold">
+                        <td colspan="2">TOTAL GÉNÉRAL</td>
+                        <td class="text-end">${Number(res.total_general).toLocaleString()}</td>
+                        <td colspan="2"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            </div>`;
 
-        html += `
-            </tbody>
-            <tfoot>
-                <tr class="table-warning fw-bold">
-                    <td colspan="2">TOTAL GÉNÉRAL</td>
-                    <td class="text-end">${Number(res.total_general).toLocaleString()}</td>
-                    <td colspan="2"></td>
-                </tr>
-            </tfoot>
-        </table>
-        </div>`;
+            $('#hf-result-container').html(html);
 
-        $('#hf-result-container').html(html);
-
-        $('#rapport-table').DataTable({
-            paging: true,
-            searching: true,
-            ordering: true,
-            order: [[0, 'asc']],
-            lengthMenu: [10, 25, 50],
-            language: {
-                search: "Recherche:",
-                lengthMenu: "Afficher _MENU_ lignes",
-                info: "Affichage _START_ à _END_ sur _TOTAL_ paiements",
-                paginate: {
-                    previous: "Précédent",
-                    next: "Suivant"
+            $('#rapport-table').DataTable({
+                paging: true,
+                searching: true,
+                ordering: true,
+                order: [[0, 'asc']],
+                lengthMenu: [10, 25, 50],
+                language: {
+                    search: "Recherche:",
+                    lengthMenu: "Afficher _MENU_ lignes",
+                    info: "Affichage _START_ à _END_ sur _TOTAL_ paiements",
+                    paginate: {
+                        previous: "Précédent",
+                        next: "Suivant"
+                    }
                 }
-            }
-        });
+            });
 
-    } else {
-        $('#hf-result-container').html(
-            '<div class="alert alert-warning text-center">Aucune donnée trouvée.</div>'
-        );
-    }
-},
-
-            error: function(xhr) {
-                $('#hf-result-container').html('<div class="alert alert-danger text-center">Erreur technique lors de la récupération des données.</div>');
-            }
-        });
-    });
-
-    // PDF
-    $(document).on('click', '#btn-download-pdf', function() {
-        const params = new URLSearchParams({
-            annee: $('#hf-annee').val(),
-            classe: $('#hf-classe').val(),
-            trimestre: $('#hf-trimestre').val(),
-            eleve: $('#hf-eleve').val(),
-            compte: $('#hf-banque').val()
-        });
-        if (!$('#hf-annee').val() || !$('#hf-classe').val()) {
-            return alert("Veuillez d'abord filtrer les données.");
+        } else {
+            $('#hf-result-container').html(
+                '<div class="alert alert-warning text-center">Aucune donnée trouvée.</div>'
+            );
         }
-        window.open(`/generate_historique_pdf/?${params.toString()}`, '_blank');
-    });
+    },
+
+                error: function(xhr) {
+                    $('#hf-result-container').html('<div class="alert alert-danger text-center">Erreur technique lors de la récupération des données.</div>');
+                }
+            });
+        });
+
+        // PDF
+        $(document).on('click', '#btn-download-pdf', function() {
+            const params = new URLSearchParams({
+                annee: $('#hf-annee').val(),
+                classe: $('#hf-classe').val(),
+                trimestre: $('#hf-trimestre').val(),
+                eleve: $('#hf-eleve').val(),
+                compte: $('#hf-banque').val()
+            });
+            if (!$('#hf-annee').val() || !$('#hf-classe').val()) {
+                return alert("Veuillez d'abord filtrer les données.");
+            }
+            window.open(`/generate_historique_pdf/?${params.toString()}`, '_blank');
+        });
+
+        // EXCEL
+        $(document).on('click', '#btn-download-excel', function() {
+
+            const params = new URLSearchParams({
+                annee: $('#hf-annee').val(),
+                classe: $('#hf-classe').val(),
+                trimestre: $('#hf-trimestre').val(),
+                eleve: $('#hf-eleve').val(),
+                compte: $('#hf-banque').val()
+            });
+
+            if (!$('#hf-annee').val() || !$('#hf-classe').val()) {
+                return alert("Veuillez d'abord filtrer les données.");
+            }
+
+            window.open(`/generate_historique_excel/?${params.toString()}`, '_blank');
+        });
+    }
 });
-
-
-
 
 </script>
 <!-- dette anterieures -->
 <script>
 $(document).ready(function () {
 
-    /* ===============================
-       AFFICHER DETTES / RAPPORT
-    =============================== */
-    $('#btn-afficher-dette').on('click', function (e) {
-        e.preventDefault();
+    if (window.location.pathname.includes('dettes_anterieures')) {
 
-        const params = {
-            annee: $('#hf-annee').val(),
-            classe: $('#hf-classe').val(),
-            trimestre: $('#hf-trimestre').val(),
-            eleve: $('#hf-eleve').val(),
-            compte: $('#hf-banque').val()
-        };
+        /* =========================
+           1. CHARGER LES CLASSES QUAND ANNEE CHANGE
+        ========================= */
+        $('#hf-annee').on('change', function () {
+            const anneeId = $(this).val();
+            const classeSelect = $('#hf-classe');
+            const trimestreSelect = $('#hf-trimestre');
+            const eleveSelect = $('#hf-eleve');
 
-        if (!params.annee || !params.classe) {
-            alert("Veuillez choisir l'année et la classe");
-            return;
-        }
+            classeSelect.html('<option value="">-- Chargement des classes... --</option>');
+            trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
+            eleveSelect.html('<option value="">-- Tous les élèves --</option>');
 
-        /* 🔹 FERMER LE MODAL AUTOMATIQUEMENT */
-        $('#modalContainer').hide();
+            if (!anneeId) {
+                classeSelect.html('<option value="">-- Choisir une classe --</option>');
+                return;
+            }
+
+            fetch(`/get_classes_actives/${anneeId}/`)
+                .then(res => res.json())
+                .then(res => {
+                    let options = '<option value="">-- Choisir une classe --</option>';
+                    if (res.success && res.classes.length > 0) {
+                        res.classes.forEach(c => {
+                            options += `<option value="${c.id_classe_active}"
+                                        data-campus="${c.id_campus}"
+                                        data-cycle="${c.id_cycle}">
+                                        ${c.campus_nom} - ${c.classe_nom}${c.groupe ? ' ('+c.groupe+')' : ''}</option>`;
+                        });
+                    }
+                    classeSelect.html(options);
+                })
+                .catch(() => {
+                    alert("Erreur réseau lors du chargement des classes");
+                    classeSelect.html('<option value="">-- Choisir une classe --</option>');
+                });
+        });
+
+        /* =========================
+           2. CHARGER TRIMESTRES ET ELEVES QUAND CLASSE CHANGE
+        ========================= */
+        $('#hf-classe').on('change', function () {
+            const classeId = $(this).val();
+            const anneeId = $('#hf-annee').val();
+            const opt = $(this).find(':selected');
+            const campusId = opt.data('campus');
+            const cycleId = opt.data('cycle');
+
+            const trimestreSelect = $('#hf-trimestre');
+            const eleveSelect = $('#hf-eleve');
+
+            trimestreSelect.html('<option value="">-- Chargement... --</option>');
+            eleveSelect.html('<option value="">-- Chargement élèves... --</option>');
+
+            if (!classeId) {
+                trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
+                return;
+            }
+
+            // TRIMESTRES
+            fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${campusId}&id_cycle=${cycleId}`)
+                .then(res => res.json())
+                .then(res => {
+                    let options = '<option value="">-- Choisir un trimestre --</option>';
+                    if (res.success && res.trimestres.length > 0) {
+                        res.trimestres.forEach(t => {
+                            options += `<option value="${t.id}">${t.nom}</option>`;
+                        });
+                    }
+                    trimestreSelect.html(options);
+                })
+                .catch(() => {
+                    trimestreSelect.html('<option value="">-- Erreur chargement --</option>');
+                });
+
+            // ELEVES
+        });
 
 
-        $('#dette-result-container').html(`
-            <div class="text-center py-4">
-                <i class="fas fa-spinner fa-spin fa-2x"></i><br>
-                Chargement du rapport...
-            </div>
-        `);
+        /* =========================
+           4. AFFICHER DETTES / RAPPORT
+        ========================= */
+        $(document).on('click', '#btn-afficher-dette', function (e) {
+            e.preventDefault();
 
-        $.ajax({
-            url: '/eleves_en_dette/',
-            type: 'GET',
-            data: params,
+            const params = {
+                annee: $('#hf-annee').val(),
+                classe: $('#hf-classe').val(),
+                trimestre: $('#hf-trimestre').val(),
+                eleve: $('#hf-eleve').val()
+            };
 
-            success: function (res) {
+            if (!params.annee || !params.classe) {
+                alert("Veuillez choisir l'année et la classe");
+                return;
+            }
 
-                if (!res.success || !Array.isArray(res.rapport) || res.rapport.length === 0) {
-                    $('#dette-result-container').html(`
-                        <div class="alert alert-success text-center">
-                            🎉 Tous les élèves sont à jour
-                        </div>
-                    `);
-                    return;
-                }
+            $('#modalContainer').hide();
+            $('#dette-result-container').html(`
+                <div class="text-center py-4">
+                    <i class="fas fa-spinner fa-spin fa-2x"></i><br>
+                    Chargement du rapport...
+                </div>
+            `);
 
-                let html = `
-                    <div id="rapport-header">
-                        <h4 class="mb-0">
-                            <i class="fas fa-exclamation-triangle text-danger"></i>
-                                Rapport des dettes
-                        </h4>
-
-                        <button id="btn-download" class="btn btn-danger btn-sm">
-                            <i class="fas fa-file-pdf"></i> Télécharger PDF
-                        </button>
-                    </div>
-
-                    <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
-                        <table id="dette-table"
-                               class="table table-striped table-bordered table-hover align-middle">
-
-                            <thead class="table-dark sticky-top">
-                                <tr>
-                                    <th>Élève</th>
-                                    <th>Variable</th>
-                                    <th class="text-end">À payer</th>
-                                    <th class="text-end">Payé</th>
-                                    <th class="text-end">Reste</th>
-                                    <th class="text-end">Pénalité</th>
-                                    <th class="text-end">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                `;
-
-                /* 🔹 TABLEAU CLASSIQUE AVEC ROWSPAN */
-                res.rapport.forEach(eleve => {
-
-                    const details = Array.isArray(eleve.details) ? eleve.details : [];
-
-                    if (details.length === 0) {
-                        html += `
-                            <tr>
-                                <td>
-                                    <strong>${eleve.eleve}</strong><br>
-                                    <span class="badge bg-danger">
-                                        Dette: ${(eleve.total_dette || 0).toLocaleString()} FBU
-                                    </span>
-                                </td>
-                                <td colspan="6" class="text-center text-muted">
-                                    Aucun détail
-                                </td>
-                            </tr>
-                        `;
+            $.ajax({
+                url: '/eleves_en_dette/',
+                type: 'GET',
+                data: params,
+                success: function (res) {
+                    if (!res.success || !Array.isArray(res.rapport) || res.rapport.length === 0) {
+                        $('#dette-result-container').html(`
+                            <div class="alert alert-success text-center">
+                                🎉 Tous les élèves sont à jour
+                            </div>
+                        `);
                         return;
                     }
 
-                    details.forEach((d, index) => {
-                        html += `
-                            <tr>
-                                ${index === 0 ? `
-                                    <td rowspan="${details.length}">
-                                        <strong>${eleve.eleve}</strong><br>
-                                        <span class="badge bg-danger">
-                                            Dette: ${(eleve.total_dette || 0).toLocaleString()} FBU
-                                        </span>
-                                    </td>
-                                ` : ''}
-
-                                <td>${d.variable || '-'}</td>
-                                <td class="text-end">${(d.montant_a_payer || 0).toLocaleString()}</td>
-                                <td class="text-end text-success">${(d.montant_paye || 0).toLocaleString()}</td>
-                                <td class="text-end text-warning">${(d.reste || 0).toLocaleString()}</td>
-                                <td class="text-end text-danger">${(d.penalite || 0).toLocaleString()}</td>
-                                <td class="text-end fw-bold">${(d.total || 0).toLocaleString()}</td>
-                            </tr>
-                        `;
-                    });
-                });
-
-                html += `
-                            </tbody>
-                        </table>
-                    </div>
-                `;
-
-                $('#dette-result-container').html(html);
-
-                /* 🔹 SCROLL AUTO */
-                $('#dette-result-container')[0]
-                    .scrollIntoView({ behavior: 'smooth' });
-            },
-
-            error: function () {
-                $('#dette-result-container').html(`
-                    <div class="alert alert-danger text-center">
-                        Erreur lors du chargement des données
-                    </div>
-                `);
-            }
+                    // Ici tu peux réutiliser ton code d'affichage du tableau + PDF + Excel
+                    buildTableDettes(res.rapport);
+                },
+                error: function () {
+                    $('#dette-result-container').html(`
+                        <div class="alert alert-danger text-center">
+                            Erreur lors du chargement des données
+                        </div>
+                    `);
+                }
+            });
         });
-    });
 
-    /* ===============================
-       BOUTON TÉLÉCHARGER PDF (INCHANGÉ)
-    =============================== */
-  $(document).on('click', '#btn-download', function () {
-    // On ne récupère QUE ce qui est dans ton formulaire
-    const annee = $('#hf-annee').val();
-    const classe = $('#hf-classe').val();
-    const trimestre = $('#hf-trimestre').val() || ''; // Vide si non choisi
+        /* =========================
+           Fonction pour construire le tableau
+        ========================= */
+        function buildTableDettes(rapport) {
+            let html = `
+                <div id="rapport-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <h4 class="mb-0"><i class="fas fa-exclamation-triangle text-danger"></i> Rapport des dettes</h4>
+                    <div>
+                        <button id="btn-download" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> PDF</button>
+                        <button id="btn-download-excel-dette" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</button>
+                    </div>
+                </div>
+                <div class="table-responsive" style="max-height:400px; overflow-y:auto;">
+                    <table id="dette-table" class="table table-striped table-bordered table-hover align-middle">
+                        <thead class="table-dark sticky-top">
+                            <tr>
+                                <th>Élève</th>
+                                <th>Variable</th>
+                                <th class="text-end">À payer</th>
+                                <th class="text-end">Payé</th>
+                                <th class="text-end">Reste</th>
+                                <th class="text-end">Pénalité</th>
+                                <th class="text-end">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
 
-    if (!annee || !classe) {
-        alert("Veuillez choisir l'année et la classe");
-        return;
+            rapport.forEach(eleve => {
+                const details = Array.isArray(eleve.details) ? eleve.details : [];
+                if (details.length === 0) {
+                    html += `<tr><td><strong>${eleve.eleve}</strong></td><td colspan="6" class="text-center text-muted">Aucun détail</td></tr>`;
+                    return;
+                }
+                details.forEach((d,index)=>{
+                    html += `<tr>
+                        ${index===0?`<td rowspan="${details.length}"><strong>${eleve.eleve}</strong></td>`:``}
+                        <td>${d.variable||'-'}</td>
+                        <td class="text-end">${(d.montant_a_payer||0).toLocaleString()}</td>
+                        <td class="text-end text-success">${(d.montant_paye||0).toLocaleString()}</td>
+                        <td class="text-end text-warning">${(d.reste||0).toLocaleString()}</td>
+                        <td class="text-end text-danger">${(d.penalite||0).toLocaleString()}</td>
+                        <td class="text-end fw-bold">${(d.total||0).toLocaleString()}</td>
+                    </tr>`;
+                });
+            });
+
+            html += `</tbody></table></div>`;
+            $('#dette-result-container').html(html);
+            $('#dette-result-container')[0].scrollIntoView({ behavior: 'smooth' });
+        }
+
+
+        /* ===============================
+           BOUTON TÉLÉCHARGER PDF
+        =============================== */
+        $(document).on('click', '#btn-download', function () {
+            const annee = $('#hf-annee').val();
+            const classe = $('#hf-classe').val();
+            const trimestre = $('#hf-trimestre').val() || '';
+
+            if (!annee || !classe) {
+                alert("Veuillez choisir l'année et la classe");
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('annee', annee);
+            params.append('classe', classe);
+            if (trimestre) params.append('trimestre', trimestre);
+
+            window.open(`/generate_dette_pdf/?${params.toString()}`, '_blank');
+        });
+
+        /* ===============================
+           BOUTON EXCEL DETTE
+        =============================== */
+        $(document).on('click', '#btn-download-excel-dette', function () {
+            const annee = $('#hf-annee').val();
+            const classe = $('#hf-classe').val();
+            const trimestre = $('#hf-trimestre').val() || '';
+
+            if (!annee || !classe) {
+                alert("Veuillez choisir l'année et la classe");
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('annee', annee);
+            params.append('classe', classe);
+            if (trimestre) params.append('trimestre', trimestre);
+
+            window.open(`/generate_dette_excel/?${params.toString()}`, '_blank');
+        });
     }
-
-    // Construction propre de l'URL sans paramètres inutiles
-    const params = new URLSearchParams();
-    params.append('annee', annee);
-    params.append('classe', classe);
-    if (trimestre) params.append('trimestre', trimestre);
-
-    window.open(`/generate_dette_pdf/?${params.toString()}`, '_blank');
 });
-});
+
+
 </script>
 <!-- suivis reduction et derogation -->
 <script>
@@ -4900,84 +5033,301 @@ $(document).on('click', '.confirm-edit', function(){
 <!-- situation journaliere -->
 <script>
 $(document).ready(function(){
-    // On cible les éléments
+
+    console.log("SCRIPT SITUATION OK");
+
+    if(!window.location.pathname.includes('situation_journaliere')) return;
+
     const tbody = $("#tbody-paiements");
-    if (tbody.length === 0) {
-        return; 
-    }
+    if (tbody.length === 0) return;
+
     const totalBox = $("#total-montant");
     const dateDebutInput = $("#date_debut");
     const dateFinInput = $("#date_fin");
     const pdfButton = $("#btn-download-pdf");
 
+    /* =========================
+       FONCTION CHARGEMENT
+    ========================= */
     function loadPaiements(date_debut, date_fin){
-        // 1. On vide et on marque comme "en chargement"
+
+        if(!date_debut || !date_fin) return;
+
+        console.log("LOAD:", date_debut, date_fin);
+
         tbody.html(`<tr><td colspan="5" class="text-center">Chargement...</td></tr>`);
-        tbody.removeClass("has-data"); // Sécurité pour le bouton PDF
+        tbody.removeClass("has-data");
 
         fetch(`/situation_journaliere_data/?date_debut=${date_debut}&date_fin=${date_fin}`)
         .then(res => res.json())
         .then(data => {
+
             if(!data.success || !data.rows || data.rows.length === 0){
-                tbody.html(`<tr><td colspan="5" class="text-center">Aucun paiement trouvé</td></tr>`);
+                tbody.html(`
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">
+                            Aucun paiement trouvé pour cette période
+                        </td>
+                    </tr>
+                `);
                 totalBox.text(0);
                 return;
             }
 
-            // 2. On a des données : on nettoie et on ajoute la classe de succès
             tbody.html("");
-            tbody.addClass("has-data"); 
-            totalBox.text(data.total.toLocaleString());
+            tbody.addClass("has-data");
+
+            totalBox.text(Number(data.total).toLocaleString());
 
             data.rows.forEach(row => {
                 tbody.append(`
                     <tr>
                         <td>${row.eleve}</td>
                         <td>${row.variable}</td>
-                        <td>${row.montant.toLocaleString()}</td>
+                        <td>${Number(row.montant).toLocaleString()}</td>
                         <td>${row.date_paie}</td>
                         <td>${row.compte || '-'}</td>
                     </tr>
                 `);
             });
+
         })
         .catch(err => {
             console.error("Erreur:", err);
-            tbody.html(`<tr><td colspan="5" class="text-center text-danger">Erreur serveur</td></tr>`);
+            tbody.html(`
+                <tr>
+                    <td colspan="5" class="text-center text-danger">
+                        Erreur serveur
+                    </td>
+                </tr>
+            `);
         });
     }
 
-    // Gestion du clic PDF
+    /* =========================
+       INITIALISATION DATE AUJOURD'HUI
+    ========================= */
+    const today = new Date().toISOString().split('T')[0];
+
+    dateDebutInput.val(today);
+    dateFinInput.val(today);
+
+    /* =========================
+       CONTRAINTE : FIN >= DEBUT
+    ========================= */
+    dateDebutInput.on("change", function(){
+
+        const debut = $(this).val();
+        const fin = dateFinInput.val();
+
+        // empêcher fin < debut
+        dateFinInput.attr("min", debut);
+
+        if(fin && fin < debut){
+            dateFinInput.val(debut);
+        }
+
+        loadPaiements(dateDebutInput.val(), dateFinInput.val());
+    });
+
+    dateFinInput.on("change", function(){
+
+        const debut = dateDebutInput.val();
+        const fin = $(this).val();
+
+        if(fin < debut){
+            alert("La date fin ne peut pas être inférieure à la date début");
+            $(this).val(debut);
+            return;
+        }
+
+        loadPaiements(dateDebutInput.val(), dateFinInput.val());
+    });
+
+    /* =========================
+       PDF
+    ========================= */
     pdfButton.on("click", function(e){
         e.preventDefault();
 
-        // VERSION ROBUSTE DU TEST :
-        // On vérifie simplement si la classe "has-data" est présente sur le tbody
         if(!tbody.hasClass("has-data")){
-            alert("Veuillez d'abord filtrer les données ou attendre la fin du chargement.");
+            alert("Aucune donnée à imprimer.");
             return;
         }
 
         const d_debut = dateDebutInput.val();
         const d_fin = dateFinInput.val();
 
-        const url = `/generate_situation_pdf/?date_debut=${d_debut}&date_fin=${d_fin}`;
-        window.open(url, "_blank");
+        window.open(
+            `/generate_situation_pdf/?date_debut=${d_debut}&date_fin=${d_fin}`,
+            "_blank"
+        );
     });
 
-    // Reste de votre logique (Initialisation dates, etc.)
-    const today = new Date().toISOString().split('T')[0];
-    if(!dateDebutInput.val()) dateDebutInput.val(today);
-    if(!dateFinInput.val()) dateFinInput.val(today);
-    
-    loadPaiements(dateDebutInput.val(), dateFinInput.val());
+    /* =========================
+       CHARGEMENT INITIAL
+    ========================= */
+    loadPaiements(today, today);
+    $("#btn-download-excel").on("click", function(){
 
-    $("#btn-filtrer").on("click", function(e){
-        e.preventDefault();
-        loadPaiements(dateDebutInput.val(), dateFinInput.val());
+        if(!tbody.hasClass("has-data")){
+            alert("Aucune donnée à exporter.");
+            return;
+        }
+
+        const d_debut = dateDebutInput.val();
+        const d_fin = dateFinInput.val();
+
+        window.open(
+            `/generate_situation_excel/?date_debut=${d_debut}&date_fin=${d_fin}`,
+            "_blank"
+        );
     });
+
+
 });
+
 </script>
+<!-- rapport general paiement  -->
+<script>
+
+$(document).ready(function () {
+
+    // ================================
+    // CHARGER LES CLASSES SELON ANNEE
+    // ================================
+    $('#hf-annee').on('change', function () {
+
+        const anneeId = $(this).val();
+
+        $('#hf-classe').html('<option value="">-- Choisir une classe --</option>');
+
+        if (!anneeId) return;
+
+        fetch(`/get_classes_actives/${anneeId}/`)
+            .then(res => res.json())
+            .then(data => {
+
+                if (data.success) {
+
+                    data.classes.forEach(c => {
+
+                        $('#hf-classe').append(`
+                            <option 
+                                value="${c.id_classe_active}" 
+                                data-campus-id="${c.id_campus}" 
+                                data-cycle-id="${c.id_cycle}">
+                                ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
+                            </option>
+                        `);
+
+                    });
+
+                } else {
+                    alert("Erreur lors du chargement des classes");
+                }
+
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Erreur serveur lors du chargement");
+            });
+
+    });
+
+
+
+    // ================================
+    // TELECHARGER RAPPORT
+    // ================================
+    $('#btn-telecharger-rapport').on('click', function () {
+
+        const annee = $('#hf-annee').val();
+        const classe = $('#hf-classe').val();
+        const date_debut = $('#date_debut').val();
+        const date_fin = $('#date_fin').val();
+        const type_fichier = $('#hf-type-fichier').val();
+
+        // ============================
+        // VALIDATION
+        // ============================
+        if (!annee) {
+            alert("Veuillez choisir une année");
+            return;
+        }
+
+        if (!classe) {
+            alert("Veuillez choisir une classe");
+            return;
+        }
+
+        if (!type_fichier) {
+            alert("Veuillez choisir le type de fichier");
+            return;
+        }
+
+        // ============================
+        // URL PARAMETRES
+        // ============================
+        const params = new URLSearchParams({
+            id_annee: annee,
+            id_classe_active: classe,
+            date_debut: date_debut || '',
+            date_fin: date_fin || '',
+            type_fichier: type_fichier
+        });
+
+        const url = `/rapport-paiements/?${params.toString()}`;
+
+        // ============================
+        // LOADING BOUTON
+        // ============================
+        const btn = $(this);
+        const originalHtml = btn.html();
+
+        btn.prop("disabled", true);
+        btn.html('<i class="fas fa-spinner fa-spin"></i> Génération...');
+
+        // ============================
+        // TELECHARGEMENT
+        // ============================
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // ============================
+        // RESET BOUTON
+        // ============================
+        setTimeout(() => {
+            btn.prop("disabled", false);
+            btn.html(originalHtml);
+        }, 3000);
+
+    });
+
+
+
+    // ================================
+    // BOUTON ANNULER
+    // ================================
+    $('#cancelBtn').on('click', function () {
+
+        $('#hf-annee').val('');
+        $('#hf-classe').html('<option value="">-- Choisir une classe --</option>');
+        $('#date_debut').val('');
+        $('#date_fin').val('');
+        $('#hf-type-fichier').val('');
+
+    });
+
+});
+
+</script>
+
+
 
 
 

@@ -853,7 +853,8 @@ def eleves_en_dette(request):
         # 🔹 Variables attendues pour la classe
         variables = VariablePrix.objects.filter(
             id_classe_active=id_classe,
-            id_annee=id_annee
+            id_annee=id_annee,
+            id_variable__estObligatoire=True
         ).select_related('id_variable')
 
         details = []
@@ -953,9 +954,6 @@ def toggle_penalite_actif(request):
             return JsonResponse({'success': False, 'error': 'Pénalité non trouvée'})
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée'})
 
-from django.http import JsonResponse
-from django.db.models import Q
-
 def eleves_en_penalite(request):
 
     id_campus   = request.GET.get('id_campus')
@@ -1020,7 +1018,8 @@ def eleves_en_penalite(request):
             id_variable=config.id_variable,
             id_annee=config.id_annee,
             id_campus=config.id_campus,
-            id_cycle_actif=config.id_cycle_actif
+            id_cycle_actif=config.id_cycle_actif,
+            id_variable__estObligatoire=True
         ).first()
 
         if not db_obj:
@@ -1039,7 +1038,8 @@ def eleves_en_penalite(request):
             derog = VariableDerogation.objects.filter(
                 id_eleve=eleve,
                 id_variable=config.id_variable,
-                id_annee_id=annee
+                id_annee_id=annee,
+                id_variable__estObligatoire=True
             ).first()
 
             date_limite = derog.date_derogation if derog else db_obj.date_butoire
@@ -1048,6 +1048,7 @@ def eleves_en_penalite(request):
             paiement = Paiement.objects.filter(
                 id_eleve=eleve,
                 id_variable=config.id_variable,
+                id_variable__estObligatoire=True,
                 id_annee_id=annee,
                 status=True
             ).order_by('date_paie').first()
@@ -1060,7 +1061,8 @@ def eleves_en_penalite(request):
                 id_variable=config.id_variable,
                 id_annee_id=annee,
                 id_campus=config.id_campus,
-                id_cycle_actif=config.id_cycle_actif
+                id_cycle_actif=config.id_cycle_actif,
+                id_variable__estObligatoire=True
             ).first()
 
             montant_base = prix_obj.prix if prix_obj else 0
@@ -1089,9 +1091,6 @@ def eleves_en_penalite(request):
             })
 
     return JsonResponse({'success': True, 'eleves': resultats})
-
-from django.http import JsonResponse
-from app.models import Eleve_reduction_prix, VariableDerogation
 
 
 def suivi_reduction_derogation_data(request):
@@ -1183,9 +1182,6 @@ def get_dates_butoire(request):
         })
 
 
-from datetime import date
-from django.db.models import Sum
-from django.http import JsonResponse
 
 def situation_journaliere_data(request):
 
@@ -1232,3 +1228,315 @@ def situation_journaliere_data(request):
         "rows": rows,
         "total": total
     })
+
+
+from datetime import date
+from django.http import HttpResponse
+from django.db.models import Sum
+from django.views.decorators.http import require_GET
+
+from app.models import (
+    Paiement,
+    Eleve_reduction_prix,
+    VariableDerogation,
+    VariablePrix,
+    VariableDatebutoire,
+)
+
+from app.models import Classe_active
+from app.models import Eleve
+
+
+from datetime import date
+from django.http import HttpResponse
+from django.db.models import Sum
+
+@require_GET
+def rapport_paiements(request):
+
+    id_annee = request.GET.get("id_annee")
+    id_classe_active = request.GET.get("id_classe_active")
+    date_debut = request.GET.get("date_debut")
+    date_fin = request.GET.get("date_fin")
+    type_fichier = request.GET.get("type_fichier")
+
+    if not id_annee or not id_classe_active:
+        return HttpResponse("Paramètres manquants")
+
+    # ============================
+    # CLASSE
+    # ============================
+    classe = Classe_active.objects.select_related(
+        "id_campus",
+        "cycle_id"
+    ).get(pk=id_classe_active)
+
+    # ============================
+    # INSCRIPTIONS
+    # ============================
+    inscriptions = Eleve_inscription.objects.select_related(
+        "id_eleve"
+    ).filter(
+        id_classe=id_classe_active,
+        id_annee=id_annee
+    )
+
+    # ============================
+    # PRIX TOTAL CLASSE
+    # ============================
+    total_du_classe = VariablePrix.objects.filter(
+        id_annee=id_annee,
+        id_classe_active=id_classe_active
+    ).aggregate(total=Sum("prix"))["total"] or 0
+
+    # ============================
+    # DATE BUTOIRE
+    # ============================
+    date_butoire_obj = VariableDatebutoire.objects.filter(
+        id_annee=id_annee,
+        id_classe_active=id_classe_active
+    ).first()
+
+    # ============================
+    # TABLEAUX
+    # ============================
+    tableau_complet = []
+    tableau_reduction = []
+    tableau_derogation = []
+    tableau_penalite = []
+    tableau_dette = []
+
+    # ============================
+    # TRAITEMENT ELEVE
+    # ============================
+    for ins in inscriptions:
+
+        eleve = ins.id_eleve   # ✅ CORRECTION ICI
+
+        paiements = Paiement.objects.filter(
+            id_eleve=eleve,
+            id_annee=id_annee,
+            id_classe_active=id_classe_active,
+            status=True,
+            is_rejected=False
+        )
+
+        if date_debut and date_fin:
+            paiements = paiements.filter(
+                date_paie__range=[date_debut, date_fin]
+            )
+
+        total_paye = paiements.aggregate(
+            total=Sum("montant")
+        )["total"] or 0
+
+        # ======================
+        # REDUCTION
+        # ======================
+        reduction_obj = Eleve_reduction_prix.objects.filter(
+            id_eleve=eleve,
+            id_annee=id_annee,
+            id_classe_active=id_classe_active
+        ).first()
+
+        reduction = 0
+        if reduction_obj:
+            reduction = (total_du_classe * reduction_obj.pourcentage) / 100
+
+        total_apres_reduction = total_du_classe - reduction
+
+        # ======================
+        # DEROGATION
+        # ======================
+        derogation = VariableDerogation.objects.filter(
+            id_eleve=eleve,
+            id_annee=id_annee,
+            id_classe_active=id_classe_active
+        ).exists()
+
+        # ======================
+        # PENALITE
+        # ======================
+        penalite = False
+        if date_butoire_obj:
+            if date.today() > date_butoire_obj.date_butoire and total_paye < total_apres_reduction:
+                penalite = True
+
+        # ======================
+        # STATUT
+        # ======================
+        if total_paye >= total_apres_reduction:
+            statut = "COMPLET"
+        elif total_paye == 0:
+            statut = "NON PAYE"
+        else:
+            statut = "PARTIEL"
+
+        row = [
+            str(eleve),
+            total_du_classe,
+            reduction,
+            total_apres_reduction,
+            total_paye,
+            statut
+        ]
+
+        # ======================
+        # CLASSEMENT
+        # ======================
+        if statut == "COMPLET":
+            tableau_complet.append(row)
+
+        if reduction_obj:
+            tableau_reduction.append(row)
+
+        if derogation:
+            tableau_derogation.append(row)
+
+        if penalite:
+            tableau_penalite.append(row)
+
+        if total_paye < total_apres_reduction:
+            tableau_dette.append(row)
+
+    # ============================
+    # EXPORT
+    # ============================
+    if type_fichier == "excel":
+        return export_excel_multi(
+            tableau_complet,
+            tableau_reduction,
+            tableau_derogation,
+            tableau_penalite,
+            tableau_dette
+        )
+
+    if type_fichier == "pdf":
+        return export_pdf_multi(
+            tableau_complet,
+            tableau_reduction,
+            tableau_derogation,
+            tableau_penalite,
+            tableau_dette
+        )
+
+    return HttpResponse("Type non supporté")
+
+
+from openpyxl import Workbook
+
+
+def add_section(ws, title, data):
+
+    ws.append([title])
+    ws.append([f"Nombre d'élèves : {len(data)}"])
+
+    headers = [
+        "Eleve",
+        "Total dû",
+        "Reduction",
+        "Total après réduction",
+        "Total payé",
+        "Statut"
+    ]
+
+    ws.append(headers)
+
+    for row in data:
+        ws.append(row)
+
+    ws.append([])
+
+
+def export_excel_multi(*tables):
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rapport Paiements"
+
+    titres = [
+        "PAIEMENTS COMPLETS",
+        "REDUCTIONS",
+        "DEROGATIONS",
+        "PENALITES",
+        "DETTES"
+    ]
+
+    for titre, table in zip(titres, tables):
+        add_section(ws, titre, table)
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+    response["Content-Disposition"] = 'attachment; filename="rapport_paiements.xlsx"'
+    wb.save(response)
+
+    return response
+
+
+from io import BytesIO
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+
+
+def section_pdf(elements, titre, data):
+
+    styles = getSampleStyleSheet()
+
+    elements.append(Paragraph(f"<b>{titre}</b>", styles["Heading2"]))
+    elements.append(Paragraph(f"Nombre d'élèves : {len(data)}", styles["Normal"]))
+    elements.append(Spacer(1, 10))
+
+    headers = [
+        "Eleve",
+        "Total dû",
+        "Reduction",
+        "Total après réduction",
+        "Total payé",
+        "Statut"
+    ]
+
+    table_data = [headers] + data
+
+    table = Table(table_data, repeatRows=1)
+
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+    ]))
+
+    elements.append(table)
+    elements.append(Spacer(1, 20))
+
+
+def export_pdf_multi(*tables):
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+
+    elements = []
+
+    titres = [
+        "PAIEMENTS COMPLETS",
+        "REDUCTIONS",
+        "DEROGATIONS",
+        "PENALITES",
+        "DETTES"
+    ]
+
+    for titre, table in zip(titres, tables):
+        section_pdf(elements, titre, table)
+
+    doc.build(elements)
+
+    pdf = buffer.getvalue()
+    buffer.close()
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = 'attachment; filename="rapport_paiements.pdf"'
+    response.write(pdf)
+
+    return response

@@ -240,6 +240,13 @@ def eleves_penalite(request):
         'variables': Variable.objects.all(),
     })
 
+def rapport_paiement(request):
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'rapport_paiement_form': True,
+        'form_type': 'rapport_paiement_form',
+        'annees': Annee.objects.all(),
+    })
+
 
 def historique(request):
     return render(request, 'recouvrement/index_recouvrement.html', {

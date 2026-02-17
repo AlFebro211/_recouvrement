@@ -53,6 +53,11 @@
             <h3 id="modalTitle">Détails</h3>
             <span id="closeModal">&times;</span>
         </div>
+        <div style="padding:10px 20px; display:flex; gap:10px; background:#f3f4f6">
+    <button id="downloadExcel" style="background:#16a34a;color:white;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;">⬇ Excel</button>
+    <button id="downloadPDF" style="background:#2563eb;color:white;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;">⬇ PDF</button>
+</div>
+
 
         <div id="modalBody"></div>
     </div>
@@ -268,6 +273,13 @@
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!-- XLSX pour Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<!-- jsPDF pour PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+
 
 <script>
 $(document).ready(function(){
@@ -474,9 +486,13 @@ $(document).ready(function(){
         });
 
     }
+let currentStatsType = ''; // On garde le type actif pour nom du fichier et total
+
 $('.stat-card').on('click', function(){
 
     const type = $(this).data('type');
+    currentStatsType = type; // ✅ on garde le type actif
+
     const annee = $('#anneeFilter').val();
     const classe = $('#classeFilter').val() || '';
     const eleve = $('#eleveFilter').val() || '';
@@ -502,6 +518,8 @@ $('.stat-card').on('click', function(){
 
         const showEleve = type === 'dette' || type === 'paye';
 
+        let totalGeneral = 0;
+
         let html = `<table style="width:100%;border-collapse:collapse">
             <tr>
                 <th style="text-align:left;border-bottom:1px solid #ddd">Classe</th>
@@ -511,6 +529,7 @@ $('.stat-card').on('click', function(){
             </tr>`;
 
         data.rows.forEach(r => {
+            totalGeneral += parseFloat(r.total || 0);
             html += `<tr>
                 <td>${r.classe}</td>
                 ${showEleve ? `<td>${r.nom || '-'}</td>` : ''}
@@ -519,6 +538,12 @@ $('.stat-card').on('click', function(){
             </tr>`;
         });
 
+        // Ligne total
+        html += `<tr style="font-weight:bold; background:#e5e7eb">
+            <td colspan="${showEleve ? 3 : 2}" style="text-align:right">Total Général</td>
+            <td style="text-align:right">${totalGeneral}</td>
+        </tr>`;
+
         html += '</table>';
         $('#modalBody').html(html);
 
@@ -526,13 +551,145 @@ $('.stat-card').on('click', function(){
 
 });
 
+// ==========================
+// DOWNLOAD TABLE
+// ==========================
+function getModalTableData(){
+    const table = $('#modalBody table')[0];
+    if(!table) return null;
 
-    // CLOSE MODAL
-    $('#closeModal').on('click', ()=>$('#statsModal').hide());
-
-    $('#statsModal').on('click', function(e){
-        if(e.target.id==='statsModal') $(this).hide();
+    const headers = [];
+    $(table).find('th').each(function(){
+        headers.push($(this).text().trim());
     });
+
+    const rows = [];
+    $(table).find('tr').not(':first').each(function(){
+        const rowData = [];
+        $(this).find('td').each(function(){
+            rowData.push($(this).text().trim());
+        });
+        rows.push(rowData);
+    });
+
+    return { headers, rows };
+}
+// ==========================
+// FERMER MODAL
+// ==========================
+$('#closeModal').on('click', function(){
+    $('#statsModal').fadeOut(200);
+});
+
+// Fermer si clic en dehors du contenu
+$('#statsModal').on('click', function(e){
+    if(e.target === this){
+        $(this).fadeOut(200);
+    }
+});
+
+// Générer nom de fichier selon stats
+function getFileName(){
+    const mapping = {
+        'transactions': 'total_paiements',
+        'paye': 'montant_paye',
+        'attendu': 'total_attendu',
+        'reste': 'reste_a_payer',
+        'dette': 'eleves_en_dette',
+        'rejet': 'paiements_rejetes'
+    };
+    return (mapping[currentStatsType] || 'dashboard') + '_' + new Date().toISOString().split('T')[0];
+}
+
+// Excel
+$('#downloadExcel').on('click', function(){
+
+    const annee = $('#anneeFilter').val();
+    const classe = $('#classeFilter').val() || '';
+    const eleve = $('#eleveFilter').val() || '';
+    const trimestre = $('#trimestreFilter').val() || '';
+    const variable = $('#variableFilter').val() || '';
+
+    if(!annee){
+        alert("Année obligatoire");
+        return;
+    }
+
+    window.open(
+        `/export-dashboard-excel/?type=${currentStatsType}&annee=${annee}&classe=${classe}&eleve=${eleve}&trimestre=${trimestre}&variable=${variable}`,
+        "_blank"
+    );
+
+});
+
+
+// PDF
+$('#downloadPDF').on('click', function(){
+
+    const table = $('#modalBody table');
+    if(!table.length) return alert('Aucune donnée');
+
+    const headers = [];
+    table.find('th').each(function(){
+        headers.push($(this).text().trim());
+    });
+
+    const rows = [];
+    let totalGeneral = 0;
+
+    table.find('tr').not(':first').each(function(){
+
+        const row = [];
+
+        $(this).find('td').each(function(){
+            row.push($(this).text().trim());
+        });
+
+        if(row.length){
+            const lastValue = parseFloat(row[row.length - 1]) || 0;
+            totalGeneral += lastValue;
+            rows.push(row);
+        }
+
+    });
+
+    fetch('/export-dashboard-pdf/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
+        },
+        body: JSON.stringify({
+            title: $('#modalTitle').text(),
+            headers: headers,
+            rows: rows,
+            total: totalGeneral,
+
+            id_campus: $('#classeFilter option:selected').data('campus_id'),
+            id_cycle: $('#classeFilter option:selected').data('cycle_id'),
+            id_annee: $('#anneeFilter').val(),
+            id_classe: $('#classeFilter').val(),
+            id_eleve: $('#eleveFilter').val()
+        })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+
+        a.href = url;
+        a.download = $('#modalTitle').text().replace(/\s+/g,'_') + '.pdf';
+
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+    });
+
+});
+
+
 
 });
 </script>

@@ -19,6 +19,66 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from django.contrib.staticfiles import finders
 from django.db.models import Sum
 import socket
+from reportlab.platypus import Table, TableStyle, Paragraph, Image
+from reportlab.lib.units import inch, mm
+from reportlab.lib.styles import ParagraphStyle
+from django.conf import settings
+import os
+from datetime import datetime
+from app.models import Institution, Campus, Classe_active, Classe_cycle_actif, Annee, Eleve
+
+def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None):
+    """
+    Retourne un tableau ReportLab à utiliser comme header dans un PDF.
+    Peut recevoir :
+        - un élève (Eleve)
+        - une classe (Classe_active)
+        - id_campus, id_cycle, id_annee pour info générale
+    """
+    normal_style = ParagraphStyle(name='Normal', fontSize=9, leading=10)
+
+    # Logo
+    logo_cell = []
+    institution = Institution.objects.first()
+    if institution and institution.logo_ecole:
+        logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
+        if os.path.exists(logo_path):
+            logo_cell.append(Image(logo_path, width=0.8*inch, height=0.8*inch))
+        else:
+            logo_cell.append(Paragraph("Logo non disponible", normal_style))
+    else:
+        logo_cell.append(Paragraph("Aucun logo configuré", normal_style))
+
+    # Informations
+    info_lines = []
+
+    if id_campus:
+        campus_text = Campus.objects.get(id_campus=id_campus).campus
+        info_lines.append(f"Campus: <b>{campus_text}</b>")
+
+    if id_cycle:
+        cycle_text = Classe_cycle_actif.objects.get(id_cycle_actif=id_cycle).cycle_id.cycle
+        info_lines.append(f"Cycle: <b>{cycle_text}</b>")
+
+    if classe_obj:
+        classe_info = f"{classe_obj.classe_id.classe} {classe_obj.groupe}".strip() if classe_obj.groupe else classe_obj.classe_id.classe
+        info_lines.append(f"Classe: <b>{classe_info}</b>")
+
+    if id_annee:
+        annee_text = Annee.objects.get(id_annee=id_annee).annee
+        info_lines.append(f"Année: <b>{annee_text}</b>")
+
+    if eleve:
+        info_lines.append(f"Elève: <b>{eleve.nom} {eleve.prenom}</b>")
+
+    info_lines.append(f"Date: <b>{datetime.now().strftime('%d/%m/%Y %H:%M')}</b>")
+
+    info_paragraph = Paragraph("<br/>".join(info_lines), normal_style)
+
+    # Crée le tableau header
+    header_table = Table([[info_paragraph, logo_cell]], colWidths=[120*mm, 70*mm])
+    header_table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'), ('ALIGN',(1,0),(1,0),'RIGHT')]))
+    return header_table
 
 
 def generate_invoice(request, id_paiement):
@@ -236,20 +296,27 @@ def generate_fiche_paie_classe(request):
         except Exception as e:
             return HttpResponse(f"Erreur : Données de classe non trouvées.", status=404)
 
-        info_text = (
-            f"Campus: <font color='black'><b>{campus}</b></font><br/>"
-            f"Cycle: <font color='black'><b>{cycle}</b></font><br/>"
-            f"Classe: <font color='black'><b>{classe_info}</b></font><br/>"
-            f"Année scolaire: <font color='black'><b>{annee}</b></font><br/>"
-            f"Date: <font color='black'><b>{datetime.now().strftime('%d/%m/%Y %H:%M')}</b></font>"
-        )
-        info_paragraph = Paragraph(info_text, normal_style)
+        # info_text = (
+        #     f"Campus: <font color='black'><b>{campus}</b></font><br/>"
+        #     f"Cycle: <font color='black'><b>{cycle}</b></font><br/>"
+        #     f"Classe: <font color='black'><b>{classe_info}</b></font><br/>"
+        #     f"Année scolaire: <font color='black'><b>{annee}</b></font><br/>"
+        #     f"Date: <font color='black'><b>{datetime.now().strftime('%d/%m/%Y %H:%M')}</b></font>"
+        # )
+        # info_paragraph = Paragraph(info_text, normal_style)
 
-        header_table = Table([[info_paragraph, logo_cell]], colWidths=[120*mm, 70*mm])
-        header_table.setStyle(TableStyle([
-            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ]))
+        # header_table = Table([[info_paragraph, logo_cell]], colWidths=[120*mm, 70*mm])
+        # header_table.setStyle(TableStyle([
+        #     ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        #     ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        # ]))
+        # elements.append(header_table)
+        header_table = build_pdf_header(
+            classe_obj=classe,      # Objet Classe_active
+            id_campus=id_campus,
+            id_cycle=id_cycle,
+            id_annee=id_annee
+        )
         elements.append(header_table)
 
         elements.append(Spacer(1, 5*mm))
@@ -382,22 +449,29 @@ def generate_fiche_paie_eleve(request):
         institution = Institution.objects.first()
 
         # --- HEADER ---
-        header_data = [[
-            logo_img,
-            [
-                Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", fontSize=9, alignment=TA_CENTER ),
-                Paragraph(f"CAMPUS : {campus_nom}", ParagraphStyle('H3', fontSize=9, alignment=TA_CENTER)),
-                Paragraph(f"CLASSE : {classe_info}", ParagraphStyle('H3', fontSize=9, alignment=TA_CENTER)),
-            ],
-            Paragraph(f"A-A : {obj_annee.annee}", ParagraphStyle('H3', fontSize=10, alignment=TA_RIGHT))
-        ]]
-        header_table = Table(header_data, colWidths=[30*mm, 110*mm, 40*mm])
-        header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
-        elements.append(header_table)
-        elements.append(Spacer(1, 10*mm))
+        # header_data = [[
+        #     logo_img,
+        #     [
+        #         Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", fontSize=9, alignment=TA_CENTER ),
+        #         Paragraph(f"CAMPUS : {campus_nom}", ParagraphStyle('H3', fontSize=9, alignment=TA_CENTER)),
+        #         Paragraph(f"CLASSE : {classe_info}", ParagraphStyle('H3', fontSize=9, alignment=TA_CENTER)),
+        #     ],
+        #     Paragraph(f"A-A : {obj_annee.annee}", ParagraphStyle('H3', fontSize=10, alignment=TA_RIGHT))
+        # ]]
+        # header_table = Table(header_data, colWidths=[30*mm, 110*mm, 40*mm])
+        # header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
+        # elements.append(header_table)
+        # elements.append(Spacer(1, 10*mm))
 
-        elements.append(Paragraph(f"<b>Nom et Prénom :</b> {eleve.nom} {eleve.prenom}", styles['Normal']))
-        elements.append(Paragraph(f"<b>Matricule :</b> {getattr(eleve, 'matricule', id_eleve)}", styles['Normal']))
+        # elements.append(Paragraph(f"<b>Nom et Prénom :</b> {eleve.nom} {eleve.prenom}", styles['Normal']))
+        # elements.append(Paragraph(f"<b>Matricule :</b> {getattr(eleve, 'matricule', id_eleve)}", styles['Normal']))
+        header_table = build_pdf_header(
+            eleve=eleve,            # Objet Eleve
+            id_campus=id_campus,
+            id_cycle=None,
+            id_annee=id_annee
+        )
+        elements.append(header_table)
         elements.append(Spacer(1, 5*mm))
         elements.append(Paragraph("<u>SITUATION DES PAIEMENTS</u>", ParagraphStyle('T', fontSize=14, alignment=TA_CENTER)))
         elements.append(Spacer(1, 5*mm))
@@ -565,10 +639,17 @@ def generate_facture_paiement(request):
             elements.append(Spacer(1,2*mm))
 
         # Infos école et campus
-        elements.append(Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style))
-        elements.append(Paragraph(f"Campus : {campus_nom}", small_center))
-        elements.append(Paragraph(f"Classe : {classe_info}", small_center))
-        elements.append(Paragraph(f"Année académique : {annee_txt}", small_center))
+        header_table = build_pdf_header(
+            eleve=eleve,
+            classe_obj=paiement.id_classe_active,  # l'objet complet, pas juste le nom
+            id_campus=paiement.id_campus.id_campus if paiement.id_campus else None,
+            id_cycle=paiement.id_cycle_actif.id_cycle_actif if paiement.id_classe_active and paiement.id_cycle_actif else None,
+            id_annee=paiement.id_annee.id_annee if paiement.id_annee else None
+        )
+
+        elements.append(header_table)
+        elements.append(Spacer(1,4*mm))
+
         elements.append(Spacer(1,4*mm))
 
         # =========================
@@ -1045,3 +1126,672 @@ def generate_situation_pdf(request):
 
     except Exception as e:
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
+
+
+from django.http import HttpResponse
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from io import BytesIO
+import json
+
+def export_dashboard_pdf(request):
+
+    data = json.loads(request.body)
+
+    title = data.get("title", "Tableau")
+    headers = data.get("headers", [])
+    rows = data.get("rows", [])
+    total = data.get("total", 0)
+
+    id_campus = data.get("id_campus")
+    id_cycle = data.get("id_cycle")
+    id_annee = data.get("id_annee")
+    id_classe = data.get("id_classe")
+    id_eleve = data.get("id_eleve")
+
+    # 🔥 récupération objets si filtres présents
+    classe_obj = None
+    eleve_obj = None
+
+    if id_classe:
+        classe_obj = Classe_active.objects.filter(id_classe_active=id_classe).first()
+
+    if id_eleve:
+        eleve_obj = Eleve.objects.filter(id_eleve=id_eleve).first()
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+
+    elements = []
+
+    # HEADER EXISTANT
+    header = build_pdf_header(
+        eleve=eleve_obj,
+        classe_obj=classe_obj,
+        id_campus=id_campus,
+        id_cycle=id_cycle,
+        id_annee=id_annee
+    )
+
+    elements.append(header)
+    elements.append(Spacer(1, 10))
+
+    styles = getSampleStyleSheet()
+    elements.append(Paragraph(f"<b>{title}</b>", styles["Heading2"]))
+    elements.append(Spacer(1, 10))
+
+    # TABLEAU
+    table_data = [headers] + rows + [["", "", "Total Général", total]]
+
+    table = Table(table_data, repeatRows=1)
+
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.grey),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+        ('ALIGN', (-1,1), (-1,-1), 'RIGHT'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.lightgrey),
+    ]))
+
+    elements.append(table)
+
+    doc.build(elements)
+
+    pdf = buffer.getvalue()
+    buffer.close()
+
+    filename = title.replace(" ", "_").lower()
+
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
+
+    return response
+
+
+from django.http import HttpResponse, JsonResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from django.db.models import Sum
+from app.models import Paiement
+
+
+def generate_historique_excel(request):
+    try:
+        annee = request.GET.get('annee')
+        classe = request.GET.get('classe')
+        trimestre = request.GET.get('trimestre')
+        eleve = request.GET.get('eleve')
+        compte = request.GET.get('compte')
+
+        paiements = Paiement.objects.select_related(
+            'id_eleve',
+            'id_variable',
+            'id_compte'
+        ).filter(
+            id_annee=annee,
+            id_classe_active=classe
+        ).order_by('id_eleve__nom', 'id_eleve__prenom')
+
+        if trimestre:
+            paiements = paiements.filter(id_trimestre=trimestre)
+
+        if eleve:
+            paiements = paiements.filter(id_eleve=eleve)
+
+        if compte:
+            paiements = paiements.filter(id_compte=compte)
+
+        # ======================
+        # CREATION EXCEL
+        # ======================
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Rapport Financier"
+
+        # Titre
+        ws.merge_cells('A1:E1')
+        ws['A1'] = "RAPPORT FINANCIER"
+        ws['A1'].font = Font(size=14, bold=True)
+        ws['A1'].alignment = Alignment(horizontal="center")
+
+        # Entêtes
+        headers = ["Élève", "Variable", "Montant payé", "Date paiement", "Banque / Compte"]
+        ws.append(headers)
+
+        for cell in ws[2]:
+            cell.font = Font(bold=True)
+
+        total_general = 0
+
+        # Données
+        for p in paiements:
+            montant = p.montant or 0
+            total_general += montant
+
+            ws.append([
+                str(p.id_eleve),
+                str(p.id_variable),
+                montant,
+                p.date_paie.strftime("%d/%m/%Y") if p.date_paie else "",
+                str(p.id_compte) if p.id_compte else ""
+            ])
+
+        # Ligne total
+        ws.append(["", "TOTAL GENERAL", total_general, "", ""])
+        ws[f'B{ws.max_row}'].font = Font(bold=True)
+        ws[f'C{ws.max_row}'].font = Font(bold=True)
+
+        # Ajuster largeur colonnes
+        from openpyxl.utils import get_column_letter
+
+# Ajuster largeur colonnes (version safe)
+        for i, column_cells in enumerate(ws.columns, 1):
+            max_length = 0
+            for cell in column_cells:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+
+            ws.column_dimensions[get_column_letter(i)].width = max_length + 2
+
+
+        # Response
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename=rapport_financier.xlsx'
+
+        wb.save(response)
+        return response
+
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "message": str(e)
+        })
+
+from django.http import HttpResponse, JsonResponse
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from openpyxl.utils import get_column_letter
+from django.db.models import Sum
+
+
+def generate_dette_excel(request):
+
+    id_annee = request.GET.get('annee')
+    id_classe = request.GET.get('classe')
+    id_trimestre = request.GET.get('trimestre')
+
+    if not id_annee or not id_classe:
+        return JsonResponse({
+            "success": False,
+            "message": "Année et classe obligatoires"
+        })
+
+    # 🔥 TRI ALPHABETIQUE ICI
+    inscriptions = Eleve_inscription.objects.select_related(
+        'id_eleve',
+        'id_classe',
+        'id_classe__classe_id'
+    ).filter(
+        id_annee=id_annee,
+        id_classe=id_classe,
+        status=True
+    ).order_by('id_eleve__nom', 'id_eleve__prenom')
+
+    if id_trimestre:
+        inscriptions = inscriptions.filter(id_trimestre=id_trimestre)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Rapport Dettes"
+
+    # Titre
+    ws.merge_cells('A1:G1')
+    ws['A1'] = "RAPPORT DES DETTES"
+    ws['A1'].font = Font(size=14, bold=True)
+    ws['A1'].alignment = Alignment(horizontal="center")
+
+    headers = [
+        "Élève",
+        "Variable",
+        "À payer",
+        "Payé",
+        "Reste",
+        "Pénalité",
+        "Total"
+    ]
+
+    ws.append(headers)
+
+    for cell in ws[2]:
+        cell.font = Font(bold=True)
+
+    row_index = 3
+
+    for ins in inscriptions:
+
+        eleve = ins.id_eleve
+
+        paiements = Paiement.objects.filter(
+            id_eleve=eleve,
+            id_classe_active=id_classe,
+            id_annee=id_annee
+        )
+
+        variables = VariablePrix.objects.filter(
+            id_classe_active=id_classe,
+            id_annee=id_annee,
+            id_variable__estObligatoire=True
+        ).select_related('id_variable')
+
+        total_dette_eleve = 0
+
+        for vp in variables:
+
+            variable = vp.id_variable
+            montant_a_payer = vp.prix
+
+            montant_paye = paiements.filter(
+                id_variable=variable
+            ).aggregate(total=Sum('montant'))['total'] or 0
+
+            reste = max(montant_a_payer - montant_paye, 0)
+
+            penalite = 0
+            if reste > 0:
+                penalite = PenaliteConfig.objects.filter(
+                    id_variable=variable,
+                    id_classe_active=id_classe,
+                    actif=True
+                ).aggregate(total=Sum('valeur'))['total'] or 0
+
+            total = reste + penalite
+
+            if total > 0:
+
+                ws.append([
+                    f"{eleve.nom} {eleve.prenom}",
+                    variable.variable,
+                    montant_a_payer,
+                    montant_paye,
+                    reste,
+                    penalite,
+                    total
+                ])
+
+                total_dette_eleve += total
+
+        # Ligne total élève
+        if total_dette_eleve > 0:
+            ws.append([
+                "",
+                "TOTAL ELEVE",
+                "",
+                "",
+                "",
+                "",
+                total_dette_eleve
+            ])
+
+            ws[f'B{ws.max_row}'].font = Font(bold=True)
+            ws[f'G{ws.max_row}'].font = Font(bold=True)
+
+    # Ajuster largeur colonnes (safe merged)
+    for i, column_cells in enumerate(ws.columns, 1):
+        max_length = 0
+        for cell in column_cells:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+
+        ws.column_dimensions[get_column_letter(i)].width = max_length + 2
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+    response['Content-Disposition'] = 'attachment; filename=rapport_dettes.xlsx'
+
+    wb.save(response)
+
+    return response
+
+from django.http import HttpResponse
+from django.db.models import Sum
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from openpyxl.utils import get_column_letter
+from datetime import date
+
+def generate_situation_excel(request):
+
+    date_debut = request.GET.get('date_debut')
+    date_fin = request.GET.get('date_fin')
+
+    paiements = Paiement.objects.select_related(
+        'id_eleve',
+        'id_variable',
+        'id_compte'
+    ).filter(
+        status=True,
+        is_rejected=False
+    )
+
+    # ======================
+    # FILTRE DATE
+    # ======================
+    if date_debut and date_fin:
+        paiements = paiements.filter(
+            date_saisie__range=[date_debut, date_fin]
+        )
+    else:
+        today = date.today()
+        paiements = paiements.filter(date_saisie=today)
+        date_debut = today
+        date_fin = today
+
+    # ======================
+    # TRI ALPHABETIQUE
+    # ======================
+    paiements = paiements.order_by(
+        'id_eleve__nom',
+        'id_eleve__prenom'
+    )
+
+    total_general = paiements.aggregate(
+        total=Sum('montant')
+    )['total'] or 0
+
+    # ======================
+    # EXCEL
+    # ======================
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Situation Journalière"
+
+    # TITRE
+    ws.merge_cells('A1:E1')
+    ws['A1'] = f"SITUATION DES PAIEMENTS DU {date_debut} AU {date_fin}"
+    ws['A1'].font = Font(size=14, bold=True)
+    ws['A1'].alignment = Alignment(horizontal="center")
+
+    headers = [
+        "Élève",
+        "Variable",
+        "Montant",
+        "Date paiement",
+        "Compte utilisé"
+    ]
+
+    ws.append(headers)
+
+    for cell in ws[2]:
+        cell.font = Font(bold=True)
+
+    # ======================
+    # DONNEES
+    # ======================
+    for p in paiements:
+
+        ws.append([
+            str(p.id_eleve),
+            str(p.id_variable),
+            p.montant,
+            p.date_paie.strftime("%Y-%m-%d") if p.date_paie else "",
+            str(p.id_compte) if p.id_compte else "-"
+        ])
+
+    # ======================
+    # TOTAL
+    # ======================
+    ws.append([
+        "",
+        "TOTAL",
+        total_general,
+        "",
+        ""
+    ])
+
+    ws[f'B{ws.max_row}'].font = Font(bold=True)
+    ws[f'C{ws.max_row}'].font = Font(bold=True)
+
+    # ======================
+    # AUTO WIDTH SAFE
+    # ======================
+    for i, column_cells in enumerate(ws.columns, 1):
+        max_length = 0
+        for cell in column_cells:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+
+        ws.column_dimensions[get_column_letter(i)].width = max_length + 2
+
+    # ======================
+    # RESPONSE
+    # ======================
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+
+    filename = f"situation_paiements_{date_debut}_au_{date_fin}.xlsx"
+
+    response['Content-Disposition'] = f'attachment; filename={filename}'
+
+    wb.save(response)
+
+    return response
+
+from django.http import HttpResponse, JsonResponse
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Font, Alignment
+from django.db.models import Sum
+
+def export_dashboard_excel(request):
+    type_stat = request.GET.get('type')
+    annee_id = request.GET.get('annee')
+    classe_id = request.GET.get('classe')
+    eleve_id = request.GET.get('eleve')
+    variable_id = request.GET.get('variable')
+    trimestre_id = request.GET.get('trimestre')
+
+    if not annee_id:
+        return JsonResponse({"success": False, "message": "Année obligatoire"})
+
+    # ======================
+    # Classe active
+    # ======================
+    classe_active = None
+    if classe_id and classe_id.isdigit():
+        classe_active = Classe_active.objects.filter(id_classe_active=int(classe_id)).first()
+
+    # ======================
+    # Élèves
+    # ======================
+    eleves = Eleve_inscription.objects.filter(id_annee_id=annee_id, status=True)
+    if classe_active:
+        eleves = eleves.filter(
+            id_classe_id=classe_active.id_classe_active,
+            id_campus_id=classe_active.id_campus,
+            id_classe_cycle_id=classe_active.cycle_id
+        )
+    if eleve_id and eleve_id.isdigit():
+        eleves = eleves.filter(id_eleve_id=int(eleve_id))
+
+    # ======================
+    # Variables
+    # ======================
+    variables_prix = VariablePrix.objects.filter(id_annee_id=annee_id)
+    if classe_active:
+        variables_prix = variables_prix.filter(id_classe_active=classe_active.id_classe_active)
+    if variable_id and variable_id.isdigit():
+        variables_prix = variables_prix.filter(id_variable_id=int(variable_id))
+    if trimestre_id and trimestre_id.isdigit():
+        variables_prix = variables_prix.filter(id_annee_trimestre_id=int(trimestre_id))
+
+    # ======================
+    # Fonction utilitaire
+    # ======================
+    def get_classe_full_from_vp(vp):
+        c = vp.id_classe_active
+        return f"{c.id_campus.campus} - {c.cycle_id.cycle_id.cycle} - {c.classe_id.classe} {c.groupe or ''}"
+
+    # ======================
+    # Construction des données
+    # ======================
+    data = []
+    title = ""
+
+    if type_stat == "transactions":
+        title = "Total Paiements par Variable"
+        for vp in variables_prix:
+            qs = Paiement.objects.filter(
+                id_variable_id=vp.id_variable_id,
+                id_annee_id=annee_id,
+                status=True,
+                is_rejected=False
+            )
+            if classe_active:
+                qs = qs.filter(id_classe_active_id=classe_active.id_classe_active)
+            data.append([get_classe_full_from_vp(vp), '-', vp.id_variable.variable, qs.count()])
+
+    elif type_stat == "paye":
+        title = "Montant Payé par Élève"
+        for vp in variables_prix:
+            for e in eleves:
+                paiements_qs = Paiement.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee_id,
+                    status=True,
+                    is_rejected=False
+                )
+                if classe_active:
+                    paiements_qs = paiements_qs.filter(id_classe_active_id=classe_active.id_classe_active)
+                total_montant = paiements_qs.aggregate(total=Sum('montant'))['total'] or 0
+                if total_montant > 0:
+                    data.append([get_classe_full_from_vp(vp), f"{e.id_eleve.nom} {e.id_eleve.prenom}", vp.id_variable.variable, total_montant])
+
+    elif type_stat == "rejet":
+        title = "Paiements Rejetés"
+        for vp in variables_prix:
+            qs = Paiement.objects.filter(
+                id_variable_id=vp.id_variable_id,
+                id_annee_id=annee_id,
+                is_rejected=True
+            )
+            if classe_active:
+                qs = qs.filter(id_classe_active_id=classe_active.id_classe_active)
+            data.append([get_classe_full_from_vp(vp), '-', vp.id_variable.variable, qs.count()])
+
+    elif type_stat == "attendu":
+        title = "Montant Attendu par Variable"
+        for vp in variables_prix:
+            total_attendu = 0
+            prix = vp.prix
+            for e in eleves:
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee_id
+                ).first()
+                if reduction:
+                    total_attendu += prix - (prix * reduction.pourcentage / 100)
+                else:
+                    total_attendu += prix
+            data.append([get_classe_full_from_vp(vp), '-', vp.id_variable.variable, total_attendu])
+
+    elif type_stat == "reste":
+        title = "Reste à Payer par Variable"
+        for vp in variables_prix:
+            reste_global = 0
+            prix = vp.prix
+            for e in eleves:
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee_id
+                ).first()
+                attendu = prix - (prix * reduction.pourcentage / 100) if reduction else prix
+                total_paye = Paiement.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee_id,
+                    status=True,
+                    is_rejected=False
+                ).aggregate(total=Sum('montant'))['total'] or 0
+                reste_global += max(attendu - total_paye, 0)
+            data.append([get_classe_full_from_vp(vp), '-', vp.id_variable.variable, reste_global])
+
+    elif type_stat == "dette":
+        title = "Élèves en Dette"
+        for vp in variables_prix:
+            prix = vp.prix
+            for e in eleves:
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee_id
+                ).first()
+                attendu = prix - (prix * reduction.pourcentage / 100) if reduction else prix
+                total_paye = Paiement.objects.filter(
+                    id_variable_id=vp.id_variable_id,
+                    id_eleve_id=e.id_eleve_id,
+                    id_annee_id=annee_id,
+                    status=True,
+                    is_rejected=False
+                ).aggregate(total=Sum('montant'))['total'] or 0
+                reste = attendu - total_paye
+                if reste > 0:
+                    data.append([get_classe_full_from_vp(vp), f"{e.id_eleve.nom} {e.id_eleve.prenom}", vp.id_variable.variable, reste])
+
+    # ======================
+    # Création Excel
+    # ======================
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Dashboard"
+
+    ws.merge_cells('A1:D1')
+    ws['A1'] = title
+    ws['A1'].font = Font(size=14, bold=True)
+    ws['A1'].alignment = Alignment(horizontal="center")
+
+    headers = ["Classe", "Élève", "Variable", "Total"]
+    ws.append(headers)
+    for cell in ws[2]:
+        cell.font = Font(bold=True)
+
+    total_general = 0
+    for row in data:
+        total_general += row[3] or 0
+        ws.append(row)
+
+    ws.append(["", "", "TOTAL GENERAL", total_general])
+    ws[f'C{ws.max_row}'].font = Font(bold=True)
+    ws[f'D{ws.max_row}'].font = Font(bold=True)
+
+    for i, column_cells in enumerate(ws.columns, 1):
+        max_length = max((len(str(cell.value)) for cell in column_cells if cell.value), default=0)
+        ws.column_dimensions[get_column_letter(i)].width = max_length + 2
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename=dashboard_{type_stat}.xlsx'
+    wb.save(response)
+    return response
