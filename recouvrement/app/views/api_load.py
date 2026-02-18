@@ -6,6 +6,24 @@ from django.http import JsonResponse
 from django.db.models import Sum
 from django.db.models.functions import Coalesce
 from datetime import date
+from app.views.invoice_paiement import build_pdf_header
+import io
+from datetime import datetime, date
+from django.db.models import Q, Sum
+from django.http import HttpResponse
+from django.shortcuts import render
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+from io import BytesIO 
+
+# Imports pour PDF avec ReportLab
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
 
@@ -534,7 +552,8 @@ def get_variables_restant_a_payer(request):
         id_campus_id=campus_id,
         id_cycle_id=cycle_id,
         id_classe_id=classe_id,
-        etat_trimestre="En cours"  # 🔹 récupère les trimestres en attente
+        # etat_trimestre="En cours"
+        etat_trimestre="En attente"
     ).select_related('trimestre').first()
 
     # 🔹 DEBUG : afficher tous les trimestres existants pour cette classe
@@ -1230,30 +1249,8 @@ def situation_journaliere_data(request):
     })
 
 
-from datetime import date
-from django.http import HttpResponse
-from django.db.models import Sum
-from django.views.decorators.http import require_GET
 
-from app.models import (
-    Paiement,
-    Eleve_reduction_prix,
-    VariableDerogation,
-    VariablePrix,
-    VariableDatebutoire,
-)
-
-from app.models import Classe_active
-from app.models import Eleve
-
-
-from datetime import date
-from django.http import HttpResponse
-from django.db.models import Sum
-
-@require_GET
 def rapport_paiements(request):
-
     id_annee = request.GET.get("id_annee")
     id_classe_active = request.GET.get("id_classe_active")
     date_debut = request.GET.get("date_debut")
@@ -1263,13 +1260,28 @@ def rapport_paiements(request):
     if not id_annee or not id_classe_active:
         return HttpResponse("Paramètres manquants")
 
+    # Conversion des dates
+    if date_debut:
+        try:
+            date_debut = datetime.strptime(date_debut, '%Y-%m-%d').date()
+        except ValueError:
+            date_debut = None
+    if date_fin:
+        try:
+            date_fin = datetime.strptime(date_fin, '%Y-%m-%d').date()
+        except ValueError:
+            date_fin = None
+
     # ============================
     # CLASSE
     # ============================
-    classe = Classe_active.objects.select_related(
-        "id_campus",
-        "cycle_id"
-    ).get(pk=id_classe_active)
+    try:
+        classe = Classe_active.objects.select_related(
+            "id_campus",
+            "cycle_id"
+        ).get(pk=id_classe_active)
+    except Classe_active.DoesNotExist:
+        return HttpResponse("Classe non trouvée")
 
     # ============================
     # INSCRIPTIONS
@@ -1282,37 +1294,169 @@ def rapport_paiements(request):
     )
 
     # ============================
-    # PRIX TOTAL CLASSE
+    # PRIX PAR VARIABLE POUR LA CLASSE
     # ============================
-    total_du_classe = VariablePrix.objects.filter(
+    variables_prix = VariablePrix.objects.filter(
         id_annee=id_annee,
         id_classe_active=id_classe_active
-    ).aggregate(total=Sum("prix"))["total"] or 0
+    ).select_related('id_variable', 'id_annee_trimestre')
+
+    # Dictionnaire pour stocker les prix par variable
+    prix_par_variable = {}
+    for vp in variables_prix:
+        # Nom de variable plus court pour l'affichage
+        nom_variable = vp.id_variable.variable if hasattr(vp.id_variable, 'variable') else f"Var-{vp.id_variable.id_variable}"
+        # Raccourcir les noms longs
+        if "Minerval" in nom_variable:
+            nom_variable = "Minerval"
+        elif "Inscription" in nom_variable:
+            nom_variable = "Inscription"
+        elif "Evaluation" in nom_variable or "évaluation" in nom_variable:
+            nom_variable = "Éval"
+            
+        prix_par_variable[vp.id_variable.id_variable] = {
+            'prix': vp.prix,
+            'trimestre': vp.id_annee_trimestre,
+            'variable_obj': vp.id_variable,
+            'nom_variable': nom_variable
+        }
 
     # ============================
-    # DATE BUTOIRE
+    # DATES BUTOIRES
     # ============================
-    date_butoire_obj = VariableDatebutoire.objects.filter(
+    dates_butoires = VariableDatebutoire.objects.filter(
         id_annee=id_annee,
         id_classe_active=id_classe_active
-    ).first()
+    ).select_related('id_variable')
+
+    # Dictionnaire des dates butoires par variable
+    date_butoire_par_variable = {}
+    for db in dates_butoires:
+        date_butoire_par_variable[db.id_variable.id_variable] = db.date_butoire
 
     # ============================
-    # TABLEAUX
+    # CONFIGURATION DES PÉNALITÉS
     # ============================
-    tableau_complet = []
-    tableau_reduction = []
-    tableau_derogation = []
-    tableau_penalite = []
-    tableau_dette = []
+    penalites_config = PenaliteConfig.objects.filter(
+        id_annee=id_annee,
+        actif=True
+    ).filter(
+        Q(id_classe_active=id_classe_active) | 
+        Q(id_classe_active__isnull=True)
+    ).filter(
+        Q(id_campus=classe.id_campus) | 
+        Q(id_campus__isnull=True)
+    )
 
     # ============================
-    # TRAITEMENT ELEVE
+    # TABLEAUX DEMANDÉS
+    # ============================
+    tableau_complet = []      # Élèves ayant tout payé dans la période
+    tableau_reduction = []    # Élèves avec réductions
+    tableau_derogation = []   # Élèves avec dérogations
+    tableau_penalite = []     # Élèves avec pénalités
+    tableau_dette = []        # Élèves ayant une dette
+
+    # ============================
+    # TRAITEMENT PAR ÉLÈVE
     # ============================
     for ins in inscriptions:
+        eleve = ins.id_eleve
 
-        eleve = ins.id_eleve   # ✅ CORRECTION ICI
+        # Nom complet de l'élève
+        nom_complet = ""
+        if hasattr(eleve, 'nom') and hasattr(eleve, 'prenom'):
+            nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
+        elif hasattr(eleve, 'nom'):
+            nom_complet = eleve.nom
+        elif hasattr(eleve, 'prenom'):
+            nom_complet = eleve.prenom
+        else:
+            nom_complet = str(eleve)
 
+        # ======================
+        # VÉRIFIER LES RÉDUCTIONS
+        # ======================
+        reductions = Eleve_reduction_prix.objects.filter(
+            id_eleve=eleve,
+            id_annee=id_annee,
+            id_classe_active=id_classe_active
+        ).select_related('id_variable')
+
+        reduction_par_variable = {}
+        for red in reductions:
+            reduction_par_variable[red.id_variable.id_variable] = red.pourcentage
+
+        # ======================
+        # VÉRIFIER LES DÉROGATIONS
+        # ======================
+        derogations = VariableDerogation.objects.filter(
+            id_eleve=eleve,
+            id_annee=id_annee,
+            id_classe_active=id_classe_active
+        ).select_related('id_variable')
+
+        derogation_par_variable = {}
+        for der in derogations:
+            derogation_par_variable[der.id_variable.id_variable] = der.date_derogation
+
+        # ======================
+        # CALCULER CE QUI ÉTAIT DÛ PENDANT LA PÉRIODE
+        # ======================
+        montant_du_periode = 0
+        details_du = []
+        variables_dues = []
+
+        for var_id, var_info in prix_par_variable.items():
+            prix_variable = var_info['prix']
+            nom_variable = var_info['nom_variable']
+            
+            # Vérifier si cette variable était due dans la période
+            est_dans_periode = False
+            
+            if var_id in date_butoire_par_variable:
+                date_butoire = date_butoire_par_variable[var_id]
+                if date_debut and date_fin:
+                    if date_debut <= date_butoire <= date_fin:
+                        est_dans_periode = True
+                elif date_debut and not date_fin:
+                    if date_butoire >= date_debut:
+                        est_dans_periode = True
+                elif not date_debut and date_fin:
+                    if date_butoire <= date_fin:
+                        est_dans_periode = True
+                else:
+                    est_dans_periode = True
+            else:
+                # Si pas de date butoire, on considère par défaut
+                est_dans_periode = True
+
+            if est_dans_periode:
+                # Appliquer la réduction si elle existe
+                if var_id in reduction_par_variable:
+                    pourcentage = reduction_par_variable[var_id]
+                    reduction = (prix_variable * pourcentage) / 100
+                    prix_apres_reduction = prix_variable - reduction
+                else:
+                    prix_apres_reduction = prix_variable
+                    reduction = 0
+
+                montant_du_periode += prix_apres_reduction
+                variables_dues.append(var_id)
+                
+                details_du.append({
+                    'variable': nom_variable,
+                    'prix_initial': prix_variable,
+                    'reduction': reduction,
+                    'prix_final': prix_apres_reduction,
+                    'a_reduction': var_id in reduction_par_variable,
+                    'a_derogation': var_id in derogation_par_variable,
+                    'date_butoire': date_butoire_par_variable.get(var_id, None)
+                })
+
+        # ======================
+        # CALCULER LES PAIEMENTS PENDANT LA PÉRIODE
+        # ======================
         paiements = Paiement.objects.filter(
             id_eleve=eleve,
             id_annee=id_annee,
@@ -1323,81 +1467,190 @@ def rapport_paiements(request):
 
         if date_debut and date_fin:
             paiements = paiements.filter(
-                date_paie__range=[date_debut, date_fin]
+                date_saisie__range=[date_debut, date_fin]
             )
+        elif date_debut and not date_fin:
+            paiements = paiements.filter(date_saisie__gte=date_debut)
+        elif not date_debut and date_fin:
+            paiements = paiements.filter(date_saisie__lte=date_fin)
 
-        total_paye = paiements.aggregate(
-            total=Sum("montant")
-        )["total"] or 0
+        # Paiements par variable
+        paiements_par_variable = {}
+        for paiement in paiements:
+            var_id = paiement.id_variable.id_variable
+            if var_id not in paiements_par_variable:
+                paiements_par_variable[var_id] = 0
+            paiements_par_variable[var_id] += paiement.montant
 
-        # ======================
-        # REDUCTION
-        # ======================
-        reduction_obj = Eleve_reduction_prix.objects.filter(
-            id_eleve=eleve,
-            id_annee=id_annee,
-            id_classe_active=id_classe_active
-        ).first()
-
-        reduction = 0
-        if reduction_obj:
-            reduction = (total_du_classe * reduction_obj.pourcentage) / 100
-
-        total_apres_reduction = total_du_classe - reduction
+        total_paye_periode = sum(paiements_par_variable.values())
+        reste_a_payer = montant_du_periode - total_paye_periode
 
         # ======================
-        # DEROGATION
+        # VÉRIFIER LES PÉNALITÉS
         # ======================
-        derogation = VariableDerogation.objects.filter(
-            id_eleve=eleve,
-            id_annee=id_annee,
-            id_classe_active=id_classe_active
-        ).exists()
+        penalite_calculee = 0
+        a_penalite = False
+        details_penalite = []
+
+        for var_id, var_info in prix_par_variable.items():
+            if var_id in variables_dues and var_id in date_butoire_par_variable:
+                date_butoire = date_butoire_par_variable[var_id]
+                nom_variable = var_info['nom_variable']
+                
+                # Vérifier si des paiements ont été faits après la date butoire
+                paiements_tardifs = paiements.filter(
+                    id_variable=var_id,
+                    date_saisie__gt=date_butoire
+                )
+                
+                if paiements_tardifs.exists():
+                    a_penalite = True
+                    montant_tardif = sum(paiements_tardifs.values_list('montant', flat=True))
+                    
+                    # Chercher la configuration de pénalité appropriée
+                    config_penalite = penalites_config.filter(
+                        Q(id_variable=var_id) | Q(id_variable__isnull=True)
+                    ).first()
+                    
+                    if config_penalite:
+                        if config_penalite.type_penalite == 'POURCENTAGE':
+                            penalite = montant_tardif * config_penalite.valeur / 100
+                        else:  # FORFAIT
+                            penalite = config_penalite.valeur
+                        
+                        # Appliquer le plafond si existant
+                        if config_penalite.plafond and penalite > config_penalite.plafond:
+                            penalite = config_penalite.plafond
+                    else:
+                        penalite = montant_tardif * 0.05  # 5% par défaut
+                    
+                    penalite_calculee += penalite
+                    details_penalite.append(f"{nom_variable}: {penalite:,.0f}")
 
         # ======================
-        # PENALITE
+        # CONSTRUCTION DES LIGNES POUR CHAQUE TABLEAU
         # ======================
-        penalite = False
-        if date_butoire_obj:
-            if date.today() > date_butoire_obj.date_butoire and total_paye < total_apres_reduction:
-                penalite = True
 
-        # ======================
-        # STATUT
-        # ======================
-        if total_paye >= total_apres_reduction:
-            statut = "COMPLET"
-        elif total_paye == 0:
-            statut = "NON PAYE"
-        else:
-            statut = "PARTIEL"
+        # TABLEAU DES PAIEMENTS COMPLETS
+        if montant_du_periode > 0 and total_paye_periode >= montant_du_periode:
+            row_complet = [
+                nom_complet,
+                f"{montant_du_periode:,.0f}",
+                f"{total_paye_periode:,.0f}",
+                "COMPLET"
+            ]
+            tableau_complet.append(row_complet)
 
-        row = [
-            str(eleve),
-            total_du_classe,
-            reduction,
-            total_apres_reduction,
-            total_paye,
-            statut
-        ]
+        # TABLEAU DES RÉDUCTIONS
+        if reductions.exists():
+            details_reduction = []
+            for detail in details_du:
+                if detail['a_reduction']:
+                    pourcentage = reduction_par_variable.get(
+                        [k for k, v in prix_par_variable.items() if v['nom_variable'] == detail['variable']][0], 
+                        0
+                    )
+                    details_reduction.append(
+                        f"{detail['variable']}: {pourcentage}%"
+                    )
+            
+            if details_reduction:
+                row_reduction = [
+                    nom_complet,
+                    f"{montant_du_periode:,.0f}",
+                    " / ".join(details_reduction),
+                    f"{total_paye_periode:,.0f}",
+                    f"{reste_a_payer:,.0f}" if reste_a_payer > 0 else "0"
+                ]
+                tableau_reduction.append(row_reduction)
 
-        # ======================
-        # CLASSEMENT
-        # ======================
-        if statut == "COMPLET":
-            tableau_complet.append(row)
+        # TABLEAU DES DÉROGATIONS
+        if derogations.exists():
+            details_derogation = []
+            for der in derogations:
+                var_nom = prix_par_variable.get(der.id_variable.id_variable, {}).get('nom_variable', '')
+                if var_nom:
+                    details_derogation.append(
+                        f"{var_nom}: {der.date_derogation.strftime('%d/%m')}"
+                    )
+            
+            if details_derogation:
+                row_derogation = [
+                    nom_complet,
+                    f"{montant_du_periode:,.0f}",
+                    " / ".join(details_derogation),
+                    f"{total_paye_periode:,.0f}",
+                    f"{reste_a_payer:,.0f}" if reste_a_payer > 0 else "0"
+                ]
+                tableau_derogation.append(row_derogation)
 
-        if reduction_obj:
-            tableau_reduction.append(row)
+        # TABLEAU DES PÉNALITÉS
+        if a_penalite:
+            # Formater les détails des pénalités avec des sauts de ligne
+            if len(details_penalite) > 1:
+                penalite_display = "\n".join(details_penalite)
+            else:
+                penalite_display = details_penalite[0] if details_penalite else f"{penalite_calculee:,.0f}"
+            
+            row_penalite = [
+                nom_complet,
+                f"{montant_du_periode:,.0f}",
+                penalite_display,
+                f"{total_paye_periode:,.0f}",
+                f"{reste_a_payer:,.0f}" if reste_a_payer > 0 else "0"
+            ]
+            tableau_penalite.append(row_penalite)
 
-        if derogation:
-            tableau_derogation.append(row)
+        # TABLEAU DES DETTES
+        if reste_a_payer > 0:
+            row_dette = [
+                nom_complet,
+                f"{montant_du_periode:,.0f}",
+                f"{total_paye_periode:,.0f}",
+                f"{reste_a_payer:,.0f}"
+            ]
+            tableau_dette.append(row_dette)
 
-        if penalite:
-            tableau_penalite.append(row)
+    # ============================
+    # EN-TÊTES DES TABLEAUX (cohérents et sans erreurs)
+    # ============================
+    headers_complet = [
+        "Élève",
+        "Dû",
+        "Payé",
+        "Statut"
+    ]
 
-        if total_paye < total_apres_reduction:
-            tableau_dette.append(row)
+    headers_reduction = [
+        "Élève",
+        "Dû",
+        "Réductions",
+        "Payé",
+        "Reste"
+    ]
+
+    headers_derogation = [
+        "Élève",
+        "Dû",
+        "Dérogations",
+        "Payé",
+        "Reste"
+    ]
+
+    headers_penalite = [
+        "Élève",
+        "Dû",
+        "Pénalités",
+        "Payé",
+        "Reste"
+    ]
+
+    headers_dette = [
+        "Élève",
+        "Dû",
+        "Payé",
+        "Dette"
+    ]
 
     # ============================
     # EXPORT
@@ -1408,7 +1661,15 @@ def rapport_paiements(request):
             tableau_reduction,
             tableau_derogation,
             tableau_penalite,
-            tableau_dette
+            tableau_dette,
+            headers_complet,
+            headers_reduction,
+            headers_derogation,
+            headers_penalite,
+            headers_dette,
+            date_debut,
+            date_fin,
+            classe
         )
 
     if type_fichier == "pdf":
@@ -1417,53 +1678,171 @@ def rapport_paiements(request):
             tableau_reduction,
             tableau_derogation,
             tableau_penalite,
-            tableau_dette
+            tableau_dette,
+            headers_complet,
+            headers_reduction,
+            headers_derogation,
+            headers_penalite,
+            headers_dette,
+            date_debut,
+            date_fin,
+            classe
         )
 
     return HttpResponse("Type non supporté")
 
 
-from openpyxl import Workbook
+def add_section_excel(ws, title, data, headers, start_row):
+    """Ajoute une section au fichier Excel avec un style amélioré"""
+    
+    # Styles
+    title_font = Font(bold=True, size=12, color="FFFFFF")
+    title_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+    
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    current_row = start_row
+    
+    # Titre de section
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=len(headers))
+    cell = ws.cell(row=current_row, column=1, value=title)
+    cell.font = title_font
+    cell.fill = title_fill
+    cell.alignment = Alignment(horizontal='center', vertical='center')
+    current_row += 1
+    
+    # Nombre d'élèves
+    ws.cell(row=current_row, column=1, value=f"Nombre : {len(data)}")
+    current_row += 1
+    
+    # En-têtes
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=current_row, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = border
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+    current_row += 1
+    
+    # Données
+    for row_data in data:
+        for col, value in enumerate(row_data, 1):
+            cell = ws.cell(row=current_row, column=col, value=value)
+            cell.border = border
+            if col == 1:  # Colonne Élève
+                cell.alignment = Alignment(horizontal='left', vertical='center')
+            else:  # Colonnes de montants
+                cell.alignment = Alignment(horizontal='right', vertical='center')
+            # Activer le retour à la ligne pour les cellules avec plusieurs lignes
+            if col == 3 and isinstance(value, str) and "\n" in value:
+                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        current_row += 1
+    
+    return current_row
 
 
-def add_section(ws, title, data):
-
-    ws.append([title])
-    ws.append([f"Nombre d'élèves : {len(data)}"])
-
-    headers = [
-        "Eleve",
-        "Total dû",
-        "Reduction",
-        "Total après réduction",
-        "Total payé",
-        "Statut"
-    ]
-
-    ws.append(headers)
-
-    for row in data:
-        ws.append(row)
-
-    ws.append([])
-
-
-def export_excel_multi(*tables):
+def export_excel_multi(tableau_complet, tableau_reduction, tableau_derogation, 
+                      tableau_penalite, tableau_dette, headers_complet, 
+                      headers_reduction, headers_derogation, headers_penalite, 
+                      headers_dette, date_debut, date_fin, classe):
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Rapport Paiements"
 
-    titres = [
-        "PAIEMENTS COMPLETS",
-        "REDUCTIONS",
-        "DEROGATIONS",
-        "PENALITES",
-        "DETTES"
-    ]
+    # Style pour le titre principal
+    title_font = Font(bold=True, size=16, color="FFFFFF")
+    title_fill = PatternFill(start_color="2F528F", end_color="2F528F", fill_type="solid")
+    
+    current_row = 1
+    
+    # Informations de période et classe
+    ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=5)
+    cell = ws.cell(row=current_row, column=1)
+    if date_debut and date_fin:
+        cell.value = f"RAPPORT PAIEMENTS - {classe} - Du {date_debut} au {date_fin}"
+    elif date_debut:
+        cell.value = f"RAPPORT PAIEMENTS - {classe} - A partir du {date_debut}"
+    elif date_fin:
+        cell.value = f"RAPPORT PAIEMENTS - {classe} - Jusqu'au {date_fin}"
+    else:
+        cell.value = f"RAPPORT PAIEMENTS - {classe}"
+    cell.font = title_font
+    cell.fill = title_fill
+    cell.alignment = Alignment(horizontal='center', vertical='center')
+    
+    current_row += 1
+    ws.cell(row=current_row, column=1, value=f"Edite le {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    current_row += 2
 
-    for titre, table in zip(titres, tables):
-        add_section(ws, titre, table)
+    # Tableaux demandés
+    sections = [
+        (tableau_complet, "1. PAIEMENTS COMPLETS", headers_complet),
+        (tableau_reduction, "2. RÉDUCTIONS", headers_reduction),
+        (tableau_derogation, "3. DÉROGATIONS", headers_derogation),
+        (tableau_penalite, "4. PÉNALITÉS", headers_penalite),
+        (tableau_dette, "5. DETTES", headers_dette)
+    ]
+    
+    for data, title, headers in sections:
+        if data:
+            current_row = add_section_excel(ws, title, data, headers, current_row)
+            current_row += 1
+
+    # Récapitulatif
+    current_row += 1
+    ws.cell(row=current_row, column=1, value="RÉCAPITULATIF").font = Font(bold=True, size=11)
+    current_row += 1
+    
+    recap_data = [
+        ["Catégorie", "Nombre"],
+        ["Complets", len(tableau_complet)],
+        ["Réductions", len(tableau_reduction)],
+        ["Dérogations", len(tableau_derogation)],
+        ["Pénalités", len(tableau_penalite)],
+        ["Endettés", len(tableau_dette)]
+    ]
+    
+    for row_data in recap_data:
+        for col, value in enumerate(row_data, 1):
+            cell = ws.cell(row=current_row, column=col, value=value)
+            if col == 2:  # Colonne des nombres
+                cell.alignment = Alignment(horizontal='center')
+        current_row += 1
+
+    # Ajuster la largeur des colonnes
+    for col in range(1, ws.max_column + 1):
+        max_length = 0
+        column_letter = get_column_letter(col)
+        for row in range(1, ws.max_row + 1):
+            cell = ws.cell(row=row, column=col)
+            try:
+                if cell.value:
+                    if isinstance(cell.value, str) and "\n" in cell.value:
+                        # Pour les cellules avec sauts de ligne, prendre la ligne la plus longue
+                        lines = cell.value.split("\n")
+                        max_line_length = max(len(line) for line in lines)
+                        max_length = max(max_length, max_line_length)
+                    else:
+                        max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        # Largeurs adaptatives
+        if col == 1:  # Colonne Élève
+            adjusted_width = min(max_length + 2, 35)
+        elif col == 3 and any([tableau_reduction, tableau_derogation, tableau_penalite]):  # Colonne des détails
+            adjusted_width = min(max_length + 4, 50)
+        else:
+            adjusted_width = min(max_length + 2, 15)
+        ws.column_dimensions[column_letter].width = adjusted_width
 
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1475,61 +1854,271 @@ def export_excel_multi(*tables):
     return response
 
 
-from io import BytesIO
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
+def calculate_dynamic_widths(table_data, headers):
+    """
+    Calcule les largeurs de colonnes de façon dynamique en fonction du contenu
+    Retourne une liste de largeurs en cm
+    """
+    col_widths = []
+    
+    for col_idx in range(len(headers)):
+        # Commencer par la largeur de l'en-tête
+        max_chars = len(headers[col_idx])
+        has_multiline = False
+        
+        # Parcourir toutes les lignes de données
+        for row_idx in range(1, len(table_data)):
+            row = table_data[row_idx]
+            if col_idx < len(row):
+                cell_text = str(row[col_idx])
+                
+                # Vérifier si la cellule contient plusieurs lignes
+                if "\n" in cell_text:
+                    has_multiline = True
+                    lines = cell_text.split("\n")
+                    # Prendre la ligne la plus longue
+                    for line in lines:
+                        max_chars = max(max_chars, len(line))
+                else:
+                    max_chars = max(max_chars, len(cell_text))
+        
+        # Facteur d'ajustement par type de colonne
+        if col_idx == 0:  # Colonne Élève
+            factor = 0.13  # cm par caractère
+            min_width = 4 * cm
+            max_width = 7 * cm
+        elif col_idx == 2 and len(headers) > 3:  # Colonne des détails (Réductions/Dérogations/Pénalités)
+            factor = 0.12 if not has_multiline else 0.14
+            min_width = 3.5 * cm
+            max_width = 6 * cm
+        else:  # Colonnes de montants
+            factor = 0.1
+            min_width = 2.5 * cm
+            max_width = 4 * cm
+        
+        # Calculer la largeur
+        width = max_chars * factor * cm
+        width = max(min_width, min(width, max_width))
+        col_widths.append(width)
+    
+    return col_widths
 
 
-def section_pdf(elements, titre, data):
-
+def section_pdf(elements, titre, data, headers):
+    """Ajoute une section au PDF avec largeurs dynamiques et gestion des sauts de ligne"""
     styles = getSampleStyleSheet()
-
-    elements.append(Paragraph(f"<b>{titre}</b>", styles["Heading2"]))
-    elements.append(Paragraph(f"Nombre d'élèves : {len(data)}", styles["Normal"]))
-    elements.append(Spacer(1, 10))
-
-    headers = [
-        "Eleve",
-        "Total dû",
-        "Reduction",
-        "Total après réduction",
-        "Total payé",
-        "Statut"
-    ]
-
+    
+    # Style pour le titre de section
+    section_style = ParagraphStyle(
+        'SectionTitle',
+        parent=styles['Heading2'],
+        fontSize=12,
+        textColor=colors.HexColor('#2F528F'),
+        spaceAfter=6,
+        spaceBefore=10,
+        alignment=TA_LEFT
+    )
+    
+    # Titre de section
+    elements.append(Paragraph(titre, section_style))
+    
+    if not data:
+        elements.append(Paragraph("Aucun élève", styles['Italic']))
+        elements.append(Spacer(1, 0.3*cm))
+        return
+    
+    # Préparer les données du tableau
     table_data = [headers] + data
-
-    table = Table(table_data, repeatRows=1)
-
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-    ]))
-
+    
+    # Calculer les largeurs dynamiques
+    col_widths = calculate_dynamic_widths(table_data, headers)
+    
+    # Créer le tableau
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    
+    # Style de base du tableau
+    style = [
+        # En-tête
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F528F')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 9),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+        ('TOPPADDING', (0, 0), (-1, 0), 8),
+        
+        # Grille
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('FONTSIZE', (0, 1), (-1, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # Alignement en haut pour tous
+        
+        # Alignement des colonnes
+        ('ALIGN', (0, 1), (0, -1), 'LEFT'),   # Élève à gauche
+        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'), # Montants à droite
+    ]
+    
+    # Ajouter le style pour la colonne des détails (alignée à gauche)
+    if len(headers) > 3:
+        style.append(('ALIGN', (2, 1), (2, -1), 'LEFT'))
+    
+    table.setStyle(TableStyle(style))
+    
+    # Ajouter des couleurs alternées pour les lignes
+    for i in range(1, len(table_data)):
+        if i % 2 == 0:
+            bg_color = colors.HexColor('#F9F9F9')
+        else:
+            bg_color = colors.HexColor('#FFFFFF')
+        
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, i), (-1, i), bg_color),
+        ]))
+    
     elements.append(table)
-    elements.append(Spacer(1, 20))
+    elements.append(Spacer(1, 0.5*cm))
 
 
-def export_pdf_multi(*tables):
-
+def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation, 
+                    tableau_penalite, tableau_dette, headers_complet, 
+                    headers_reduction, headers_derogation, headers_penalite, 
+                    headers_dette, date_debut, date_fin, classe):
+    
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    
+    # Créer le document PDF en format paysage avec marges confortables
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), 
+                           leftMargin=1.2*cm, rightMargin=1.2*cm,
+                           topMargin=1.5*cm, bottomMargin=1.2*cm)
 
     elements = []
+    styles = getSampleStyleSheet()
+    
+    # # Style pour le titre principal
+    # title_style = ParagraphStyle(
+    #     'CustomTitle',
+    #     parent=styles['Heading1'],
+    #     fontSize=16,
+    #     textColor=colors.HexColor('#2F528F'),
+    #     alignment=TA_CENTER,
+    #     spaceAfter=2,
+    #     spaceBefore=0
+    # )
+    
+    # # Style pour les informations
+    # info_style = ParagraphStyle(
+    #     'InfoStyle',
+    #     parent=styles['Normal'],
+    #     fontSize=10,
+    #     alignment=TA_CENTER,
+    #     textColor=colors.HexColor('#666666'),
+    #     spaceAfter=2
+    # )
+    
+    # # Titre principal
+    # elements.append(Paragraph("RAPPORT DES PAIEMENTS", title_style))
+    
+    # Classe et période sur la même ligne
+    # if date_debut and date_fin:
+    #     info = f"{classe} - Du {date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')}"
+    # elif date_debut:
+    #     info = f"{classe} - A partir du {date_debut.strftime('%d/%m/%Y')}"
+    # elif date_fin:
+    #     info = f"{classe} - Jusqu'au {date_fin.strftime('%d/%m/%Y')}"
+    # else:
+    #     info = f"{classe} - Toute la période"
+    
+    # elements.append(Paragraph(info, info_style))
+    
+    # # Date d'édition
+    # date_style = ParagraphStyle(
+    #     'DateStyle',
+    #     parent=styles['Normal'],
+    #     fontSize=8,
+    #     alignment=TA_RIGHT,
+    #     textColor=colors.HexColor('#999999')
+    # )
+    # elements.append(Paragraph(f"Edite le {datetime.now().strftime('%d/%m/%Y %H:%M')}", date_style))
+    # elements.append(Spacer(1, 0.8*cm))
+    if date_debut and date_fin:
+        titre = f"RAPPORT DES PAIEMENTS - Du {date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')}"
+    elif date_debut:
+        titre = f"RAPPORT DES PAIEMENTS - A partir du {date_debut.strftime('%d/%m/%Y')}"
+    elif date_fin:
+        titre = f"RAPPORT DES PAIEMENTS - Jusqu'au {date_fin.strftime('%d/%m/%Y')}"
+    else:
+        titre = "RAPPORT DES PAIEMENTS - Toute la période"
+    
+    # Extraire les IDs depuis l'objet classe
+    campus_id = None
+    annee_id = None
+    cycle_id = None
+    
+    if classe:
+        # Adapter selon la structure de votre objet Classe_active
+        if hasattr(classe, 'id_campus'):
+            campus_id = classe.id_campus.id_campus if hasattr(classe.id_campus, 'id_campus') else classe.id_campus
+        if hasattr(classe, 'id_annee'):
+            annee_id = classe.id_annee.id_annee if hasattr(classe.id_annee, 'id_annee') else classe.id_annee
+        if hasattr(classe, 'cycle_id'):
+            cycle_id = classe.cycle_id.id_cycle_actif if hasattr(classe.cycle_id, 'id_cycle_actif') else classe.cycle_id
+    
+    # Appeler la fonction header
+    header_table = build_pdf_header(
+        eleve=None,  # Pas d'élève spécifique ici
+        classe_obj=classe,
+        id_campus=campus_id,
+        id_cycle=cycle_id,
+        id_annee=annee_id,
+        titre=titre
+    )
+    
+    elements.append(header_table)
+    elements.append(Spacer(1, 0.8*cm))
 
-    titres = [
-        "PAIEMENTS COMPLETS",
-        "REDUCTIONS",
-        "DEROGATIONS",
-        "PENALITES",
-        "DETTES"
+    # Sections demandées
+    sections = [
+        ("1. PAIEMENTS COMPLETS", tableau_complet, headers_complet),
+        ("2. RÉDUCTIONS", tableau_reduction, headers_reduction),
+        ("3. DÉROGATIONS", tableau_derogation, headers_derogation),
+        ("4. PÉNALITÉS", tableau_penalite, headers_penalite),
+        ("5. DETTES", tableau_dette, headers_dette)
     ]
+    
+    for titre, data, headers in sections:
+        if data:
+            section_pdf(elements, titre, data, headers)
+    
+    # Récapitulatif
+    elements.append(Spacer(1, 0.5*cm))
+    elements.append(Paragraph("RÉCAPITULATIF", styles['Heading3']))
+    elements.append(Spacer(1, 0.2*cm))
+    
+    recap_data = [
+        ["Catégorie", "Nombre d'élèves"],
+        ["Complets", len(tableau_complet)],
+        ["Réductions", len(tableau_reduction)],
+        ["Dérogations", len(tableau_derogation)],
+        ["Pénalités", len(tableau_penalite)],
+        ["Endettés", len(tableau_dette)]
+    ]
+    
+    recap_table = Table(recap_data, colWidths=[5*cm, 3*cm])
+    recap_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F528F')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F9F9F9')),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    
+    elements.append(recap_table)
 
-    for titre, table in zip(titres, tables):
-        section_pdf(elements, titre, table)
-
+    # Générer le PDF
     doc.build(elements)
 
     pdf = buffer.getvalue()

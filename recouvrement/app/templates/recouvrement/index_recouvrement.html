@@ -3345,7 +3345,6 @@ $(document).ready(function() {
                         alert('Paiement enregistré avec succès !');
                         $('#modalContainer').modal('hide');
                         loadPaiements();
-                        window.location.href = "{% url 'ajouter_paiement' %}";
                     } else {
                         let errorMsg = response.error;
                         if (response.details) {

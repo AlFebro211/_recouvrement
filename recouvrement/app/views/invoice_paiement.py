@@ -1,41 +1,78 @@
 
 
 from urllib import request
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
-from app.models import Paiement, Institution,Eleve_inscription,Campus,Eleve,Classe_active,Classe_cycle_actif,Annee
+from app.models import *
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Image, Paragraph, Table, TableStyle, Spacer
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch, mm
+from reportlab.lib.units import inch, mm, cm
 from reportlab.lib.pagesizes import A4
-import os
 from django.conf import settings
-import logging
-from datetime import datetime
-from app.models import *
-from django.http import JsonResponse
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from datetime import datetime, date
+import os
+from app.models import *
 from django.contrib.staticfiles import finders
 from django.db.models import Sum
-import socket
-from reportlab.platypus import Table, TableStyle, Paragraph, Image
-from reportlab.lib.units import inch, mm
-from reportlab.lib.styles import ParagraphStyle
-from django.conf import settings
-import os
-from datetime import datetime
-from app.models import Institution, Campus, Classe_active, Classe_cycle_actif, Annee, Eleve
+from io import BytesIO
+import json
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
+from openpyxl.utils import get_column_letter
 
-def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None):
+def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None, titre=None):
     """
     Retourne un tableau ReportLab à utiliser comme header dans un PDF.
-    Peut recevoir :
-        - un élève (Eleve)
-        - une classe (Classe_active)
-        - id_campus, id_cycle, id_annee pour info générale
+    
+    Args:
+        eleve: Objet Eleve (optionnel)
+        classe_obj: Objet Classe_active (optionnel)
+        id_campus: ID du campus (optionnel)
+        id_cycle: ID du cycle (optionnel)
+        id_annee: ID de l'année (optionnel)
+        titre: Titre personnalisé (optionnel)
+    
+    Returns:
+        Table: Tableau ReportLab formaté
     """
-    normal_style = ParagraphStyle(name='Normal', fontSize=9, leading=10)
+    
+    # Styles
+    style_titre = ParagraphStyle(
+        'TitreHeader',
+        fontSize=12,
+        fontName='Helvetica-Bold',
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#2F528F'),
+        spaceAfter=4
+    )
+    
+    style_normal = ParagraphStyle(
+        'NormalHeader',
+        fontSize=9,
+        fontName='Helvetica',
+        alignment=TA_LEFT,
+        leading=11,
+        textColor=colors.HexColor('#333333')
+    )
+    
+    style_gras = ParagraphStyle(
+        'GrasHeader',
+        fontSize=9,
+        fontName='Helvetica-Bold',
+        alignment=TA_LEFT,
+        leading=11,
+        textColor=colors.HexColor('#2F528F')
+    )
+    
+    style_date = ParagraphStyle(
+        'DateHeader',
+        fontSize=8,
+        fontName='Helvetica',
+        alignment=TA_RIGHT,
+        textColor=colors.HexColor('#666666')
+    )
 
     # Logo
     logo_cell = []
@@ -43,42 +80,140 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
     if institution and institution.logo_ecole:
         logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
         if os.path.exists(logo_path):
-            logo_cell.append(Image(logo_path, width=0.8*inch, height=0.8*inch))
+            logo_cell.append(Image(logo_path, width=1.2*cm, height=1.2*cm))
         else:
-            logo_cell.append(Paragraph("Logo non disponible", normal_style))
+            logo_cell.append(Paragraph("Logo non disponible", style_normal))
     else:
-        logo_cell.append(Paragraph("Aucun logo configuré", normal_style))
+        # Logo par défaut
+        default_logo = os.path.join(settings.BASE_DIR, 'static/assets/img/MonEcoleApp-logo.png')
+        if os.path.exists(default_logo):
+            logo_cell.append(Image(default_logo, width=1.2*cm, height=1.2*cm))
+        else:
+            logo_cell.append(Paragraph("", style_normal))
 
-    # Informations
+    # Informations centrales
     info_lines = []
-
+    
+    # Titre
+    if titre:
+        info_lines.append(f"<font color='#2F528F' size='12'><b>{titre}</b></font>")
+    else:
+        info_lines.append("<font color='#2F528F' size='12'><b>ÉCOLE INTERNATIONALE DE BUJUMBURA</b></font>")
+    
+    # Institution
+    if institution and institution.nom_ecole:
+        info_lines.append(f"<font size='10'>{institution.nom_ecole}</font>")
+    
+    # Campus
     if id_campus:
-        campus_text = Campus.objects.get(id_campus=id_campus).campus
-        info_lines.append(f"Campus: <b>{campus_text}</b>")
-
-    if id_cycle:
-        cycle_text = Classe_cycle_actif.objects.get(id_cycle_actif=id_cycle).cycle_id.cycle
-        info_lines.append(f"Cycle: <b>{cycle_text}</b>")
-
+        try:
+            campus = Campus.objects.get(id_campus=id_campus)
+            info_lines.append(f"<b>Campus:</b> {campus.campus}")
+        except:
+            pass
+    
+    # Cycle/Classe
     if classe_obj:
-        classe_info = f"{classe_obj.classe_id.classe} {classe_obj.groupe}".strip() if classe_obj.groupe else classe_obj.classe_id.classe
-        info_lines.append(f"Classe: <b>{classe_info}</b>")
-
+        try:
+            classe_info = classe_obj.classe_id.classe
+            if classe_obj.groupe:
+                classe_info += f" {classe_obj.groupe}"
+            info_lines.append(f"<b>Classe:</b> {classe_info}")
+        except:
+            pass
+    
+    # Année
     if id_annee:
-        annee_text = Annee.objects.get(id_annee=id_annee).annee
-        info_lines.append(f"Année: <b>{annee_text}</b>")
-
+        try:
+            annee = Annee.objects.get(id_annee=id_annee)
+            info_lines.append(f"<b>Année:</b> {annee.annee}")
+        except:
+            pass
+    
+    # Élève
     if eleve:
-        info_lines.append(f"Elève: <b>{eleve.nom} {eleve.prenom}</b>")
+        nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
+        info_lines.append(f"<b>Élève:</b> {nom_complet}")
+        if hasattr(eleve, 'matricule') and eleve.matricule:
+            info_lines.append(f"<b>Matricule:</b> {eleve.matricule}")
+    
+    info_paragraph = Paragraph("<br/>".join(info_lines), style_normal)
 
-    info_lines.append(f"Date: <b>{datetime.now().strftime('%d/%m/%Y %H:%M')}</b>")
+    # Date et heure
+    date_text = f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    date_paragraph = Paragraph(date_text, style_date)
 
-    info_paragraph = Paragraph("<br/>".join(info_lines), normal_style)
-
-    # Crée le tableau header
-    header_table = Table([[info_paragraph, logo_cell]], colWidths=[120*mm, 70*mm])
-    header_table.setStyle(TableStyle([('VALIGN',(0,0),(-1,-1),'TOP'), ('ALIGN',(1,0),(1,0),'RIGHT')]))
+    # Création du tableau principal
+    header_data = [
+        [logo_cell, info_paragraph, date_paragraph]
+    ]
+    
+    # Largeurs des colonnes
+    col_widths = [2.5*cm, 12*cm, 4*cm]
+    
+    header_table = Table(header_data, colWidths=col_widths)
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+        ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]))
+    
     return header_table
+
+
+def build_pdf_header_simple(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None):
+    """
+    Version simplifiée du header pour les petits PDF (format POS)
+    """
+    style_normal = ParagraphStyle(
+        'NormalSimple',
+        fontSize=8,
+        fontName='Helvetica',
+        alignment=TA_CENTER,
+        leading=9
+    )
+    
+    info_lines = []
+    
+    institution = Institution.objects.first()
+    if institution and institution.nom_ecole:
+        info_lines.append(f"<b>{institution.nom_ecole}</b>")
+    
+    if id_campus:
+        try:
+            campus = Campus.objects.get(id_campus=id_campus)
+            info_lines.append(f"{campus.campus}")
+        except:
+            pass
+    
+    if classe_obj:
+        try:
+            classe_info = classe_obj.classe_id.classe
+            if classe_obj.groupe:
+                classe_info += f" {classe_obj.groupe}"
+            info_lines.append(f"{classe_info}")
+        except:
+            pass
+    
+    if id_annee:
+        try:
+            annee = Annee.objects.get(id_annee=id_annee)
+            info_lines.append(f"{annee.annee}")
+        except:
+            pass
+    
+    if eleve:
+        nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
+        info_lines.append(f"{nom_complet}")
+    
+    info_paragraph = Paragraph("<br/>".join(info_lines), style_normal)
+    
+    return info_paragraph
 
 
 def generate_invoice(request, id_paiement):
@@ -466,10 +601,11 @@ def generate_fiche_paie_eleve(request):
         # elements.append(Paragraph(f"<b>Nom et Prénom :</b> {eleve.nom} {eleve.prenom}", styles['Normal']))
         # elements.append(Paragraph(f"<b>Matricule :</b> {getattr(eleve, 'matricule', id_eleve)}", styles['Normal']))
         header_table = build_pdf_header(
-            eleve=eleve,            # Objet Eleve
+            eleve=eleve,
+            classe_obj=classe,
             id_campus=id_campus,
-            id_cycle=None,
-            id_annee=id_annee
+            id_annee=id_annee,
+            titre="FICHE INDIVIDUELLE DE PAIEMENT"
         )
         elements.append(header_table)
         elements.append(Spacer(1, 5*mm))
@@ -543,17 +679,6 @@ def style_tableau_standard():
         ('FONTSIZE', (0,0), (-1,-1), 9),
     ])
 
-
-
-from django.http import HttpResponse
-from django.conf import settings
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
-from reportlab.lib import colors
-from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
-import os
 
 def generate_facture_paiement(request):
     try:
@@ -640,13 +765,13 @@ def generate_facture_paiement(request):
 
         # Infos école et campus
         header_table = build_pdf_header(
-            eleve=eleve,
-            classe_obj=paiement.id_classe_active,  # l'objet complet, pas juste le nom
-            id_campus=paiement.id_campus.id_campus if paiement.id_campus else None,
-            id_cycle=paiement.id_cycle_actif.id_cycle_actif if paiement.id_classe_active and paiement.id_cycle_actif else None,
-            id_annee=paiement.id_annee.id_annee if paiement.id_annee else None
-        )
-
+                eleve=paiement.id_eleve,
+                classe_obj=paiement.id_classe_active,
+                id_campus=paiement.id_campus.id_campus,
+                id_cycle=paiement.id_cycle_actif.id_cycle_actif,
+                id_annee=paiement.id_annee.id_annee,
+                titre="REÇU DE PAIEMENT"
+            )
         elements.append(header_table)
         elements.append(Spacer(1,4*mm))
 
@@ -815,18 +940,26 @@ def generate_historique_pdf(request):
         elements.append(Spacer(1, 4*mm))
 
         # Header
-        institution = Institution.objects.first()
-        header_table = Table(
-            [[
-                Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style),
-                Paragraph(
+        # institution = Institution.objects.first()
+        # header_table = Table(
+        #     [[
+        #         Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style),
+        #         Paragraph(
 
-                    f"<b>Campus :</b> {campus_txt}<br/><b>Classe :</b> {classe_info}<br/><b>Élève :</b> {eleve_txt}",
-                    left_style
-                ),
-                Paragraph(f"<b>Année académique :</b><br/>{annee_txt}", right_style)
-            ]],
-            colWidths=[120*mm, 70*mm]
+        #             f"<b>Campus :</b> {campus_txt}<br/><b>Classe :</b> {classe_info}<br/><b>Élève :</b> {eleve_txt}",
+        #             left_style
+        #         ),
+        #         Paragraph(f"<b>Année académique :</b><br/>{annee_txt}", right_style)
+        #     ]],
+        #     colWidths=[120*mm, 70*mm]
+        # )
+        id_campus = p_ref.id_classe_active.id_campus
+        header_table = build_pdf_header(
+            eleve=eleve_txt,
+            classe_obj=classe_info,
+            id_campus= id_campus if 'id_campus' in locals() else None,
+            id_annee=annee_txt,
+            titre="HISTORIQUE DES PAIEMENTS"
         )
         header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
         elements.append(header_table)
@@ -997,17 +1130,25 @@ def generate_dette_pdf(request):
         logo_img = Image(logo_path, width=30*mm, height=30*mm) if logo_path and os.path.exists(logo_path) else Paragraph("", styles['Normal'])
         institution = Institution.objects.first()
         # 🔹 Entête améliorée
-        header_data = [[
-            logo_img,
-            [
-                Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style),
-                Paragraph(f"CAMPUS : {campus_txt}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
-                Paragraph(f"CLASSE : {classe_info}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
-                Paragraph(f"Trimestre : {id_trimestre or 'Tous'}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
-            ],
-            Paragraph(f"A-A : {annee_txt}", ParagraphStyle('H3', fontSize=10, alignment=TA_RIGHT))
-        ]]
-        header_table = Table(header_data, colWidths=[30*mm, 110*mm, 40*mm])
+        # header_data = [[
+        #     logo_img,
+        #     [
+        #         Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style),
+        #         Paragraph(f"CAMPUS : {campus_txt}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
+        #         Paragraph(f"CLASSE : {classe_info}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
+        #         Paragraph(f"Trimestre : {id_trimestre or 'Tous'}", ParagraphStyle('H3', fontSize=9, alignment=TA_LEFT)),
+        #     ],
+        #     Paragraph(f"A-A : {annee_txt}", ParagraphStyle('H3', fontSize=10, alignment=TA_RIGHT))
+        # ]]
+        header_table = build_pdf_header(
+            classe_obj=classe_obj,
+            id_campus=classe_obj.id_campus.id_campus,
+            id_annee=id_annee,
+            titre="RAPPORT DES DETTES"
+        )
+        elements.append(header_table)
+        elements.append(Spacer(1, 5*mm))
+        # header_table = Table(header_data, colWidths=[30*mm, 110*mm, 40*mm])
         header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
         elements.append(header_table)
         elements.append(Spacer(1, 10*mm))
@@ -1059,7 +1200,6 @@ def generate_dette_pdf(request):
     except Exception as e:
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
 
-
 def generate_situation_pdf(request):
     try:
         date_debut = request.GET.get('date_debut')
@@ -1069,10 +1209,22 @@ def generate_situation_pdf(request):
             return HttpResponse("Erreur : veuillez fournir les deux dates.", status=400)
 
         paiements_qs = Paiement.objects.select_related(
-            'id_eleve','id_variable','id_banque','id_compte'
+            'id_eleve','id_variable','id_banque','id_compte',
+            'id_campus', 'id_annee', 'id_classe_active', 'id_cycle_actif'
         ).filter(date_saisie__range=[date_debut, date_fin]).order_by(
             'id_eleve__nom','id_variable__variable','date_saisie'
         )
+
+        # ======================
+        # Récupérer les informations pour le header
+        # ======================
+        premier_paiement = paiements_qs.first()
+        campus_id = None
+        annee_id = None
+        
+        if premier_paiement:
+            campus_id = premier_paiement.id_campus.id_campus if premier_paiement.id_campus else None
+            annee_id = premier_paiement.id_annee.id_annee if premier_paiement.id_annee else None
 
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'inline; filename="Situation_Journaliere.pdf"'
@@ -1080,20 +1232,37 @@ def generate_situation_pdf(request):
         doc = SimpleDocTemplate(response, pagesize=A4, leftMargin=10*mm, rightMargin=10*mm, topMargin=10*mm, bottomMargin=10*mm)
         elements = []
         styles = getSampleStyleSheet()
+
+        # ======================
+        # HEADER AVEC build_pdf_header
+        # ======================
+        header = build_pdf_header(
+            id_campus=campus_id,
+            id_annee=annee_id,
+            titre="SITUATION JOURNALIÈRE DES PAIEMENTS"
+        )
+        elements.append(header)
+        elements.append(Spacer(1, 8*mm))
+
+        # ======================
+        # Informations de période
+        # ======================
+        periode_style = ParagraphStyle(
+            'Periode',
+            parent=styles['Normal'],
+            fontSize=10,
+            alignment=TA_CENTER,
+            textColor=colors.HexColor('#666666'),
+            spaceAfter=6
+        )
+        elements.append(Paragraph(f"Période du {date_debut} au {date_fin}", periode_style))
+        elements.append(Spacer(1, 5*mm))
+
+        # ======================
+        # TABLEAU
+        # ======================
         small = ParagraphStyle('small', parent=styles['Normal'], fontSize=8, leading=10)
-        title_style = ParagraphStyle('title', fontSize=16, alignment=1, fontName='Helvetica-Bold')
-
-        # Logo
-        logo_path = finders.find('assets/img/logo.png')
-        if logo_path:
-            elements.append(Image(logo_path, width=25*mm, height=25*mm))
-        elements.append(Spacer(1, 4*mm))
-
-        # Titre
-        elements.append(Paragraph("SITUATION JOURNALIERE DES PAIEMENTS", title_style))
-        elements.append(Spacer(1, 4*mm))
-
-        # Tableau
+        
         data = [["Élève", "Variable", "Montant", "Date paiement", "Compte"]]
         total_general = 0
 
@@ -1121,6 +1290,20 @@ def generate_situation_pdf(request):
         ]))
 
         elements.append(table)
+        
+        # ======================
+        # Pied de page avec totaux
+        # ======================
+        elements.append(Spacer(1, 5*mm))
+        footer_style = ParagraphStyle(
+            'Footer',
+            parent=styles['Normal'],
+            fontSize=8,
+            alignment=TA_RIGHT,
+            textColor=colors.HexColor('#666666')
+        )
+        elements.append(Paragraph(f"Total général: {total_general:,.0f} FBU", footer_style))
+
         doc.build(elements)
         return response
 
@@ -1128,13 +1311,7 @@ def generate_situation_pdf(request):
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
 
 
-from django.http import HttpResponse
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
-from io import BytesIO
-import json
+
 
 def export_dashboard_pdf(request):
 
@@ -1167,14 +1344,24 @@ def export_dashboard_pdf(request):
     elements = []
 
     # HEADER EXISTANT
+    # header = build_pdf_header(
+    #     eleve=eleve_obj,
+    #     classe_obj=classe_obj,
+    #     id_campus=id_campus,
+    #     id_cycle=id_cycle,
+    #     id_annee=id_annee
+    # )
+
+    # elements.append(header)
+    # elements.append(Spacer(1, 10))
     header = build_pdf_header(
         eleve=eleve_obj,
         classe_obj=classe_obj,
         id_campus=id_campus,
         id_cycle=id_cycle,
-        id_annee=id_annee
+        id_annee=id_annee,
+        titre=title
     )
-
     elements.append(header)
     elements.append(Spacer(1, 10))
 
@@ -1209,13 +1396,6 @@ def export_dashboard_pdf(request):
     response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
 
     return response
-
-
-from django.http import HttpResponse, JsonResponse
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
-from django.db.models import Sum
-from app.models import Paiement
 
 
 def generate_historique_excel(request):
@@ -1284,9 +1464,6 @@ def generate_historique_excel(request):
         ws[f'B{ws.max_row}'].font = Font(bold=True)
         ws[f'C{ws.max_row}'].font = Font(bold=True)
 
-        # Ajuster largeur colonnes
-        from openpyxl.utils import get_column_letter
-
 # Ajuster largeur colonnes (version safe)
         for i, column_cells in enumerate(ws.columns, 1):
             max_length = 0
@@ -1314,13 +1491,6 @@ def generate_historique_excel(request):
             "success": False,
             "message": str(e)
         })
-
-from django.http import HttpResponse, JsonResponse
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
-from openpyxl.utils import get_column_letter
-from django.db.models import Sum
-
 
 def generate_dette_excel(request):
 
@@ -1465,13 +1635,6 @@ def generate_dette_excel(request):
 
     return response
 
-from django.http import HttpResponse
-from django.db.models import Sum
-from openpyxl import Workbook
-from openpyxl.styles import Font, Alignment
-from openpyxl.utils import get_column_letter
-from datetime import date
-
 def generate_situation_excel(request):
 
     date_debut = request.GET.get('date_debut')
@@ -1592,12 +1755,6 @@ def generate_situation_excel(request):
     wb.save(response)
 
     return response
-
-from django.http import HttpResponse, JsonResponse
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
-from openpyxl.styles import Font, Alignment
-from django.db.models import Sum
 
 def export_dashboard_excel(request):
     type_stat = request.GET.get('type')
@@ -1760,9 +1917,6 @@ def export_dashboard_excel(request):
     # ======================
     # Création Excel
     # ======================
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, Alignment
-    from openpyxl.utils import get_column_letter
 
     wb = Workbook()
     ws = wb.active
