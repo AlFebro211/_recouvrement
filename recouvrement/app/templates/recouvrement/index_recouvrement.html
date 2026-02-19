@@ -3456,7 +3456,7 @@ $(document).ready(function () {
         var dropdown = $('#filter_classe')[0];
         dropdown.innerHTML = '<option value="">------</option>';
 
-        fetch(`/get_classes_actives/${anneeId}/`)
+        fetch(`/get_classes_actives_with_paie/${anneeId}/`)
             .then(res => res.json())
             .then(res => {
                 if (!res.success) return;
@@ -4475,7 +4475,7 @@ $(document).ready(function () {
                 return;
             }
 
-            fetch(`/get_classes_actives/${anneeId}/`)
+            fetch(`/get_classes_actives_with_paie/${anneeId}/`)
                 .then(res => res.json())
                 .then(res => {
                     let options = '<option value="">-- Choisir une classe --</option>';

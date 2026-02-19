@@ -1,5 +1,3 @@
-
-
 from urllib import request
 from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -22,21 +20,12 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment
 from openpyxl.utils import get_column_letter
 
-def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None, titre=None):
+def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None, titre=None, banque_info=None):
     """
-    Header professionnel pour PDF
+    Header professionnel pour PDF - Avec support de la banque
     """
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.lib import colors
-    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image
-    from reportlab.lib.units import cm
-    from datetime import datetime
-    import os
-    from django.conf import settings
-    from app.models import Institution
     
-    # Styles professionnels
+    # Styles professionnels (inchangés)
     style_nom_ecole = ParagraphStyle(
         'NomEcole',
         fontSize=18,
@@ -119,13 +108,13 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
     except:
         pass
     
-    # Valeurs par défaut
+    # Initialisation des variables
     nom_ecole = "ECOLE INTERNATIONALE DE BUJUMBURA"
     sigle = ""
-    telephone = "+257 72 30 70 12"
-    email = "info@eibu.bi"
+    telephone = ""
+    email = ""
     site = ""
-    siege = "Bujumbura, Burundi"
+    siege = ""
     b_postale = ""
     emplacement = ""
     
@@ -147,7 +136,7 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
         if institution.emplacement:
             emplacement = institution.emplacement
 
-    # Construction de l'adresse complète (SANS POINTS NOIRS)
+    # Construction de l'adresse complète
     adresse_parts = []
     if siege:
         adresse_parts.append(siege)
@@ -158,7 +147,7 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
     
     adresse = " | ".join(filter(None, adresse_parts)) if adresse_parts else "Bujumbura, Burundi"
     
-    # Construction des coordonnées complètes (SANS POINTS NOIRS)
+    # Construction des coordonnées complètes
     contact_parts = []
     if telephone:
         contact_parts.append(telephone)
@@ -242,13 +231,20 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
     # LIGNE 2: Séparateur
     data.append([Paragraph("", style_info), Paragraph("─" * 90, style_separator), Paragraph("", style_info)])
     
-    # LIGNE 3: Informations contextuelles
+    # LIGNE 3: Informations contextuelles (Campus, Classe à gauche / Année, Date à droite)
     data.append([Paragraph("", style_info), left_info, right_info])
     
-    # LIGNE 4: Espace avant le titre
+    # LIGNE 4: Banque (si fournie) - AJOUTÉ ICI, APRÈS LES INFOS CONTEXTUELLES
+    if banque_info:
+        banque_paragraph = Paragraph(f"<b>Banque sélectionnée :</b> {banque_info}", style_info_bold)
+        data.append([Paragraph("", style_info), banque_paragraph, Paragraph("", style_info)])
+        # Petit espace après la banque
+        data.append([Paragraph("", style_info), Spacer(1, 3), Paragraph("", style_info)])
+    
+    # LIGNE 5: Espace avant le titre
     data.append([Paragraph("", style_info), Spacer(1, 5), Paragraph("", style_info)])
     
-    # LIGNE 5: Titre
+    # LIGNE 6: Titre
     if titre:
         data.append([Paragraph("", style_info), Paragraph(f"<b>{titre.upper()}</b>", style_titre), Paragraph("", style_info)])
     
@@ -260,7 +256,7 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
     style_commands = [
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+        ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Aligné à gauche pour la banque
         ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
         ('LEFTPADDING', (0, 0), (-1, -1), 5),
         ('RIGHTPADDING', (0, 0), (-1, -1), 5),
@@ -268,8 +264,13 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
         ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
     ]
     
+    # Déterminer l'index de la ligne de titre
+    titre_index = 5  # Par défaut, si pas de banque
+    if banque_info:
+        titre_index = 6  # Si banque présente, le titre recule d'une ligne
+    
     if titre:
-        style_commands.append(('BACKGROUND', (1, 4), (1, 4), colors.HexColor('#f8fafc')))
+        style_commands.append(('BACKGROUND', (1, titre_index), (1, titre_index), colors.HexColor('#f8fafc')))
     
     table.setStyle(TableStyle(style_commands))
     
@@ -280,15 +281,6 @@ def build_pdf_header_pos(eleve=None, classe_obj=None, id_campus=None, id_cycle=N
     """
     Version POS du header professionnel - Chaque info sur sa propre ligne
     """
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.lib import colors
-    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image
-    from reportlab.lib.units import cm, mm
-    from datetime import datetime
-    import os
-    from django.conf import settings
-    from app.models import Institution, Campus, Annee
     
     # Tailles pour POS
     font_size_normal = 8
@@ -1218,6 +1210,9 @@ def generate_historique_pdf(request):
         id_trimestre = request.GET.get('trimestre')
         id_compte = request.GET.get('compte')
 
+        # ============================================
+        # CONSTRUCTION DE LA REQUÊTE DE BASE
+        # ============================================
         paiements_qs = Paiement.objects.select_related(
             'id_eleve',
             'id_variable',
@@ -1233,17 +1228,31 @@ def generate_historique_pdf(request):
             'date_paie'
         )
 
+        # Filtres de base
         if id_annee:
             paiements_qs = paiements_qs.filter(id_annee=id_annee)
         if id_classe:
             paiements_qs = paiements_qs.filter(id_classe_active=id_classe)
         if id_eleve:
             paiements_qs = paiements_qs.filter(id_eleve=id_eleve)
-        if id_trimestre:
-            paiements_qs = paiements_qs.filter(id_variable__trimestre=id_trimestre)
         if id_compte:
             paiements_qs = paiements_qs.filter(id_compte=id_compte)
 
+        # ============================================
+        # FILTRE PAR TRIMESTRE VIA VARIABLEPRIX
+        # ============================================
+        if id_trimestre:
+            from app.models import VariablePrix
+            
+            variable_ids = VariablePrix.objects.filter(
+                id_annee_trimestre_id=id_trimestre
+            ).values_list('id_variable_id', flat=True).distinct()
+            
+            paiements_qs = paiements_qs.filter(id_variable_id__in=variable_ids)
+
+        # ============================================
+        # CRÉATION DU PDF
+        # ============================================
         response = HttpResponse(content_type='application/pdf')
         response['Content-Disposition'] = 'inline; filename="Rapport_Financier.pdf"'
 
@@ -1260,9 +1269,7 @@ def generate_historique_pdf(request):
         styles = getSampleStyleSheet()
 
         small = ParagraphStyle('small', parent=styles['Normal'], fontSize=8, leading=10)
-        title_style = ParagraphStyle('title', fontSize=16, alignment=1, fontName='Helvetica-Bold')
         left_style = ParagraphStyle('left', fontSize=9, leading=11)
-        right_style = ParagraphStyle('right', fontSize=9, leading=11, alignment=2)
 
         # Logo
         logo_path = finders.find('assets/img/logo.png')
@@ -1270,63 +1277,56 @@ def generate_historique_pdf(request):
             elements.append(Image(logo_path, width=25*mm, height=25*mm))
         elements.append(Spacer(1, 4*mm))
 
+        # Récupérer la première ligne pour les infos d'en-tête
         p_ref = paiements_qs.first()
+        
+        # ============================================
+        # PRÉPARER LES INFORMATIONS POUR LE HEADER
+        # ============================================
+        eleve_obj = None
+        classe_obj = None
+        id_campus_val = None
+        id_cycle_val = None
+        banque_info = None
+        
         if p_ref:
-            annee_txt = p_ref.id_annee.annee
-            campus_txt = p_ref.id_classe_active.id_campus.campus
-            nom_classe = p_ref.id_classe_active.classe_id.classe
-            groupe = p_ref.id_classe_active.groupe or ""
-            classe_info = f"{nom_classe} {groupe}".strip()
-            eleve_txt = f"{p_ref.id_eleve.nom} {p_ref.id_eleve.prenom}" if id_eleve else "Tous"
-            banque_txt = f"{p_ref.id_compte.id_banque.banque} - {p_ref.id_compte.compte}" if id_compte and p_ref.id_compte else None
-        else:
-            annee_txt = campus_txt = classe_info = eleve_txt = banque_txt = "-"
+            if p_ref.id_classe_active:
+                classe_obj = p_ref.id_classe_active
+                if p_ref.id_classe_active.id_campus:
+                    id_campus_val = p_ref.id_classe_active.id_campus.id_campus
+                if hasattr(p_ref.id_classe_active, 'id_cycle_actif') and p_ref.id_classe_active.id_cycle_actif:
+                    id_cycle_val = p_ref.id_classe_active.id_cycle_actif.id_cycle_actif
+            
+            if id_eleve and p_ref.id_eleve:
+                eleve_obj = p_ref.id_eleve
+            
+            if id_compte and p_ref.id_compte:
+                banque_info = f"{p_ref.id_compte.id_banque.banque} - {p_ref.id_compte.compte}"
 
-        # Titre
-        # elements.append(Paragraph("RAPPORT FINANCIER", title_style))
-        # elements.append(Spacer(1, 2*mm))
-
-        # Ligne séparatrice
-        elements.append(Table([[""]], colWidths=[190*mm], style=[('LINEBELOW', (0,0), (-1,-1), 1, colors.grey)]))
+        # ============================================
+        # HEADER AVEC build_pdf_header (MODIFIÉ POUR ACCEPTER BANQUE)
+        # ============================================
+        header_table = build_pdf_header(
+            eleve=eleve_obj,
+            classe_obj=classe_obj,
+            id_campus=id_campus_val,
+            id_cycle=id_cycle_val,
+            id_annee=int(id_annee) if id_annee else None,
+            titre="HISTORIQUE DES PAIEMENTS",
+            banque_info=banque_info  # NOUVEAU paramètre pour la banque
+        )
+        elements.append(header_table)
         elements.append(Spacer(1, 4*mm))
 
-        # Header
-        # institution = Institution.objects.first()
-        # header_table = Table(
-        #     [[
-        #         Paragraph(f"<b>{institution.nom_ecole if institution else 'N/A'}</b>", title_style),
-        #         Paragraph(
-
-        #             f"<b>Campus :</b> {campus_txt}<br/><b>Classe :</b> {classe_info}<br/><b>Élève :</b> {eleve_txt}",
-        #             left_style
-        #         ),
-        #         Paragraph(f"<b>Année académique :</b><br/>{annee_txt}", right_style)
-        #     ]],
-        #     colWidths=[120*mm, 70*mm]
-        # )
-        id_campus = p_ref.id_classe_active.id_campus
-        header_table = build_pdf_header(
-            eleve=eleve_txt,
-            classe_obj=classe_info,
-            id_campus= id_campus if 'id_campus' in locals() else None,
-            id_annee=annee_txt,
-            titre="HISTORIQUE DES PAIEMENTS"
-        )
-        header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
-        elements.append(header_table)
-        elements.append(Spacer(1, 2*mm))
-
-        # Affichage de la banque en dessous du nom de l'élève si sélectionnée
-        if banque_txt:
-            elements.append(Paragraph(f"<b>Banque :</b> {banque_txt}", left_style))
-            elements.append(Spacer(1, 4*mm))
-
-        # Déterminer si on affiche la colonne banque
-        afficher_banque = not id_compte
+        # ============================================
+        # DÉTERMINER LES COLONNES DU TABLEAU
+        # ============================================
+        # Si une banque est sélectionnée, on NE l'affiche PAS dans le tableau
+        afficher_banque_dans_tableau = not id_compte
 
         # Tableau
         table_header = ["Élève", "Variable", "Montant", "Date paiement"]
-        if afficher_banque:
+        if afficher_banque_dans_tableau:
             table_header.append("Banque / Compte")
         data = [table_header]
 
@@ -1340,18 +1340,19 @@ def generate_historique_pdf(request):
                 f"{p.montant:,.0f}",
                 Paragraph(p.date_paie.strftime('%d/%m/%Y'), small)
             ]
-            if afficher_banque:
+            if afficher_banque_dans_tableau:
                 row.append(Paragraph(f"{p.id_compte.id_banque.banque} - {p.id_compte.compte}" if p.id_compte else "-", small))
             data.append(row)
 
         # Total général
         total_row = ["", "TOTAL GÉNÉRAL", f"{total_general:,.0f}", ""]
-        if afficher_banque:
+        if afficher_banque_dans_tableau:
             total_row.append("")
         data.append(total_row)
 
+        # Largeurs des colonnes
         colWidths = [45*mm, 40*mm, 25*mm, 30*mm]
-        if afficher_banque:
+        if afficher_banque_dans_tableau:
             colWidths.append(45*mm)
 
         table = Table(data, colWidths=colWidths, repeatRows=1)
@@ -1371,13 +1372,15 @@ def generate_historique_pdf(request):
         return response
 
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
-
 
 def generate_dette_pdf(request):
     try:
         id_annee = request.GET.get('annee')
         id_classe = request.GET.get('classe')
+        id_campus = request.GET.get('id_campus')
         id_trimestre = request.GET.get('trimestre')
 
         if not id_annee or not id_classe:
@@ -1501,7 +1504,7 @@ def generate_dette_pdf(request):
         elements.append(Spacer(1, 5*mm))
         # header_table = Table(header_data, colWidths=[30*mm, 110*mm, 40*mm])
         header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
-        elements.append(header_table)
+        # elements.append(header_table)
         elements.append(Spacer(1, 10*mm))
 
 
@@ -1776,17 +1779,18 @@ def generate_historique_excel(request):
         eleve = request.GET.get('eleve')
         compte = request.GET.get('compte')
 
+        # ============================================
+        # CONSTRUCTION DE LA REQUÊTE DE BASE
+        # ============================================
         paiements = Paiement.objects.select_related(
             'id_eleve',
             'id_variable',
-            'id_compte'
+            'id_compte',
+            'id_compte__id_banque'
         ).filter(
             id_annee=annee,
             id_classe_active=classe
         ).order_by('id_eleve__nom', 'id_eleve__prenom')
-
-        if trimestre:
-            paiements = paiements.filter(id_trimestre=trimestre)
 
         if eleve:
             paiements = paiements.filter(id_eleve=eleve)
@@ -1794,24 +1798,54 @@ def generate_historique_excel(request):
         if compte:
             paiements = paiements.filter(id_compte=compte)
 
-        # ======================
-        # CREATION EXCEL
-        # ======================
+        # ============================================
+        # FILTRE PAR TRIMESTRE VIA VARIABLEPRIX
+        # ============================================
+        if trimestre:
+            from app.models import VariablePrix
+            
+            variable_ids = VariablePrix.objects.filter(
+                id_annee_trimestre_id=trimestre
+            ).values_list('id_variable_id', flat=True).distinct()
+            
+            paiements = paiements.filter(id_variable_id__in=variable_ids)
+        
         wb = Workbook()
         ws = wb.active
         ws.title = "Rapport Financier"
 
         # Titre
         ws.merge_cells('A1:E1')
-        ws['A1'] = "RAPPORT FINANCIER"
+        ws['A1'] = "RAPPORT FINANCIER - HISTORIQUE DES PAIEMENTS"
         ws['A1'].font = Font(size=14, bold=True)
         ws['A1'].alignment = Alignment(horizontal="center")
+
+        # Informations de filtre (optionnel)
+        ws.merge_cells('A2:E2')
+        filter_info = []
+        if annee:
+            filter_info.append(f"Année: {annee}")
+        if classe:
+            filter_info.append(f"Classe: {classe}")
+        if trimestre:
+            filter_info.append(f"Trimestre: {trimestre}")
+        if eleve:
+            filter_info.append(f"Élève: {eleve}")
+        if compte:
+            filter_info.append(f"Compte: {compte}")
+        
+        ws['A2'] = " | ".join(filter_info) if filter_info else "Tous les filtres"
+        ws['A2'].font = Font(italic=True)
+        ws['A2'].alignment = Alignment(horizontal="center")
+
+        # Ligne vide
+        ws.append([])
 
         # Entêtes
         headers = ["Élève", "Variable", "Montant payé", "Date paiement", "Banque / Compte"]
         ws.append(headers)
 
-        for cell in ws[2]:
+        for cell in ws[4]:  # Ligne 4 car les 3 premières sont occupées
             cell.font = Font(bold=True)
 
         total_general = 0
@@ -1823,18 +1857,26 @@ def generate_historique_excel(request):
 
             ws.append([
                 str(p.id_eleve),
-                str(p.id_variable),
+                str(p.id_variable.variable),
                 montant,
                 p.date_paie.strftime("%d/%m/%Y") if p.date_paie else "",
-                str(p.id_compte) if p.id_compte else ""
+                f"{p.id_compte.id_banque.banque} - {p.id_compte.compte}" if p.id_compte else "-"
             ])
 
         # Ligne total
-        ws.append(["", "TOTAL GENERAL", total_general, "", ""])
-        ws[f'B{ws.max_row}'].font = Font(bold=True)
-        ws[f'C{ws.max_row}'].font = Font(bold=True)
+        ws.append(["", "TOTAL GÉNÉRAL", total_general, "", ""])
+        
+        # Style de la ligne de total
+        total_row = ws.max_row
+        ws[f'B{total_row}'].font = Font(bold=True)
+        ws[f'C{total_row}'].font = Font(bold=True)
+        ws[f'C{total_row}'].number_format = '#,##0'
 
-# Ajuster largeur colonnes (version safe)
+        # Format des montants
+        for row in range(5, total_row):
+            ws[f'C{row}'].number_format = '#,##0'
+
+        # Ajuster largeur colonnes
         for i, column_cells in enumerate(ws.columns, 1):
             max_length = 0
             for cell in column_cells:
@@ -1843,9 +1885,9 @@ def generate_historique_excel(request):
                         max_length = max(max_length, len(str(cell.value)))
                 except:
                     pass
-
-            ws.column_dimensions[get_column_letter(i)].width = max_length + 2
-
+            # Limiter à 50 caractères max
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[get_column_letter(i)].width = adjusted_width
 
         # Response
         response = HttpResponse(
@@ -1857,6 +1899,8 @@ def generate_historique_excel(request):
         return response
 
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return JsonResponse({
             "success": False,
             "message": str(e)

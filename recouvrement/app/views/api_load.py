@@ -1815,42 +1815,107 @@ def export_excel_multi(tableau_complet, tableau_reduction, tableau_derogation,
     ws.cell(row=current_row, column=1, value=f"Edite le {datetime.now().strftime('%d/%m/%Y %H:%M')}")
     current_row += 2
 
-    # Tableaux demandés
-    sections = [
-        (tableau_complet, "1. PAIEMENTS COMPLETS", headers_complet),
-        (tableau_reduction, "2. RÉDUCTIONS", headers_reduction),
-        (tableau_derogation, "3. DÉROGATIONS", headers_derogation),
-        (tableau_penalite, "4. PÉNALITÉS", headers_penalite),
-        (tableau_dette, "5. DETTES", headers_dette)
-    ]
+    # ============================================
+    # SECTIONS - Uniquement celles avec des données
+    # ============================================
+    sections = []
     
-    for data, title, headers in sections:
-        if data:
-            current_row = add_section_excel(ws, title, data, headers, current_row)
+    # N'ajouter que les sections qui ont des données
+    if tableau_complet:
+        sections.append((tableau_complet, "1. PAIEMENTS COMPLETS", headers_complet))
+    if tableau_reduction:
+        sections.append((tableau_reduction, "2. RÉDUCTIONS", headers_reduction))
+    if tableau_derogation:
+        sections.append((tableau_derogation, "3. DÉROGATIONS", headers_derogation))
+    if tableau_penalite:
+        sections.append((tableau_penalite, "4. PÉNALITÉS", headers_penalite))
+    if tableau_dette:
+        sections.append((tableau_dette, "5. DETTES", headers_dette))
+    
+    # Renumérotation continue
+    for idx, (data, title, headers) in enumerate(sections, 1):
+        # Remplacer le premier chiffre par le nouvel index
+        nouveau_titre = title.replace(title[0], str(idx), 1)
+        
+        # Titre de section
+        ws.cell(row=current_row, column=1, value=nouveau_titre).font = Font(bold=True, size=11, color="FFFFFF")
+        ws.cell(row=current_row, column=1).fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        current_row += 1
+        
+        # En-têtes
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=current_row, column=col, value=header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
+            cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                                top=Side(style='thin'), bottom=Side(style='thin'))
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+        current_row += 1
+        
+        # Données
+        for row_data in data:
+            for col, value in enumerate(row_data, 1):
+                cell = ws.cell(row=current_row, column=col, value=value)
+                cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                                    top=Side(style='thin'), bottom=Side(style='thin'))
+                if col == 1:
+                    cell.alignment = Alignment(horizontal='left', vertical='center')
+                else:
+                    cell.alignment = Alignment(horizontal='right', vertical='center')
+                # Activer le retour à la ligne pour les cellules avec sauts de ligne
+                if col == 3 and isinstance(value, str) and "\n" in value:
+                    cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
             current_row += 1
+        
+        current_row += 1
 
-    # Récapitulatif
+    # ============================================
+    # RÉCAPITULATIF
+    # ============================================
+    total_eleves_classe = Eleve_inscription.objects.filter(id_classe=classe.id_classe_active).count()
+    
     current_row += 1
     ws.cell(row=current_row, column=1, value="RÉCAPITULATIF").font = Font(bold=True, size=11)
     current_row += 1
     
     recap_data = [
-        ["Catégorie", "Nombre"],
-        ["Complets", len(tableau_complet)],
-        ["Réductions", len(tableau_reduction)],
-        ["Dérogations", len(tableau_derogation)],
-        ["Pénalités", len(tableau_penalite)],
-        ["Endettés", len(tableau_dette)]
+        ["Catégorie", "Nombre d'élèves", "Pourcentage"],
+        ["Complets", len(tableau_complet), f"{len(tableau_complet)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Réductions", len(tableau_reduction), f"{len(tableau_reduction)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Dérogations", len(tableau_derogation), f"{len(tableau_derogation)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Pénalités", len(tableau_penalite), f"{len(tableau_penalite)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Endettés", len(tableau_dette), f"{len(tableau_dette)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["TOTAL", total_eleves_classe, "100%"]
     ]
     
-    for row_data in recap_data:
+    # En-têtes du récapitulatif
+    for col, value in enumerate(recap_data[0], 1):
+        cell = ws.cell(row=current_row, column=col, value=value)
+        cell.font = Font(bold=True)
+        cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                            top=Side(style='thin'), bottom=Side(style='thin'))
+        cell.fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
+        cell.alignment = Alignment(horizontal='center')
+    current_row += 1
+    
+    # Données du récapitulatif
+    for row_data in recap_data[1:]:
         for col, value in enumerate(row_data, 1):
             cell = ws.cell(row=current_row, column=col, value=value)
-            if col == 2:  # Colonne des nombres
+            cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), 
+                                top=Side(style='thin'), bottom=Side(style='thin'))
+            if row_data[0] == "TOTAL":
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="E6E6E6", end_color="E6E6E6", fill_type="solid")
+            if col == 1:
+                cell.alignment = Alignment(horizontal='left')
+            else:
                 cell.alignment = Alignment(horizontal='center')
         current_row += 1
 
-    # Ajuster la largeur des colonnes
+    # ============================================
+    # AJUSTEMENT DES LARGEURS DE COLONNES
+    # ============================================
     for col in range(1, ws.max_column + 1):
         max_length = 0
         column_letter = get_column_letter(col)
@@ -1859,7 +1924,6 @@ def export_excel_multi(tableau_complet, tableau_reduction, tableau_derogation,
             try:
                 if cell.value:
                     if isinstance(cell.value, str) and "\n" in cell.value:
-                        # Pour les cellules avec sauts de ligne, prendre la ligne la plus longue
                         lines = cell.value.split("\n")
                         max_line_length = max(len(line) for line in lines)
                         max_length = max(max_length, max_line_length)
@@ -1867,19 +1931,22 @@ def export_excel_multi(tableau_complet, tableau_reduction, tableau_derogation,
                         max_length = max(max_length, len(str(cell.value)))
             except:
                 pass
-        # Largeurs adaptatives
+        
+        # Largeurs adaptatives selon le type de colonne
         if col == 1:  # Colonne Élève
             adjusted_width = min(max_length + 2, 35)
         elif col == 3 and any([tableau_reduction, tableau_derogation, tableau_penalite]):  # Colonne des détails
             adjusted_width = min(max_length + 4, 50)
+        elif col <= 3:  # Autres colonnes
+            adjusted_width = min(max_length + 2, 20)
         else:
             adjusted_width = min(max_length + 2, 15)
+            
         ws.column_dimensions[column_letter].width = adjusted_width
 
     response = HttpResponse(
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
     response["Content-Disposition"] = 'attachment; filename="rapport_paiements.xlsx"'
     wb.save(response)
 
@@ -2025,52 +2092,28 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
     elements = []
     styles = getSampleStyleSheet()
     
-    # # Style pour le titre principal
-    # title_style = ParagraphStyle(
-    #     'CustomTitle',
-    #     parent=styles['Heading1'],
-    #     fontSize=16,
-    #     textColor=colors.HexColor('#2F528F'),
-    #     alignment=TA_CENTER,
-    #     spaceAfter=2,
-    #     spaceBefore=0
-    # )
+    # Style pour le titre de section
+    section_style = ParagraphStyle(
+        'SectionTitle',
+        parent=styles['Heading2'],
+        fontSize=12,
+        textColor=colors.HexColor('#2F528F'),
+        spaceAfter=4,
+        spaceBefore=8,
+        alignment=TA_LEFT
+    )
     
-    # # Style pour les informations
-    # info_style = ParagraphStyle(
-    #     'InfoStyle',
-    #     parent=styles['Normal'],
-    #     fontSize=10,
-    #     alignment=TA_CENTER,
-    #     textColor=colors.HexColor('#666666'),
-    #     spaceAfter=2
-    # )
+    # Style pour le nombre d'élèves
+    count_style = ParagraphStyle(
+        'CountStyle',
+        parent=styles['Normal'],
+        fontSize=9,
+        textColor=colors.HexColor('#666666'),
+        spaceAfter=4,
+        alignment=TA_LEFT
+    )
     
-    # # Titre principal
-    # elements.append(Paragraph("RAPPORT DES PAIEMENTS", title_style))
-    
-    # Classe et période sur la même ligne
-    # if date_debut and date_fin:
-    #     info = f"{classe} - Du {date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')}"
-    # elif date_debut:
-    #     info = f"{classe} - A partir du {date_debut.strftime('%d/%m/%Y')}"
-    # elif date_fin:
-    #     info = f"{classe} - Jusqu'au {date_fin.strftime('%d/%m/%Y')}"
-    # else:
-    #     info = f"{classe} - Toute la période"
-    
-    # elements.append(Paragraph(info, info_style))
-    
-    # # Date d'édition
-    # date_style = ParagraphStyle(
-    #     'DateStyle',
-    #     parent=styles['Normal'],
-    #     fontSize=8,
-    #     alignment=TA_RIGHT,
-    #     textColor=colors.HexColor('#999999')
-    # )
-    # elements.append(Paragraph(f"Edite le {datetime.now().strftime('%d/%m/%Y %H:%M')}", date_style))
-    # elements.append(Spacer(1, 0.8*cm))
+    # Construire le titre avec la période
     if date_debut and date_fin:
         titre = f"RAPPORT DES PAIEMENTS - Du {date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')}"
     elif date_debut:
@@ -2086,7 +2129,6 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
     cycle_id = None
     
     if classe:
-        # Adapter selon la structure de votre objet Classe_active
         if hasattr(classe, 'id_campus'):
             campus_id = classe.id_campus.id_campus if hasattr(classe.id_campus, 'id_campus') else classe.id_campus
         if hasattr(classe, 'id_annee'):
@@ -2096,7 +2138,7 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
     
     # Appeler la fonction header
     header_table = build_pdf_header(
-        eleve=None,  # Pas d'élève spécifique ici
+        eleve=None,
         classe_obj=classe,
         id_campus=campus_id,
         id_cycle=cycle_id,
@@ -2107,34 +2149,92 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
     elements.append(header_table)
     elements.append(Spacer(1, 0.8*cm))
 
-    # Sections demandées
-    sections = [
-        ("1. PAIEMENTS COMPLETS", tableau_complet, headers_complet),
-        ("2. RÉDUCTIONS", tableau_reduction, headers_reduction),
-        ("3. DÉROGATIONS", tableau_derogation, headers_derogation),
-        ("4. PÉNALITÉS", tableau_penalite, headers_penalite),
-        ("5. DETTES", tableau_dette, headers_dette)
-    ]
+    # ============================================
+    # SECTIONS - Numérotation continue (1,2,3,4)
+    # ============================================
+    sections = []
     
-    for titre, data, headers in sections:
+    # N'ajouter que les sections qui ont des données
+    if tableau_complet:
+        sections.append(("1. PAIEMENTS COMPLETS", tableau_complet, headers_complet))
+    if tableau_reduction:
+        sections.append(("2. RÉDUCTIONS", tableau_reduction, headers_reduction))
+    if tableau_derogation:
+        sections.append(("3. DÉROGATIONS", tableau_derogation, headers_derogation))
+    if tableau_penalite:
+        sections.append(("4. PÉNALITÉS", tableau_penalite, headers_penalite))
+    if tableau_dette:
+        sections.append(("5. DETTES", tableau_dette, headers_dette))
+    
+    # Renumérotation continue
+    for idx, (titre_section, data, headers) in enumerate(sections, 1):
+        # Remplacer le premier chiffre par le nouvel index
+        nouveau_titre = titre_section.replace(titre_section[0], str(idx), 1)
+        
+        # Titre de section
+        elements.append(Paragraph(nouveau_titre, section_style))
+        
         if data:
-            section_pdf(elements, titre, data, headers)
+            # Afficher le tableau
+            table_data = [headers] + data
+            col_widths = calculate_dynamic_widths(table_data, headers)
+            
+            table = Table(table_data, colWidths=col_widths, repeatRows=1)
+            
+            style = [
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F528F')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 9),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+                ('TOPPADDING', (0, 0), (-1, 0), 8),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+            ]
+            
+            if len(headers) > 3:
+                style.append(('ALIGN', (2, 1), (2, -1), 'LEFT'))
+            
+            table.setStyle(TableStyle(style))
+            
+            # Couleurs alternées
+            for i in range(1, len(table_data)):
+                if i % 2 == 0:
+                    bg_color = colors.HexColor('#F9F9F9')
+                else:
+                    bg_color = colors.HexColor('#FFFFFF')
+                
+                table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, i), (-1, i), bg_color),
+                ]))
+            
+            elements.append(table)
+        
+        elements.append(Spacer(1, 0.5*cm))
     
-    # Récapitulatif
-    elements.append(Spacer(1, 0.5*cm))
+    # ============================================
+    # RÉCAPITULATIF
+    # ============================================
     elements.append(Paragraph("RÉCAPITULATIF", styles['Heading3']))
     elements.append(Spacer(1, 0.2*cm))
     
+    total_eleves_classe = Eleve_inscription.objects.filter(id_classe=classe.id_classe_active).count()
+    
     recap_data = [
-        ["Catégorie", "Nombre d'élèves"],
-        ["Complets", len(tableau_complet)],
-        ["Réductions", len(tableau_reduction)],
-        ["Dérogations", len(tableau_derogation)],
-        ["Pénalités", len(tableau_penalite)],
-        ["Endettés", len(tableau_dette)]
+        ["Catégorie", "Nombre d'élèves", "Pourcentage"],
+        ["Complets", len(tableau_complet), f"{len(tableau_complet)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Réductions", len(tableau_reduction), f"{len(tableau_reduction)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Dérogations", len(tableau_derogation), f"{len(tableau_derogation)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Pénalités", len(tableau_penalite), f"{len(tableau_penalite)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["Endettés", len(tableau_dette), f"{len(tableau_dette)/total_eleves_classe*100:.1f}%" if total_eleves_classe > 0 else "0%"],
+        ["TOTAL", total_eleves_classe, "100%"]
     ]
     
-    recap_table = Table(recap_data, colWidths=[5*cm, 3*cm])
+    recap_table = Table(recap_data, colWidths=[5*cm, 3*cm, 3*cm])
     recap_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F528F')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -2143,14 +2243,15 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
         ('FONTSIZE', (0, 0), (-1, 0), 10),
         ('FONTSIZE', (0, 1), (-1, -1), 9),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#F9F9F9')),
+        ('BACKGROUND', (0, 1), (-1, -2), colors.HexColor('#F9F9F9')),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#E6E6E6')),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
     
     elements.append(recap_table)
 
-    # Générer le PDF
     doc.build(elements)
 
     pdf = buffer.getvalue()
