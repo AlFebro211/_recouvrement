@@ -73,6 +73,22 @@
     </div>
 </div>
 
+<!-- MODAL DETAILS STATS -->
+<div id="statsModal" class="stats-modal">
+    <div class="stats-modal-content">
+        <div class="stats-modal-header">
+            <h3 id="modalTitle">Détails</h3>
+            <span id="closeModal">&times;</span>
+        </div>
+        <div style="padding:10px 20px; display:flex; gap:10px; background:#f3f4f6">
+            <button id="downloadExcel" style="background:#16a34a;color:white;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;">⬇ Excel</button>
+            <button id="downloadPDF" style="background:#2563eb;color:white;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;">⬇ PDF</button>
+        </div>
+
+        <div id="modalBody"></div>
+    </div>
+</div>
+
 <style>
 :root {
     --primary-color: #2563eb;
@@ -90,36 +106,20 @@
 .dashboard-title {
     font-size: 2rem;
     font-weight: 700;
-    color: #06b6d4; /* Couleur principale pour visibilité */
+    color: #06b6d4;
     text-align: center;
     margin-top: 60px;
     margin-bottom: 30px;
-    text-shadow: 1px 1px 4px rgba(0,0,0,0.25); /* légère ombre pour le contraste */
+    text-shadow: 1px 1px 4px rgba(0,0,0,0.25);
 }
-.filter-box { 
-    display:flex; 
-    gap:10px; 
-    flex-wrap:wrap; 
-    margin-bottom:25px; 
-}
-.filter-box select, .filter-box button { 
-    padding:8px 12px;
-    border-radius:8px;
-    border:1px solid #ddd;
- }
-.filter-box button { 
-    background:var(--primary-color);
-    color:white;
-    cursor:pointer;
-    font-weight:bold;
- }
- /* FILTER GROUP STYLES */
+
+/* FILTER GROUP STYLES */
 .filter-box {
     display: flex;
     gap: 15px;
     flex-wrap: wrap;
     margin-bottom: 25px;
-    align-items: flex-end; /* Aligne les selects avec le bas des labels */
+    align-items: flex-end;
 }
 
 .filter-group {
@@ -172,7 +172,7 @@
     font-style: italic;
 }
 
-/* Amélioration des cartes */
+/* CARDS */
 .dashboard-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -216,12 +216,7 @@
 .orange { background: linear-gradient(135deg, #f97316, #ea580c); }
 .gray { background: linear-gradient(135deg, #6b7280, #4b5563); }
 
-
 /* MODAL */
-/* ==============================
-        MODAL DESIGN PRO
-=================================*/
-
 .stats-modal{
     position:fixed;
     inset:0;
@@ -346,7 +341,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
-
 <script>
 $(document).ready(function(){
 
@@ -363,7 +357,7 @@ $(document).ready(function(){
     }
 
     // ==========================
-    // FONCTION POUR TITRE PROFESSIONNEL
+    // FONCTION POUR TITRE (SANS SOUS-TITRE)
     // ==========================
     function getProfessionalTitle(type) {
         const titles = {
@@ -375,41 +369,6 @@ $(document).ready(function(){
             'rejet': 'RELEVÉ DES PAIEMENTS REJETÉS'
         };
         return titles[type] || 'RAPPORT FINANCIER';
-    }
-
-    // ==========================
-    // FONCTION POUR SOUS-TITRE AVEC FILTRES
-    // ==========================
-    function getSubtitle() {
-        let parts = [];
-        
-        const anneeText = $('#anneeFilter option:selected').text();
-        if (anneeText && anneeText !== 'Année scolaire') {
-            parts.push(`Année: ${anneeText}`);
-        }
-        
-        const classeOpt = $('#classeFilter option:selected');
-        const classeFullText = classeOpt.text();
-        if (classeFullText && classeFullText !== 'Classe') {
-            parts.push(`Filtres: ${classeFullText}`);
-        }
-        
-        const trimestreText = $('#trimestreFilter option:selected').text();
-        if (trimestreText && trimestreText !== 'Trimestre') {
-            parts.push(`Trimestre: ${trimestreText}`);
-        }
-        
-        const variableText = $('#variableFilter option:selected').text();
-        if (variableText && variableText !== 'Variable') {
-            parts.push(`Variable: ${variableText}`);
-        }
-        
-        const eleveText = $('#eleveFilter option:selected').text();
-        if (eleveText && eleveText !== 'Élève') {
-            parts.push(`Élève: ${eleveText}`);
-        }
-        
-        return parts.length > 0 ? parts.join(' • ') : '';
     }
 
     // ==========================
@@ -575,81 +534,75 @@ $(document).ready(function(){
     // STAT CARD CLICK
     // ==========================
     $('.stat-card').on('click', function(){
-    const type = $(this).data('type');
-    currentStatsType = type;
+        const type = $(this).data('type');
+        currentStatsType = type;
 
-    const annee = $('#anneeFilter').val();
-    const classe = $('#classeFilter').val() || '';
-    const eleve = $('#eleveFilter').val() || '';
-    const trimestre = $('#trimestreFilter').val() || '';
-    const variable = $('#variableFilter').val() || '';
+        const annee = $('#anneeFilter').val();
+        const classe = $('#classeFilter').val() || '';
+        const eleve = $('#eleveFilter').val() || '';
+        const trimestre = $('#trimestreFilter').val() || '';
+        const variable = $('#variableFilter').val() || '';
 
-    if(!annee) {
-        alert('Veuillez sélectionner une année scolaire');
-        return;
-    }
-
-    const professionalTitle = getProfessionalTitle(type);
-    const subtitle = getSubtitle();
-
-    $('#modalTitle').html(`
-        <div style="display: flex; flex-direction: column;">
-            <span style="font-size: 20px; font-weight: 700;">${professionalTitle}</span>
-            ${subtitle ? `<span style="font-size: 13px; font-weight: 400; opacity: 0.9; margin-top: 4px;">${subtitle}</span>` : ''}
-        </div>
-    `);
-    
-    $('#modalBody').html('<div style="text-align: center; padding: 40px;"><div class="spinner"></div> Chargement en cours...</div>');
-    $('#statsModal').css('display','flex');
-
-    fetch(`/dashboard-details/?type=${type}&annee=${annee}&classe=${classe}&eleve=${eleve}&trimestre=${trimestre}&variable=${variable}`)
-    .then(res => res.json())
-    .then(data => {
-        if(!data.success || !data.rows || !data.rows.length){
-            $('#modalBody').html('<div style="text-align: center; padding: 40px; color: #666;">Aucune donnée disponible pour les filtres sélectionnés</div>');
+        if(!annee) {
+            alert('Veuillez sélectionner une année scolaire');
             return;
         }
 
-        const showEleve = type === 'dette' || type === 'paye' || type === 'transactions';
-        let totalGeneral = 0;
+        const professionalTitle = getProfessionalTitle(type);
 
-        let html = `<table style="width:100%; border-collapse: collapse; font-size: 14px;">
-            <thead>
-                <tr>
-                    <th style="text-align:left; padding: 14px; background: #1e3c72; color: white; border-radius: 8px 0 0 0;">Classe</th>
-                    ${showEleve ? '<th style="text-align:left; padding: 14px; background: #1e3c72; color: white;">Élève</th>' : ''}
-                    <th style="text-align:left; padding: 14px; background: #1e3c72; color: white;">Variable</th>
-                    <th style="text-align:right; padding: 14px; background: #1e3c72; color: white; border-radius: 0 8px 0 0;">Montant</th>
-                </tr>
-            </thead>
-            <tbody>`;
+        $('#modalTitle').text(professionalTitle);
+        
+        $('#modalBody').html('<div style="text-align: center; padding: 40px;"><div class="spinner"></div> Chargement en cours...</div>');
+        $('#statsModal').css('display','flex');
 
-        data.rows.forEach((r, index) => {
-            totalGeneral += parseFloat(r.total || 0);
-            const bgColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-            
-            html += `<tr style="background: ${bgColor};">
-                <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0;">${r.classe || '-'}</td>
-                ${showEleve ? `<td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0;">${r.nom || '-'}</td>` : ''}
-                <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0;">${r.variable || '-'}</td>
-                <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; text-align:right; font-weight: 500;">${formatMontant(r.total || 0)}</td>
+        fetch(`/dashboard-details/?type=${type}&annee=${annee}&classe=${classe}&eleve=${eleve}&trimestre=${trimestre}&variable=${variable}`)
+        .then(res => res.json())
+        .then(data => {
+            if(!data.success || !data.rows || !data.rows.length){
+                $('#modalBody').html('<div style="text-align: center; padding: 40px; color: #666;">Aucune donnée disponible pour les filtres sélectionnés</div>');
+                return;
+            }
+
+            const showEleve = type === 'dette' || type === 'paye' || type === 'transactions';
+            let totalGeneral = 0;
+
+            let html = `<table style="width:100%; border-collapse: collapse; font-size: 14px;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left; padding: 14px; background: #1e3c72; color: white; border-radius: 8px 0 0 0;">Classe</th>
+                        ${showEleve ? '<th style="text-align:left; padding: 14px; background: #1e3c72; color: white;">Élève</th>' : ''}
+                        <th style="text-align:left; padding: 14px; background: #1e3c72; color: white;">Variable</th>
+                        <th style="text-align:right; padding: 14px; background: #1e3c72; color: white; border-radius: 0 8px 0 0;">Montant</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            data.rows.forEach((r, index) => {
+                totalGeneral += parseFloat(r.total || 0);
+                const bgColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
+                
+                html += `<tr style="background: ${bgColor};">
+                    <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0;">${r.classe || '-'}</td>
+                    ${showEleve ? `<td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0;">${r.nom || '-'}</td>` : ''}
+                    <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0;">${r.variable || '-'}</td>
+                    <td style="padding: 12px 14px; border-bottom: 1px solid #e2e8f0; text-align:right; font-weight: 500;">${formatMontant(r.total || 0)}</td>
+                </tr>`;
+            });
+
+            html += `<tr style="background: #e2e8f0; font-weight: 700;">
+                <td colspan="${showEleve ? 3 : 2}" style="padding: 14px; text-align:right; border-top: 2px solid #1e3c72;">TOTAL GÉNÉRAL</td>
+                <td style="padding: 14px; text-align:right; border-top: 2px solid #1e3c72; color: #1e3c72;" data-total="${totalGeneral}">${formatMontant(totalGeneral)}</td>
             </tr>`;
+            
+            html += '</tbody></table>';
+            
+            $('#modalBody').html(html);
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            $('#modalBody').html('<div style="text-align: center; padding: 40px; color: #dc2626;">Une erreur est survenue lors du chargement des données</div>');
         });
-
-        html += `<tr style="background: #e2e8f0; font-weight: 700;">
-            <td colspan="${showEleve ? 3 : 2}" style="padding: 14px; text-align:right; border-top: 2px solid #1e3c72;">TOTAL GÉNÉRAL</td>
-            <td style="padding: 14px; text-align:right; border-top: 2px solid #1e3c72; color: #1e3c72;" data-total="${totalGeneral}">${formatMontant(totalGeneral)}</td>
-        </tr>`;
-        
-        html += '</tbody></table>';
-        
-        $('#modalBody').html(html);
-    })
-    .catch(error => {
-        console.error('Erreur:', error);
-        $('#modalBody').html('<div style="text-align: center; padding: 40px; color: #dc2626;">Une erreur est survenue lors du chargement des données</div>');
     });
-});
 
     // ==========================
     // FERMER MODAL
@@ -694,86 +647,87 @@ $(document).ready(function(){
     // DOWNLOAD PDF
     // ==========================
     $('#downloadPDF').on('click', function(){
-    const table = $('#modalBody table');
-    if(!table || !table.length) {
-        alert('Aucune donnée à exporter');
-        return;
-    }
-
-    const headers = [];
-    table.find('thead th').each(function(){
-        headers.push($(this).text().trim());
-    });
-
-    const rows = [];
-    let totalGeneral = 0;
-    
-    // Récupérer toutes les lignes sauf la dernière (total)
-    table.find('tbody tr').not(':last').each(function(){
-        const row = [];
-        $(this).find('td').each(function(){
-            let text = $(this).text().trim();
-            // Nettoyer le formatage (enlever les espaces)
-            text = text.replace(/\s/g, '');
-            row.push(text);
-        });
-        if(row.length) rows.push(row);
-    });
-    
-    // Récupérer le total depuis l'attribut data-total
-    const totalElement = table.find('tbody tr:last td:last');
-    totalGeneral = totalElement.data('total') || 0;
-
-    const selectedOption = $('#classeFilter option:selected');
-    const modalTitle = $('#modalTitle span:first').text() || $('#modalTitle').text();
-    
-    // Afficher un indicateur de chargement
-    const originalText = $(this).text();
-    $(this).text('Génération...').prop('disabled', true);
-
-    fetch('/export-dashboard-pdf/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
-        },
-        body: JSON.stringify({
-            title: modalTitle,
-            headers: headers,
-            rows: rows,
-            total: totalGeneral,  // Envoyer le total séparément
-            stats_type: currentStatsType,
-            id_campus: selectedOption.data('campus-id'),
-            id_cycle: selectedOption.data('cycle-id'),
-            id_annee: $('#anneeFilter').val(),
-            id_classe: $('#classeFilter').val(),
-            id_eleve: $('#eleveFilter').val()
-        })
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Erreur lors de la génération du PDF');
+        const table = $('#modalBody table');
+        if(!table || !table.length) {
+            alert('Aucune donnée à exporter');
+            return;
         }
-        return response.blob();
-    })
-    .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = modalTitle.replace(/\s+/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        window.URL.revokeObjectURL(url);
-    })
-    .catch(error => {
-        console.error('Erreur:', error);
-        alert('Erreur lors du téléchargement du PDF');
-    })
-    .finally(() => {
-        $(this).text(originalText).prop('disabled', false);
+
+        const headers = [];
+        table.find('thead th').each(function(){
+            headers.push($(this).text().trim());
+        });
+
+        const rows = [];
+        let totalGeneral = 0;
+        
+        // Récupérer toutes les lignes sauf la dernière (total)
+        table.find('tbody tr').not(':last').each(function(){
+            const row = [];
+            $(this).find('td').each(function(){
+                let text = $(this).text().trim();
+                // Nettoyer le formatage (enlever les espaces)
+                text = text.replace(/\s/g, '');
+                row.push(text);
+            });
+            if(row.length) rows.push(row);
+        });
+        
+        // Récupérer le total depuis l'attribut data-total
+        const totalElement = table.find('tbody tr:last td:last');
+        totalGeneral = totalElement.data('total') || 0;
+
+        const selectedOption = $('#classeFilter option:selected');
+        const modalTitle = $('#modalTitle').text();
+        
+        // Afficher un indicateur de chargement
+        const originalText = $(this).text();
+        $(this).text('Génération...').prop('disabled', true);
+
+        fetch('/export-dashboard-pdf/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': $('input[name=csrfmiddlewaretoken]').val()
+            },
+            body: JSON.stringify({
+                title: modalTitle,
+                headers: headers,
+                rows: rows,
+                total: totalGeneral,
+                stats_type: currentStatsType,
+                id_campus: selectedOption.data('campus-id'),
+                id_cycle: selectedOption.data('cycle-id'),
+                id_annee: $('#anneeFilter').val(),
+                id_classe: $('#classeFilter').val(),
+                id_eleve: $('#eleveFilter').val()
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Erreur lors de la génération du PDF');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = modalTitle.replace(/\s+/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        })
+        .catch(error => {
+            console.error('Erreur:', error);
+            alert('Erreur lors du téléchargement du PDF');
+        })
+        .finally(() => {
+            $(this).text(originalText).prop('disabled', false);
+        });
     });
-});
+    
     // Initialisation au chargement
     loadDashboard();
 });
