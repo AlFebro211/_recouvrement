@@ -862,6 +862,7 @@
                                 <i class="fas fa-plus-circle"></i> Ajouter
                             </button>
                         </div>
+                        <!-- historique financier -->
                     {% elif form_type == 'historique_financier_form' %}
                         <div class="modal-header">
                             <h2>Historique financier</h2>
@@ -893,20 +894,20 @@
                             </div>
 
                             <div class="form-group col-md-3">
-                            <label>Banque / Compte</label>
-                            <select id="hf-banque" class="form-control">
-                                <option value="">-- Tous les comptes --</option>
-                                {% for compte in comptes_bancaires %}
-                                    <option value="{{ compte.id_compte }}">
-                                        {{ compte.id_banque.banque }} - {{ compte.compte }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                            <div class="form-group col-md-3">
                                 <label>Élève</label>
                                 <select id="hf-eleve" class="form-control">
                                     <option value="">-- Tous les élèves --</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-3">
+                                <label>Banque / Compte</label>
+                                <select id="hf-banque" class="form-control">
+                                    <option value="">-- Tous les comptes --</option>
+                                    {% for compte in comptes_bancaires %}
+                                        <option value="{{ compte.id_compte }}">
+                                            {{ compte.id_banque.banque }} - {{ compte.compte }}
+                                        </option>
+                                    {% endfor %}
                                 </select>
                             </div>
                         </div>
@@ -3057,7 +3058,7 @@ $(document).ready(function() {
     <!-- ======== Ajout des paiements -->
 <script>
 $(document).ready(function() {
-    if (window.location.pathname === "/") {
+    if (window.location.pathname === "/ajouter_paiement/") {
         $('#field-id_classe_active').hide();
         $('#field-id_eleve').hide();
         $('#field-id_variable').hide();
@@ -3385,7 +3386,7 @@ $(document).ready(function() {
     <!-- get paiments  + modification + suppression-->
 <script>
 $(document).ready(function () {
-    if (window.location.pathname === "/") {
+    if (window.location.pathname === "/ajouter_paiement/") {
 
         let selectedAnneeId = '';
         let selectedClasseId = '';
@@ -4180,16 +4181,20 @@ $(document).ready(function () {
                 return;
             }
 
-            fetch(`/get_classes_actives/${anneeId}/`)
+            fetch(`/get_classes_actives_with_paie/${anneeId}/`)
                 .then(res => res.json())
                 .then(res => {
                     let options = '<option value="">-- Choisir une classe --</option>';
                     if (res.success) {
                         res.classes.forEach(c => {
+                            let label = `${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}`;
+                            if (c.groupe) {
+                                label += ` ${c.groupe}`; 
+                            }
                             options += `<option value="${c.id_classe_active}"
-                                        data-campus="${c.id_campus}"
-                                        data-cycle="${c.id_cycle}">
-                                        ${c.campus_nom} - ${c.classe_nom}${c.groupe ? ' ('+c.groupe+')' : ''}</option>`;
+                                    data-campus-id="${c.id_campus}"
+                                    data-cycle-id="${c.id_cycle}">
+                                    ${label}</option>`;
                         });
                     }
                     classeSelect.html(options);
@@ -4203,12 +4208,16 @@ $(document).ready(function () {
         /* =========================
         2. CLASSE → TRIMESTRES + ÉLÈVES
         ========================= */
-        $('#hf-classe').on('change', function () {
+         $('#hf-classe').on('change', function () {
             const classeId = $(this).val();
             const anneeId = $('#hf-annee').val();
-            const opt = $(this).find(':selected');
-            const campusId = opt.data('campus');
-            const cycleId = opt.data('cycle');
+            const selectedOption = $(this).find('option:selected');
+            
+            // Récupération correcte des data attributes
+            const campusId = selectedOption.data('campus-id');
+            const cycleId = selectedOption.data('cycle-id');
+            
+            console.log("DEBUG - Campus ID:", campusId, "Cycle ID:", cycleId); // Pour vérifier
 
             const trimestreSelect = $('#hf-trimestre');
             const eleveSelect = $('#hf-eleve');
@@ -4216,8 +4225,9 @@ $(document).ready(function () {
             trimestreSelect.html('<option value="">-- Chargement... --</option>');
             eleveSelect.html('<option value="">-- Chargement élèves... --</option>');
 
-            if (!classeId) {
-                trimestreSelect.html('<option value="">-- Choisir un trimestre --</option>');
+            if (!classeId || !campusId || !cycleId) {
+                console.error("IDs manquants - classe:", classeId, "campus:", campusId, "cycle:", cycleId);
+                trimestreSelect.html('<option value="">-- Erreur: IDs manquants --</option>');
                 eleveSelect.html('<option value="">-- Tous les élèves --</option>');
                 return;
             }
@@ -4227,19 +4237,25 @@ $(document).ready(function () {
                 .then(res => res.json())
                 .then(res => {
                     let options = '<option value="">-- Choisir un trimestre --</option>';
-                    if (res.success && res.trimestres.length > 0) {
+                    if (res.success && res.trimestres && res.trimestres.length > 0) {
                         res.trimestres.forEach(t => {
                             options += `<option value="${t.id}">${t.nom}</option>`;
                         });
                     }
                     trimestreSelect.html(options);
                 })
-                .catch(() => {
+                .catch(error => {
+                    console.error("Erreur chargement trimestres:", error);
                     trimestreSelect.html('<option value="">-- Erreur chargement --</option>');
                 });
 
             // ÉLÈVES
-            chargerEleves(classeId, anneeId, campusId, cycleId);
+            if (campusId && cycleId) {
+                chargerEleves(classeId, anneeId, campusId, cycleId);
+            } else {
+                console.error("Impossible de charger les élèves: campusId ou cycleId manquant");
+                eleveSelect.html('<option value="">-- Erreur paramètres --</option>');
+            }
         });
 
         /* =========================
@@ -5189,28 +5205,68 @@ $(document).ready(function(){
 </script>
 <!-- rapport general paiement  -->
 <script>
-
 $(document).ready(function () {
+    if (!window.location.pathname.includes('rapport_paiement')) return;
+
+    // ================================
+    // INITIALISATION : DATE MIN POUR FIN
+    // ================================
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Optionnel : mettre la date du jour par défaut
+    // $('#date_debut').val(today);
+    // $('#date_fin').val(today);
+
+    // ================================
+    // CONTRAINTE : DATE FIN >= DATE DEBUT
+    // ================================
+    $('#date_debut').on('change', function() {
+        const debut = $(this).val();
+        const fin = $('#date_fin').val();
+        
+        // Empêcher la sélection d'une date fin < date debut via l'attribut min
+        $('#date_fin').attr('min', debut);
+        
+        // Si la date fin actuelle est inférieure à la nouvelle date début, la réinitialiser
+        if (fin && fin < debut) {
+            $('#date_fin').val(debut);
+            // Optionnel : message discret
+            console.log("Date fin réajustée à la date début");
+        }
+    });
+
+    $('#date_fin').on('change', function() {
+        const debut = $('#date_debut').val();
+        const fin = $(this).val();
+        
+        // Si pas de date début, on ne peut pas choisir de date fin
+        if (!debut) {
+            alert("Veuillez d'abord choisir une date de début");
+            $(this).val('');
+            return;
+        }
+        
+        // Vérifier que fin >= debut
+        if (fin < debut) {
+            alert("⛔ La date de fin ne peut pas être inférieure à la date de début");
+            $(this).val(debut); // Remettre à la date début
+        }
+    });
 
     // ================================
     // CHARGER LES CLASSES SELON ANNEE
     // ================================
     $('#hf-annee').on('change', function () {
-
         const anneeId = $(this).val();
-
         $('#hf-classe').html('<option value="">-- Choisir une classe --</option>');
 
         if (!anneeId) return;
 
-        fetch(`/get_classes_actives/${anneeId}/`)
+        fetch(`/get_classes_actives_with_paie/${anneeId}/`)
             .then(res => res.json())
             .then(data => {
-
                 if (data.success) {
-
                     data.classes.forEach(c => {
-
                         $('#hf-classe').append(`
                             <option 
                                 value="${c.id_classe_active}" 
@@ -5219,28 +5275,21 @@ $(document).ready(function () {
                                 ${c.campus_nom} - ${c.cycle_nom} - ${c.classe_nom}
                             </option>
                         `);
-
                     });
-
                 } else {
                     alert("Erreur lors du chargement des classes");
                 }
-
             })
             .catch(err => {
                 console.error(err);
                 alert("Erreur serveur lors du chargement");
             });
-
     });
-
-
 
     // ================================
     // TELECHARGER RAPPORT
     // ================================
     $('#btn-telecharger-rapport').on('click', function () {
-
         const annee = $('#hf-annee').val();
         const classe = $('#hf-classe').val();
         const date_debut = $('#date_debut').val();
@@ -5262,6 +5311,22 @@ $(document).ready(function () {
 
         if (!type_fichier) {
             alert("Veuillez choisir le type de fichier");
+            return;
+        }
+
+        // ============================
+        // VALIDATION DES DATES
+        // ============================
+        if (date_debut && date_fin) {
+            if (date_fin < date_debut) {
+                alert("⛔ Erreur : La date de fin doit être supérieure ou égale à la date de début");
+                return;
+            }
+        } else if (date_debut && !date_fin) {
+            alert("Veuillez choisir une date de fin");
+            return;
+        } else if (!date_debut && date_fin) {
+            alert("Veuillez choisir une date de début");
             return;
         }
 
@@ -5304,22 +5369,20 @@ $(document).ready(function () {
             btn.prop("disabled", false);
             btn.html(originalHtml);
         }, 3000);
-
     });
-
-
 
     // ================================
     // BOUTON ANNULER
     // ================================
     $('#cancelBtn').on('click', function () {
-
         $('#hf-annee').val('');
         $('#hf-classe').html('<option value="">-- Choisir une classe --</option>');
         $('#date_debut').val('');
         $('#date_fin').val('');
         $('#hf-type-fichier').val('');
-
+        
+        // Réinitialiser l'attribut min
+        $('#date_fin').removeAttr('min');
     });
 
 });

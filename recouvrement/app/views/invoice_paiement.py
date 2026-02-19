@@ -24,197 +24,534 @@ from openpyxl.utils import get_column_letter
 
 def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None, titre=None):
     """
-    Retourne un tableau ReportLab à utiliser comme header dans un PDF.
-    
-    Args:
-        eleve: Objet Eleve (optionnel)
-        classe_obj: Objet Classe_active (optionnel)
-        id_campus: ID du campus (optionnel)
-        id_cycle: ID du cycle (optionnel)
-        id_annee: ID de l'année (optionnel)
-        titre: Titre personnalisé (optionnel)
-    
-    Returns:
-        Table: Tableau ReportLab formaté
+    Header professionnel pour PDF
     """
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib.units import cm
+    from datetime import datetime
+    import os
+    from django.conf import settings
+    from app.models import Institution
     
-    # Styles
-    style_titre = ParagraphStyle(
-        'TitreHeader',
-        fontSize=12,
+    # Styles professionnels
+    style_nom_ecole = ParagraphStyle(
+        'NomEcole',
+        fontSize=18,
         fontName='Helvetica-Bold',
         alignment=TA_CENTER,
-        textColor=colors.HexColor('#2F528F'),
-        spaceAfter=4
+        textColor=colors.HexColor('#1e3c72'),
+        leading=22
     )
     
-    style_normal = ParagraphStyle(
-        'NormalHeader',
+    style_devise = ParagraphStyle(
+        'Devise',
+        fontSize=11,
+        fontName='Helvetica-Oblique',
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#666666'),
+        leading=14
+    )
+    
+    style_contact = ParagraphStyle(
+        'Contact',
         fontSize=9,
         fontName='Helvetica',
-        alignment=TA_LEFT,
-        leading=11,
-        textColor=colors.HexColor('#333333')
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#666666'),
+        leading=14
     )
     
-    style_gras = ParagraphStyle(
-        'GrasHeader',
-        fontSize=9,
+    style_titre = ParagraphStyle(
+        'Titre',
+        fontSize=16,
+        fontName='Helvetica-Bold',
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#2c3e50'),
+        spaceAfter=10,
+        leading=20,
+        backColor=colors.HexColor('#f8fafc'),
+        borderPadding=8,
+        borderRadius=3
+    )
+    
+    style_info = ParagraphStyle(
+        'Info',
+        fontSize=10,
+        fontName='Helvetica',
+        alignment=TA_LEFT,
+        textColor=colors.HexColor('#333333'),
+        leading=18
+    )
+    
+    style_info_bold = ParagraphStyle(
+        'InfoBold',
+        fontSize=10,
         fontName='Helvetica-Bold',
         alignment=TA_LEFT,
-        leading=11,
-        textColor=colors.HexColor('#2F528F')
+        textColor=colors.HexColor('#1e3c72'),
+        leading=18
     )
     
     style_date = ParagraphStyle(
-        'DateHeader',
-        fontSize=8,
+        'Date',
+        fontSize=10,
         fontName='Helvetica',
         alignment=TA_RIGHT,
-        textColor=colors.HexColor('#666666')
+        textColor=colors.HexColor('#333333'),
+        leading=18
+    )
+    
+    style_separator = ParagraphStyle(
+        'Separator',
+        fontSize=4,
+        fontName='Helvetica',
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#cccccc')
     )
 
-    # Logo
-    logo_cell = []
-    institution = Institution.objects.first()
-    if institution and institution.logo_ecole:
-        logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
-        if os.path.exists(logo_path):
-            logo_cell.append(Image(logo_path, width=1.2*cm, height=1.2*cm))
-        else:
-            logo_cell.append(Paragraph("Logo non disponible", style_normal))
-    else:
-        # Logo par défaut
-        default_logo = os.path.join(settings.BASE_DIR, 'static/assets/img/MonEcoleApp-logo.png')
-        if os.path.exists(default_logo):
-            logo_cell.append(Image(default_logo, width=1.2*cm, height=1.2*cm))
-        else:
-            logo_cell.append(Paragraph("", style_normal))
+    # Récupération des informations de l'institution
+    institution = None
+    try:
+        institution = Institution.objects.first()
+    except:
+        pass
+    
+    # Valeurs par défaut
+    nom_ecole = "ECOLE INTERNATIONALE DE BUJUMBURA"
+    sigle = ""
+    telephone = "+257 72 30 70 12"
+    email = "info@eibu.bi"
+    site = ""
+    siege = "Bujumbura, Burundi"
+    b_postale = ""
+    emplacement = ""
+    
+    if institution:
+        if institution.nom_ecole:
+            nom_ecole = institution.nom_ecole.upper()
+        if institution.sigle:
+            sigle = f" - {institution.sigle}"
+        if institution.telephone:
+            telephone = institution.telephone
+        if institution.email:
+            email = institution.email
+        if institution.site:
+            site = institution.site
+        if institution.siege:
+            siege = institution.siege
+        if institution.b_postale:
+            b_postale = f"BP {institution.b_postale}"
+        if institution.emplacement:
+            emplacement = institution.emplacement
 
-    # Informations centrales
-    info_lines = []
+    # Construction de l'adresse complète (SANS POINTS NOIRS)
+    adresse_parts = []
+    if siege:
+        adresse_parts.append(siege)
+    if emplacement:
+        adresse_parts.append(emplacement)
+    if b_postale:
+        adresse_parts.append(b_postale)
     
-    # Titre
-    if titre:
-        info_lines.append(f"<font color='#2F528F' size='12'><b>{titre}</b></font>")
-    else:
-        info_lines.append("<font color='#2F528F' size='12'><b>ÉCOLE INTERNATIONALE DE BUJUMBURA</b></font>")
+    adresse = " | ".join(filter(None, adresse_parts)) if adresse_parts else "Bujumbura, Burundi"
     
-    # Institution
-    if institution and institution.nom_ecole:
-        info_lines.append(f"<font size='10'>{institution.nom_ecole}</font>")
+    # Construction des coordonnées complètes (SANS POINTS NOIRS)
+    contact_parts = []
+    if telephone:
+        contact_parts.append(telephone)
+    if email:
+        contact_parts.append(email)
+    if site:
+        contact_parts.append(site)
     
-    # Campus
+    contact = " | ".join(contact_parts) if contact_parts else ""
+
+    # Logo
+    logo_element = Paragraph("", ParagraphStyle('Logo', fontSize=1, alignment=TA_CENTER))
+    
+    if institution and institution.logo_ecole:
+        try:
+            logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
+            if os.path.exists(logo_path):
+                logo_element = Image(logo_path, width=2*cm, height=2*cm)
+        except:
+            pass
+
+    # Informations institution
+    institution_text = [
+        Paragraph(f"{nom_ecole}{sigle}", style_nom_ecole),
+        Spacer(1, 2),
+    ]
+    
+    if adresse:
+        institution_text.append(Paragraph(adresse, style_contact))
+    if contact:
+        institution_text.append(Paragraph(contact, style_contact))
+
+    # Colonne de gauche (Campus et Classe)
+    left_info = []
+    
+    campus_text = "Tous"
     if id_campus:
         try:
             campus = Campus.objects.get(id_campus=id_campus)
-            info_lines.append(f"<b>Campus:</b> {campus.campus}")
+            campus_text = campus.campus
         except:
             pass
+    left_info.append(Paragraph(f"<b>Campus:</b> {campus_text}", style_info_bold))
     
-    # Cycle/Classe
+    classe_text = "Toutes"
     if classe_obj:
         try:
-            classe_info = classe_obj.classe_id.classe
+            classe_text = classe_obj.classe_id.classe
             if classe_obj.groupe:
-                classe_info += f" {classe_obj.groupe}"
-            info_lines.append(f"<b>Classe:</b> {classe_info}")
+                classe_text += f" ({classe_obj.groupe})"
         except:
             pass
+    left_info.append(Paragraph(f"<b>Classe:</b> {classe_text}", style_info_bold))
     
-    # Année
+    if eleve:
+        nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
+        left_info.append(Spacer(1, 3))
+        left_info.append(Paragraph(f"<b>Élève:</b> {nom_complet}", style_info_bold))
+        if hasattr(eleve, 'matricule') and eleve.matricule:
+            left_info.append(Paragraph(f"<b>Matricule:</b> {eleve.matricule}", style_info))
+
+    # Colonne de droite (Année scolaire et Date)
+    right_info = []
+    
+    annee_text = "Non spécifiée"
     if id_annee:
         try:
             annee = Annee.objects.get(id_annee=id_annee)
-            info_lines.append(f"<b>Année:</b> {annee.annee}")
+            annee_text = annee.annee
         except:
             pass
-    
-    # Élève
-    if eleve:
-        nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
-        info_lines.append(f"<b>Élève:</b> {nom_complet}")
-        if hasattr(eleve, 'matricule') and eleve.matricule:
-            info_lines.append(f"<b>Matricule:</b> {eleve.matricule}")
-    
-    info_paragraph = Paragraph("<br/>".join(info_lines), style_normal)
+    right_info.append(Paragraph(f"<b>Année scolaire:</b> {annee_text}", style_date))
+    right_info.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_date))
 
-    # Date et heure
-    date_text = f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}"
-    date_paragraph = Paragraph(date_text, style_date)
-
-    # Création du tableau principal
-    header_data = [
-        [logo_cell, info_paragraph, date_paragraph]
-    ]
+    # Construction du tableau
+    data = []
+    
+    # LIGNE 1: Logo et informations institution
+    data.append([logo_element, institution_text, Paragraph("", style_info)])
+    
+    # LIGNE 2: Séparateur
+    data.append([Paragraph("", style_info), Paragraph("─" * 90, style_separator), Paragraph("", style_info)])
+    
+    # LIGNE 3: Informations contextuelles
+    data.append([Paragraph("", style_info), left_info, right_info])
+    
+    # LIGNE 4: Espace avant le titre
+    data.append([Paragraph("", style_info), Spacer(1, 5), Paragraph("", style_info)])
+    
+    # LIGNE 5: Titre
+    if titre:
+        data.append([Paragraph("", style_info), Paragraph(f"<b>{titre.upper()}</b>", style_titre), Paragraph("", style_info)])
     
     # Largeurs des colonnes
-    col_widths = [2.5*cm, 12*cm, 4*cm]
+    col_widths = [2.5*cm, 12*cm, 4.5*cm]
     
-    header_table = Table(header_data, colWidths=col_widths)
-    header_table.setStyle(TableStyle([
+    table = Table(data, colWidths=col_widths)
+    
+    style_commands = [
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
-        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
-        ('ALIGN', (2, 0), (2, 0), 'RIGHT'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]))
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+    ]
     
-    return header_table
+    if titre:
+        style_commands.append(('BACKGROUND', (1, 4), (1, 4), colors.HexColor('#f8fafc')))
+    
+    table.setStyle(TableStyle(style_commands))
+    
+    return table
 
 
-def build_pdf_header_simple(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None):
+def build_pdf_header_pos(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None, titre=None):
     """
-    Version simplifiée du header pour les petits PDF (format POS)
+    Version POS du header professionnel - Chaque info sur sa propre ligne
     """
-    style_normal = ParagraphStyle(
-        'NormalSimple',
-        fontSize=8,
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib import colors
+    from reportlab.platypus import Table, TableStyle, Paragraph, Spacer, Image
+    from reportlab.lib.units import cm, mm
+    from datetime import datetime
+    import os
+    from django.conf import settings
+    from app.models import Institution, Campus, Annee
+    
+    # Tailles pour POS
+    font_size_normal = 8
+    font_size_bold = 10
+    font_size_small = 7
+    logo_size = 12*mm
+    col_widths = [2*cm, 5*cm, 2*cm]
+    
+    # Styles
+    style_nom_ecole = ParagraphStyle(
+        'NomEcole',
+        fontSize=font_size_bold,
+        fontName='Helvetica-Bold',
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#1e3c72'),
+        leading=12
+    )
+    
+    style_contact = ParagraphStyle(
+        'Contact',
+        fontSize=font_size_small,
         fontName='Helvetica',
         alignment=TA_CENTER,
+        textColor=colors.HexColor('#666666'),
         leading=9
     )
     
-    info_lines = []
+    style_titre = ParagraphStyle(
+        'Titre',
+        fontSize=font_size_bold,
+        fontName='Helvetica-Bold',
+        alignment=TA_CENTER,
+        textColor=colors.HexColor('#2c3e50'),
+        leading=12,
+        backColor=colors.HexColor('#f8fafc'),
+        borderPadding=4,
+        borderRadius=2
+    )
     
-    institution = Institution.objects.first()
-    if institution and institution.nom_ecole:
-        info_lines.append(f"<b>{institution.nom_ecole}</b>")
+    style_info = ParagraphStyle(
+        'Info',
+        fontSize=font_size_normal,
+        fontName='Helvetica',
+        alignment=TA_LEFT,
+        textColor=colors.HexColor('#333333'),
+        leading=10
+    )
     
-    if id_campus:
+    style_info_bold = ParagraphStyle(
+        'InfoBold',
+        fontSize=font_size_normal,
+        fontName='Helvetica-Bold',
+        alignment=TA_LEFT,
+        textColor=colors.HexColor('#1e3c72'),
+        leading=10
+    )
+    
+    style_label = ParagraphStyle(
+        'Label',
+        fontSize=font_size_normal,
+        fontName='Helvetica-Bold',
+        alignment=TA_LEFT,
+        textColor=colors.HexColor('#1e3c72'),
+        leading=10
+    )
+    
+    style_valeur = ParagraphStyle(
+        'Valeur',
+        fontSize=font_size_normal,
+        fontName='Helvetica',
+        alignment=TA_LEFT,
+        textColor=colors.HexColor('#333333'),
+        leading=10
+    )
+    
+    style_date = ParagraphStyle(
+        'Date',
+        fontSize=font_size_small,
+        fontName='Helvetica',
+        alignment=TA_LEFT,
+        textColor=colors.HexColor('#333333'),
+        leading=9
+    )
+
+    # Récupération institution
+    institution = None
+    try:
+        institution = Institution.objects.first()
+    except:
+        pass
+    
+    # Logo
+    logo_element = Paragraph("", ParagraphStyle('Logo', fontSize=1))
+    if institution and institution.logo_ecole:
         try:
-            campus = Campus.objects.get(id_campus=id_campus)
-            info_lines.append(f"{campus.campus}")
+            logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
+            if os.path.exists(logo_path):
+                logo_element = Image(logo_path, width=logo_size, height=logo_size)
         except:
             pass
     
+    # Infos institution
+    nom_ecole = institution.nom_ecole.upper() if institution and institution.nom_ecole else "ECOLE INTERNATIONALE"
+    sigle = f" - {institution.sigle}" if institution and institution.sigle else ""
+    
+    # Coordonnées
+    contact_parts = []
+    if institution and institution.telephone:
+        contact_parts.append(institution.telephone)
+    if institution and institution.email:
+        contact_parts.append(institution.email)
+    contact = " | ".join(contact_parts) if contact_parts else ""
+    
+    # Adresse
+    adresse_parts = []
+    if institution and institution.siege:
+        adresse_parts.append(institution.siege)
+    if institution and institution.emplacement:
+        adresse_parts.append(institution.emplacement)
+    if institution and institution.b_postale:
+        adresse_parts.append(f"BP {institution.b_postale}")
+    adresse = " | ".join(adresse_parts) if adresse_parts else ""
+    
+    # Construction des données du tableau
+    data = []
+    
+    # LIGNE 1: Logo et nom école
+    data.append([
+        logo_element,
+        Paragraph(f"{nom_ecole}{sigle}", style_nom_ecole),
+        Paragraph("", style_info)
+    ])
+    
+    # LIGNE 2: Contact
+    if contact:
+        data.append([
+            Paragraph("", style_info),
+            Paragraph(contact, style_contact),
+            Paragraph("", style_info)
+        ])
+    
+    # LIGNE 3: Adresse
+    if adresse:
+        data.append([
+            Paragraph("", style_info),
+            Paragraph(adresse, style_contact),
+            Paragraph("", style_info)
+        ])
+    
+    # LIGNE 4: Séparateur
+    data.append([
+        Paragraph("", style_info),
+        Paragraph("─" * 35, ParagraphStyle('Sep', fontSize=4, alignment=TA_CENTER, textColor=colors.HexColor('#cccccc'))),
+        Paragraph("", style_info)
+    ])
+    
+    # LIGNE 5: Campus (sur sa propre ligne)
+    if id_campus:
+        try:
+            campus = Campus.objects.get(id_campus=id_campus)
+            data.append([
+                Paragraph("", style_info),
+                Paragraph(f"<b>Campus:</b> {campus.campus}", style_label),
+                Paragraph("", style_info)
+            ])
+        except:
+            pass
+    
+    # LIGNE 6: Classe (sur sa propre ligne)
     if classe_obj:
         try:
             classe_info = classe_obj.classe_id.classe
             if classe_obj.groupe:
-                classe_info += f" {classe_obj.groupe}"
-            info_lines.append(f"{classe_info}")
+                classe_info += f" ({classe_obj.groupe})"
+            data.append([
+                Paragraph("", style_info),
+                Paragraph(f"<b>Classe:</b> {classe_info}", style_label),
+                Paragraph("", style_info)
+            ])
         except:
             pass
     
+    # LIGNE 7: Année (sur sa propre ligne)
     if id_annee:
         try:
             annee = Annee.objects.get(id_annee=id_annee)
-            info_lines.append(f"{annee.annee}")
+            data.append([
+                Paragraph("", style_info),
+                Paragraph(f"<b>Année scolaire:</b> {annee.annee}", style_label),
+                Paragraph("", style_info)
+            ])
         except:
             pass
     
+    # LIGNE 8: Date (sur sa propre ligne)
+    data.append([
+        Paragraph("", style_info),
+        Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_label),
+        Paragraph("", style_info)
+    ])
+    
+    # LIGNE 9: Séparateur avant élève
+    data.append([
+        Paragraph("", style_info),
+        Paragraph("─" * 35, ParagraphStyle('Sep', fontSize=4, alignment=TA_CENTER, textColor=colors.HexColor('#cccccc'))),
+        Paragraph("", style_info)
+    ])
+    
+    # LIGNE 10: Élève si présent
     if eleve:
         nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
-        info_lines.append(f"{nom_complet}")
+        data.append([
+            Paragraph("", style_info),
+            Paragraph(f"👤 <b>{nom_complet}</b>", style_info_bold),
+            Paragraph("", style_info)
+        ])
+        
+        # LIGNE 11: Matricule
+        if hasattr(eleve, 'matricule') and eleve.matricule:
+            data.append([
+                Paragraph("", style_info),
+                Paragraph(f"🆔 {eleve.matricule}", style_info),
+                Paragraph("", style_info)
+            ])
+        
+        # LIGNE 12: Séparateur
+        data.append([
+            Paragraph("", style_info),
+            Paragraph("─" * 35, ParagraphStyle('Sep', fontSize=4, alignment=TA_CENTER, textColor=colors.HexColor('#cccccc'))),
+            Paragraph("", style_info)
+        ])
     
-    info_paragraph = Paragraph("<br/>".join(info_lines), style_normal)
+    # LIGNE 13: Titre (si fourni)
+    if titre:
+        data.append([
+            Paragraph("", style_info),
+            Paragraph(f"<b>{titre.upper()}</b>", style_titre),
+            Paragraph("", style_info)
+        ])
     
-    return info_paragraph
-
+    # Création du tableau
+    table = Table(data, colWidths=col_widths)
+    
+    # Style du tableau
+    style_commands = [
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+        ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Aligné à gauche pour meilleure lisibilité
+        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+    ]
+    
+    # Fond pour la ligne de titre
+    if titre:
+        # Trouver l'index de la ligne de titre (dernière ligne)
+        style_commands.append(('BACKGROUND', (1, -1), (1, -1), colors.HexColor('#f8fafc')))
+    
+    table.setStyle(TableStyle(style_commands))
+    
+    return table
 
 def generate_invoice(request, id_paiement):
     try:
@@ -609,8 +946,8 @@ def generate_fiche_paie_eleve(request):
         )
         elements.append(header_table)
         elements.append(Spacer(1, 5*mm))
-        elements.append(Paragraph("<u>SITUATION DES PAIEMENTS</u>", ParagraphStyle('T', fontSize=14, alignment=TA_CENTER)))
-        elements.append(Spacer(1, 5*mm))
+        # elements.append(Paragraph("<u>SITUATION DES PAIEMENTS</u>", ParagraphStyle('T', fontSize=14, alignment=TA_CENTER)))
+        # elements.append(Spacer(1, 5*mm))
 
         elements.append(Paragraph("<b>I. FRAIS À PAYER</b>", styles['Normal']))
         prix_qs = list(VariablePrix.objects.filter(id_annee_id=id_annee, id_campus_id=id_campus, id_classe_active_id=id_classe))
@@ -688,35 +1025,15 @@ def generate_facture_paiement(request):
         paiement = Paiement.objects.select_related(
             'id_eleve', 'id_variable', 'id_campus',
             'id_classe_active', 'id_classe_active__classe_id',
-            'id_annee'
+            'id_annee', 'id_cycle_actif'
         ).get(id_paiement=id_paiement)
 
         eleve = paiement.id_eleve
-        campus_nom = paiement.id_campus.campus if paiement.id_campus else "N/A"
+        campus_nom = paiement.id_campus.campus if paiement.id_campus else ""
         nom_classe = paiement.id_classe_active.classe_id.classe if paiement.id_classe_active else ""
         groupe = paiement.id_classe_active.groupe or ""
         classe_info = f"{nom_classe} {groupe}".strip()
-        annee_txt = paiement.id_annee.annee if paiement.id_annee else "N/A"
-
-        # =========================
-        # Logo dynamique via Institution ou fallback par défaut
-        # =========================
-        institution = Institution.objects.first()
-        logo_path = None
-
-        if institution and institution.logo_ecole:
-            logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
-            logo_path = os.path.normpath(logo_path)
-            if not os.path.exists(logo_path):
-                logo_path = None
-
-        # # Logo par défaut
-        # if not logo_path:
-        #     logo_path = os.path.join(settings.BASE_DIR, 'static/assets/img/MonEcoleApp-logo.png')
-        #     logo_path = os.path.normpath(logo_path)
-        #     if not os.path.exists(logo_path):
-        #         print("⚠️ Logo par défaut introuvable ! Vérifie le chemin :", logo_path)
-        #         logo_path = None
+        annee_txt = paiement.id_annee.annee if paiement.id_annee else ""
 
         # =========================
         # Mode POS ou A4
@@ -724,137 +1041,171 @@ def generate_facture_paiement(request):
         is_pos = request.GET.get("pos") == "1"
 
         response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'inline; filename="Facture_{eleve.nom}.pdf"'
+        response['Content-Disposition'] = f'inline; filename="Facture_{eleve.nom}_{eleve.prenom}.pdf"'
 
         if is_pos:
-            pagesize = (80*mm, 300*mm)
+            pagesize = (80*mm, 350*mm)
             margin = 5*mm
             font_title = 11
             font_text = 9
-            logo_size = 20*mm
+            font_small = 8
         else:
             pagesize = A4
             margin = 15*mm
-            font_title = 14
+            font_title = 16
             font_text = 11
-            logo_size = 30*mm
+            font_small = 9
 
         doc = SimpleDocTemplate(
             response,
             pagesize=pagesize,
             leftMargin=margin,
             rightMargin=margin,
-            topMargin=10*mm,
-            bottomMargin=10*mm
+            topMargin=8*mm,
+            bottomMargin=8*mm
         )
 
         elements = []
 
         # Styles
-        title_style = ParagraphStyle("title", alignment=TA_CENTER, fontSize=font_title, spaceAfter=4, leading=font_title+2)
-        small_center = ParagraphStyle("small_center", alignment=TA_CENTER, fontSize=font_text, leading=font_text+2)
-        footer_style = ParagraphStyle("footer", alignment=TA_CENTER, fontSize=font_text-1)
-        left_style = ParagraphStyle("left", alignment=TA_LEFT, fontSize=font_text, leading=font_text+2)
+        style_titre = ParagraphStyle("titre", alignment=TA_CENTER, fontSize=font_title+2, fontName='Helvetica-Bold', textColor=colors.HexColor('#2c3e50'), spaceAfter=6, leading=font_title+6, backColor=colors.HexColor('#f8fafc'), borderPadding=6, borderRadius=3)
+        style_sous_titre = ParagraphStyle("sous_titre", alignment=TA_LEFT, fontSize=font_text+1, fontName='Helvetica-Bold', textColor=colors.HexColor('#1e3c72'), spaceAfter=4, leading=font_text+4)
+        style_label = ParagraphStyle("label", alignment=TA_LEFT, fontSize=font_text, fontName='Helvetica-Bold', textColor=colors.HexColor('#333333'), leading=font_text+3)
+        style_valeur = ParagraphStyle("valeur", alignment=TA_LEFT, fontSize=font_text, fontName='Helvetica', textColor=colors.HexColor('#333333'), leading=font_text+3)
+        style_footer = ParagraphStyle("footer", alignment=TA_CENTER, fontSize=font_small-1, fontName='Helvetica', textColor=colors.gray, leading=font_small)
+        style_separator = ParagraphStyle("separator", alignment=TA_CENTER, fontSize=4, fontName='Helvetica', textColor=colors.HexColor('#cccccc'))
 
         # =========================
-        # HEADER avec logo
+        # HEADER selon le mode
         # =========================
-        if logo_path and os.path.exists(logo_path):
-            elements.append(Image(logo_path, width=logo_size, height=logo_size))
-            elements.append(Spacer(1,2*mm))
-
-        # Infos école et campus
-        header_table = build_pdf_header(
-                eleve=paiement.id_eleve,
+        if is_pos:
+            header_pos = build_pdf_header_pos(
                 classe_obj=paiement.id_classe_active,
-                id_campus=paiement.id_campus.id_campus,
-                id_cycle=paiement.id_cycle_actif.id_cycle_actif,
-                id_annee=paiement.id_annee.id_annee,
+                id_campus=paiement.id_campus.id_campus if paiement.id_campus else None,
+                id_cycle=paiement.id_cycle_actif.id_cycle_actif if paiement.id_cycle_actif else None,
+                id_annee=paiement.id_annee.id_annee if paiement.id_annee else None,
+                # titre="REÇU DE PAIEMENT"
+            )
+            elements.append(header_pos)
+        else:
+            # Mode A4 : utiliser le header complet
+            header_complet = build_pdf_header(
+                classe_obj=paiement.id_classe_active,
+                id_campus=paiement.id_campus.id_campus if paiement.id_campus else None,
+                id_cycle=paiement.id_cycle_actif.id_cycle_actif if paiement.id_cycle_actif else None,
+                id_annee=paiement.id_annee.id_annee if paiement.id_annee else None,
                 titre="REÇU DE PAIEMENT"
             )
-        elements.append(header_table)
-        elements.append(Spacer(1,4*mm))
+            elements.append(header_complet)
 
-        elements.append(Spacer(1,4*mm))
+        elements.append(Spacer(1, 5*mm))
 
-        # =========================
-        # TITRE REÇU
-        # =========================
-        elements.append(Paragraph("<b>REÇU DE PAIEMENT</b>", title_style))
-        elements.append(Spacer(1,3*mm))
+        if is_pos:
+            elements.append(Paragraph("REÇU DE PAIEMENT", style_titre))
+            elements.append(Spacer(1, 5*mm))
 
-        # =========================
-        # INFOS ÉLÈVE (toujours à gauche)
-        # =========================
-        info_data = [
-            ["Élève :", f"{eleve.nom} {eleve.prenom}"],
-            ["Motif :", paiement.id_variable.variable],
-            ["Date :", paiement.date_paie.strftime('%d/%m/%Y')],
+        # Informations élève (UNE SEULE FOIS)
+        elements.append(Paragraph("INFORMATIONS ÉLÈVE", style_sous_titre))
+        elements.append(Paragraph("─" * 40 if not is_pos else "─" * 30, style_separator))
+        elements.append(Spacer(1, 2*mm))
+
+        eleve_data = [
+            [Paragraph("<b>Nom & Prénom :</b>", style_label), Paragraph(f"{eleve.nom} {eleve.prenom}", style_valeur)],
+            [Paragraph("<b>Matricule :</b>", style_label), Paragraph(eleve.matricule if hasattr(eleve, 'matricule') and eleve.matricule else "N/A", style_valeur)],
+            [Paragraph("<b>Classe :</b>", style_label), Paragraph(classe_info if classe_info else "N/A", style_valeur)],
         ]
 
-        info_table = Table(
-            info_data,
-            colWidths=[25*mm, 45*mm] if is_pos else [60*mm, 110*mm]
-        )
-        info_table.setStyle(TableStyle([
-            ('FONTSIZE',(0,0),(-1,-1),font_text),
-            ('BOTTOMPADDING',(0,0),(-1,-1),3),
-            ('ALIGN',(0,0),(-1,-1),'LEFT'),
+        eleve_table = Table(eleve_data, colWidths=['30%', '70%'] if not is_pos else [25*mm, 45*mm])
+        eleve_table.setStyle(TableStyle([
+            ('FONTSIZE', (0,0), (-1,-1), font_text),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
-        elements.append(info_table)
-        elements.append(Spacer(1,5*mm))
+        elements.append(eleve_table)
+        elements.append(Spacer(1, 8*mm))
 
-        # =========================
-        # TABLEAU MONTANT
-        # =========================
-        data = [
-            ["Motif", "Montant"],
-            [paiement.id_variable.variable, f"{paiement.montant:,} FBu".replace(',', ' ')]
+        # Détail du paiement
+        elements.append(Paragraph("DÉTAIL DU PAIEMENT", style_sous_titre))
+        elements.append(Paragraph("─" * 40 if not is_pos else "─" * 30, style_separator))
+        elements.append(Spacer(1, 4*mm))
+
+        montant_formate = f"{paiement.montant:,}".replace(',', ' ') + " FBu"
+        
+        # Tableau de détail
+        detail_data = [
+            [Paragraph("<b>Désignation</b>", style_label), Paragraph("<b>Montant</b>", style_label)],
+            [paiement.id_variable.variable, montant_formate]
         ]
-        table = Table(
-            data,
-            colWidths=[45*mm,25*mm] if is_pos else [120*mm,60*mm]
-        )
-        table.setStyle(TableStyle([
-            ('GRID',(0,0),(-1,-1),0.5,colors.black),
-            ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#eeeeee")),
-            ('ALIGN',(0,0),(0,0),'LEFT'),
-            ('ALIGN',(1,1),(1,1),'RIGHT'),
-            ('FONTSIZE',(0,0),(-1,-1),font_text),
-            ('BOTTOMPADDING',(0,0),(-1,-1),3),
+        
+        if is_pos:
+            col_widths = [45*mm, 25*mm]
+        else:
+            col_widths = [120*mm, 60*mm]
+            
+        detail_table = Table(detail_data, colWidths=col_widths)
+        detail_table.setStyle(TableStyle([
+            ('GRID', (0,0), (-1,-2), 0.5, colors.black),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#1e3c72")),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('ALIGN', (0,0), (-1,0), 'CENTER'),
+            ('ALIGN', (1,1), (1,1), 'RIGHT'),
+            ('FONTSIZE', (0,0), (-1,-1), font_text),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
         ]))
-        elements.append(table)
-        elements.append(Spacer(1,5*mm))
+        elements.append(detail_table)
+        elements.append(Spacer(1, 2*mm))
 
-        # =========================
         # TOTAL
-        # =========================
-        total_data = [["TOTAL", f"{paiement.montant:,} FBu".replace(',', ' ')]]
-        total_table = Table(
-            total_data,
-            colWidths=[45*mm,25*mm] if is_pos else [120*mm,60*mm]
-        )
+        total_table = Table([["TOTAL PAYE", montant_formate]], colWidths=col_widths)
         total_table.setStyle(TableStyle([
-            ('LINEABOVE',(0,0),(-1,0),1,colors.black),
-            ('ALIGN',(0,0),(0,0),'LEFT'),
-            ('ALIGN',(1,0),(1,0),'RIGHT'),
-            ('FONTSIZE',(0,0),(-1,-1),font_text+1),
-            ('BACKGROUND',(0,0),(-1,0),colors.HexColor("#f2f2f2")),
-            ('TEXTCOLOR',(0,0),(-1,-1),colors.HexColor("#d9534f")),
-            ('BOTTOMPADDING',(0,0),(-1,-1),5),
+            ('LINEABOVE', (0,0), (-1,0), 1, colors.HexColor("#1e3c72")),
+            ('ALIGN', (0,0), (0,0), 'LEFT'),
+            ('ALIGN', (1,0), (1,0), 'RIGHT'),
+            ('FONTSIZE', (0,0), (-1,-1), font_text+2),
+            ('FONTNAME', (0,0), (-1,-1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#f8fafc")),
+            ('TEXTCOLOR', (1,0), (1,0), colors.HexColor("#1e3c72")),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
         ]))
         elements.append(total_table)
-        elements.append(Spacer(1,10*mm))
+        elements.append(Spacer(1, 8*mm))
 
-        # =========================
-        # FOOTER
-        # =========================
-        elements.append(Paragraph("Merci pour votre paiement", footer_style))
+        # Informations complémentaires
+        info_comp_data = [
+            [Paragraph("<b>Mode de paiement :</b>", style_label), Paragraph("Espèces", style_valeur)],
+            [Paragraph("<b>Date de paiement :</b>", style_label), Paragraph(paiement.date_paie.strftime('%d/%m/%Y'), style_valeur)],
+        ]
+        
+        info_comp_table = Table(info_comp_data, colWidths=['30%', '70%'] if not is_pos else [25*mm, 45*mm])
+        info_comp_table.setStyle(TableStyle([
+            ('FONTSIZE', (0,0), (-1,-1), font_text),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ]))
+        elements.append(info_comp_table)
+        elements.append(Spacer(1, 8*mm))
+
+        
+        # Date d'édition
+        elements.append(Paragraph(
+            f"Édité le {datetime.now().strftime('%d/%m/%Y à %H:%M')}",
+            ParagraphStyle("date_edition", alignment=TA_CENTER, fontSize=font_small-1, textColor=colors.gray)
+        ))
 
         doc.build(elements)
         return response
 
+    except Paiement.DoesNotExist:
+        return HttpResponse("Paiement introuvable", status=404)
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return HttpResponse(f"Erreur technique : {str(e)}", status=500)
 
 # logos/ecole/eibu_yxQIjf2.PNG
@@ -932,8 +1283,8 @@ def generate_historique_pdf(request):
             annee_txt = campus_txt = classe_info = eleve_txt = banque_txt = "-"
 
         # Titre
-        elements.append(Paragraph("RAPPORT FINANCIER", title_style))
-        elements.append(Spacer(1, 2*mm))
+        # elements.append(Paragraph("RAPPORT FINANCIER", title_style))
+        # elements.append(Spacer(1, 2*mm))
 
         # Ligne séparatrice
         elements.append(Table([[""]], colWidths=[190*mm], style=[('LINEBELOW', (0,0), (-1,-1), 1, colors.grey)]))
@@ -1155,8 +1506,8 @@ def generate_dette_pdf(request):
 
 
         # Titre
-        elements.append(Paragraph("RAPPORT DES DETTES", title_style))
-        elements.append(Spacer(1,3*mm))
+        # elements.append(Paragraph("RAPPORT DES DETTES", title_style))
+        # elements.append(Spacer(1,3*mm))
 
         # Tableau
         data = [["Élève","Variable","À payer","Payé","Reste","Pénalité","Total"]]
@@ -1188,11 +1539,6 @@ def generate_dette_pdf(request):
         ]))
         elements.append(table)
         elements.append(Spacer(1,6*mm))
-
-        # elements.append(Paragraph(
-        #     "Rapport généré automatiquement",
-        #     ParagraphStyle("footer", alignment=TA_CENTER, fontSize=9)
-        # ))
 
         doc.build(elements)
         return response
@@ -1311,16 +1657,13 @@ def generate_situation_pdf(request):
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
 
 
-
-
 def export_dashboard_pdf(request):
-
     data = json.loads(request.body)
 
     title = data.get("title", "Tableau")
     headers = data.get("headers", [])
     rows = data.get("rows", [])
-    total = data.get("total", 0)
+    total_general = data.get("total", 0)
 
     id_campus = data.get("id_campus")
     id_cycle = data.get("id_cycle")
@@ -1328,7 +1671,7 @@ def export_dashboard_pdf(request):
     id_classe = data.get("id_classe")
     id_eleve = data.get("id_eleve")
 
-    # 🔥 récupération objets si filtres présents
+    # Récupération des objets
     classe_obj = None
     eleve_obj = None
 
@@ -1343,17 +1686,7 @@ def export_dashboard_pdf(request):
 
     elements = []
 
-    # HEADER EXISTANT
-    # header = build_pdf_header(
-    #     eleve=eleve_obj,
-    #     classe_obj=classe_obj,
-    #     id_campus=id_campus,
-    #     id_cycle=id_cycle,
-    #     id_annee=id_annee
-    # )
-
-    # elements.append(header)
-    # elements.append(Spacer(1, 10))
+    # Header
     header = build_pdf_header(
         eleve=eleve_obj,
         classe_obj=classe_obj,
@@ -1363,25 +1696,63 @@ def export_dashboard_pdf(request):
         titre=title
     )
     elements.append(header)
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 15))
 
     styles = getSampleStyleSheet()
-    elements.append(Paragraph(f"<b>{title}</b>", styles["Heading2"]))
-    elements.append(Spacer(1, 10))
+    
+    # Nettoyer les rows
+    cleaned_rows = []
+    for row in rows:
+        cleaned_row = []
+        for cell in row:
+            cell = str(cell).strip()
+            cleaned_row.append(cell)
+        cleaned_rows.append(cleaned_row)
 
-    # TABLEAU
-    table_data = [headers] + rows + [["", "", "Total Général", total]]
+    # Construction du tableau
+    nb_colonnes = len(headers)
+    
+    # Formater le total avec des espaces
+    total_formate = f"{int(total_general):,}".replace(',', ' ')
+    
+    # Créer la ligne de total avec le libellé "TOTAL GÉNÉRAL"
+    if nb_colonnes == 4:  # Cas avec Élève
+        total_row = ['', '', 'TOTAL GÉNÉRAL', total_formate]
+    elif nb_colonnes == 3:  # Cas sans Élève
+        total_row = ['', 'TOTAL GÉNÉRAL', total_formate]
+    elif nb_colonnes == 2:
+        total_row = ['TOTAL GÉNÉRAL', total_formate]
+    else:
+        total_row = [''] * (nb_colonnes - 2) + ['TOTAL GÉNÉRAL', total_formate]
+    
+    # Ajouter la ligne de total
+    table_data = [headers] + cleaned_rows + [total_row]
 
+    # Créer le tableau
     table = Table(table_data, repeatRows=1)
 
-    table.setStyle(TableStyle([
+    # Style du tableau
+    style = TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.grey),
         ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.black),
-        ('ALIGN', (-1,1), (-1,-1), 'RIGHT'),
+        ('ALIGN', (0,0), (-1,0), 'CENTER'),
         ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,0), 10),
+        ('BOTTOMPADDING', (0,0), (-1,0), 12),
+        ('BACKGROUND', (0,1), (-1,-2), colors.white),
+        ('GRID', (0,0), (-1,-2), 1, colors.black),
+        ('ALIGN', (-1,1), (-1,-2), 'RIGHT'),
         ('BACKGROUND', (0,-1), (-1,-1), colors.lightgrey),
-    ]))
+        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
+        ('GRID', (0,-1), (-1,-1), 1, colors.black),
+        ('ALIGN', (-1,-1), (-1,-1), 'RIGHT'),
+    ])
+    
+    # Fusionner les cellules de la ligne de total
+    if nb_colonnes > 2:
+        style.add('SPAN', (0, -1), (nb_colonnes-2, -1))
+    
+    table.setStyle(style)
 
     elements.append(table)
 
@@ -1390,13 +1761,12 @@ def export_dashboard_pdf(request):
     pdf = buffer.getvalue()
     buffer.close()
 
-    filename = title.replace(" ", "_").lower()
+    filename = f"{title.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
 
     response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="{filename}.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
 
     return response
-
 
 def generate_historique_excel(request):
     try:

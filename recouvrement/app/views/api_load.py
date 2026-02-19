@@ -774,7 +774,6 @@ def get_eleves_classe(request):
 
 
 def historique_financier(request):
-
     def clean(v): 
         return v if v not in ("", None) else None
 
@@ -784,6 +783,24 @@ def historique_financier(request):
     id_trimestre = clean(request.GET.get('trimestre'))
     id_compte = clean(request.GET.get('compte'))
 
+    # Récupérer d'abord les IDs des VariablePrix correspondant aux critères
+    variable_prix_ids = []
+    
+    if id_trimestre or id_annee or id_classe:
+        # Construire la requête sur VariablePrix
+        variable_prix_qs = VariablePrix.objects.all()
+        
+        if id_annee:
+            variable_prix_qs = variable_prix_qs.filter(id_annee_id=id_annee)
+        if id_classe:
+            variable_prix_qs = variable_prix_qs.filter(id_classe_active_id=id_classe)
+        if id_trimestre:
+            variable_prix_qs = variable_prix_qs.filter(id_annee_trimestre_id=id_trimestre)
+        
+        # Récupérer les IDs des variables concernées
+        variable_prix_ids = list(variable_prix_qs.values_list('id_variable_id', flat=True).distinct())
+    
+    # Maintenant, requête sur les paiements
     paiements_qs = Paiement.objects.select_related(
         'id_eleve',
         'id_variable',
@@ -797,12 +814,25 @@ def historique_financier(request):
 
     if id_annee:
         paiements_qs = paiements_qs.filter(id_annee=id_annee)
+    
     if id_classe:
         paiements_qs = paiements_qs.filter(id_classe_active=id_classe)
+    
     if id_eleve:
         paiements_qs = paiements_qs.filter(id_eleve=id_eleve)
-    if id_trimestre:
-        paiements_qs = paiements_qs.filter(id_variable__trimestre=id_trimestre)
+    
+    if id_trimestre and variable_prix_ids:
+        # Filtrer par les variables qui sont dans VariablePrix pour ce trimestre
+        paiements_qs = paiements_qs.filter(id_variable_id__in=variable_prix_ids)
+    elif id_trimestre and not variable_prix_ids:
+        # Si aucun VariablePrix trouvé pour ce trimestre, retourner vide
+        return JsonResponse({
+            "success": True,
+            "rapport": [],
+            "total_general": 0,
+            "message": "Aucune variable trouvée pour ce trimestre"
+        })
+    
     if id_compte:
         paiements_qs = paiements_qs.filter(id_compte=id_compte)
 
@@ -1252,6 +1282,8 @@ def situation_journaliere_data(request):
 
 def rapport_paiements(request):
     id_annee = request.GET.get("id_annee")
+    id_campus = request.GET.get("id_campus")
+    id_cycle = request.GET.get("id_cycle")
     id_classe_active = request.GET.get("id_classe_active")
     date_debut = request.GET.get("date_debut")
     date_fin = request.GET.get("date_fin")
