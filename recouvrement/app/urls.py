@@ -79,6 +79,19 @@ urlpatterns =[
    path('generate_situation_excel/',views.generate_situation_excel,name='generate_situation_excel'),
    path('rapport_paiement/',views.rapport_paiement,name='rapport_paiement'),
    path("rapport-paiements/", views.rapport_paiements, name="rapport_paiements"),
+   path('liste_categories/', views.liste_categories, name='liste_categories'),
+   path('liste_operations/', views.liste_operations, name='liste_operations'),
+
+   path('save_categorie_operation/', views.save_categorie_operation, name='save_categorie_operation'),
+   path('get_annees_actives/', views.get_annees_actives, name='get_annees_actives'),
+   path('get_campus_actifs/', views.get_campus_actifs, name='get_campus_actifs'),
+   path('get_categories_filtrees/', views.get_categories_filtrees, name='get_categories_filtrees'),
+   path('get_categories_operations/', views.get_categories_operations, name='get_categories_operations'),
+
+   path('save_operation_caisse/', views.save_operation_caisse, name='save_operation_caisse'),
+   path('get_operations_caisse/', views.get_operations_caisse, name='get_operations_caisse'),
+   path('get_categories_by_filters/', views.get_categories_by_filters, name='get_categories_by_filters'),
+   path('delete_operation/<int:id_operation>/', views.delete_operation, name='delete_operation'),
 
    
 ]

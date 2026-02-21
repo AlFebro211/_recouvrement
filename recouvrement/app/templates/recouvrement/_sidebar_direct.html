@@ -140,7 +140,7 @@
             </div>
         </div>
 
-        <!-- Item 4 -->
+        <!-- Item 5 -->
         <div class="menu-item">
             <a href="#" class="menu-link">
                 <span class="icon-wrapper">📊</span>
@@ -186,7 +186,31 @@
                 </div>
             </div>
         </div>
-
+        <!-- Item 6 - Gestion financière -->
+        <div class="menu-item">
+            <a href="#" class="menu-link">
+                <span class="icon-wrapper">💰</span>
+                <span class="menu-text">Gestion financière</span>
+                <i class="fas fa-chevron-right arrow-icon"></i>
+            </a>
+            <div class="submenu">
+                <!-- Sous-menu Catégories -->
+                <div class="menu-item">
+                    <a href="{% url 'liste_categories' %}" class="submenu-link">
+                        <span class="icon-wrapper">🏷️</span>
+                        <span class="menu-text">Catégories</span>
+                    </a>
+                </div>
+                
+                <!-- Sous-menu Opérations -->
+                <div class="menu-item">
+                    <a href="{% url 'liste_operations' %}" class="submenu-link">
+                        <span class="icon-wrapper">💵</span>
+                        <span class="menu-text">Opérations</span>
+                    </a>
+                </div>
+            </div>
+        </div>
         <!-- Item 5 -->
         <div class="menu-item">
             <a style="display: none;" href="#" class="menu-link">

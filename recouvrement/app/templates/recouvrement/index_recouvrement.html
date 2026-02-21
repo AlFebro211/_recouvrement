@@ -535,6 +535,11 @@
     {% include 'recouvrement/_sidebar_direct.html'%}
     <!-- Bottom Navigation -->
     {% include 'partials/_foot_bar.html' %}
+
+    <!-- entree sorties -->
+    {% if form_type == 'liste_categories_form' %}
+        {% include 'recouvrement/_entree_sortie_operations.html' %}
+    {% endif %} 
     
 
     <!-- Main Content -->
@@ -1044,9 +1049,69 @@
                                 <i class="fas fa-download"></i> telecharger le rapport
                             </button>
                         </div>
-
-                        {% endif %}
-
+                            <!-- entre sortie prtie categorie  -->
+                    <!-- entre sortie partie categorie  -->
+{% elif form_type == 'liste_categories_form' %}
+    <h2>Ajouter une catégorie d'opération</h2>
+    
+    {% if liste_categories_form.non_field_errors %}
+    <div class="alert alert-danger">
+        {{ liste_categories_form.non_field_errors }}
+    </div>
+    {% endif %}
+    
+    <div class="form-row">
+        {% for field in liste_categories_form %}
+            <div class="form-group col-md-6">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {% render_field field class="form-control" %}
+                {% if field.errors %}
+                <small class="text-danger">{{ field.errors.0 }}</small>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="form-actions">
+        <button type="button" class="btn btn-cancel" id="cancelBtn">
+            <span class="emoji-icon">❌</span> Annuler
+        </button>
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus-circle"></i> Ajouter
+        </button>
+    </div>
+                    <!-- entre sortie partie OPERATION  -->
+<!-- entre sortie partie OPERATION -->
+{% elif form_type == 'liste_operations_form' %}
+    <h2>Ajouter une opération financière</h2>
+    
+    {% if liste_operations_form.non_field_errors %}
+    <div class="alert alert-danger">
+        {{ liste_operations_form.non_field_errors }}
+    </div>
+    {% endif %}
+    
+    <div class="form-row">
+        {% for field in liste_operations_form %}
+            <div class="form-group col-md-6" id="field-{{ field.name }}">
+                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                {% render_field field class="form-control" %}
+                {% if field.errors %}
+                <small class="text-danger">{{ field.errors.0 }}</small>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+    
+    <div class="form-actions">
+        <button type="button" class="btn btn-cancel" id="cancelBtn">
+            <span class="emoji-icon">❌</span> Annuler
+        </button>
+        <button type="submit" class="btn btn-primary">
+            <i class="fas fa-plus-circle"></i> Ajouter l'opération
+        </button>
+    </div>
+{% endif %}
                 </form>
                 
 
@@ -1626,19 +1691,191 @@
 {% endif %}
 <!-- CONTENEUR DU TABLEAU -->
        
-        <div class="table-container mt-4" id="hf-result-container">
-            <!-- Le tableau d'hist. financier sera injecté ici par JS  -->
-        </div>
-        <div id="dette-result-container" class="mt-4">
-            <!-- Le tableau des dettes antérieures sera injecté ici par JS  -->
-        </div>
+        <div class="table-container mt-4" id="hf-result-container"></div>
+        <div id="dette-result-container" class="mt-4"></div>
         <div id="penaliteContainer" class="table-container"></div>
         <div id="dateButoireContainer" class="table-container"></div>
-        
 
+<!-- ========== SECTION AFFICHAGE DES CATÉGORIES D'OPÉRATIONS ========== -->
+{% if form_type == 'liste_categories_form' %}
+<div class="container-fluid mt-3" id="categories-operations-section">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white py-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-white bg-opacity-25 rounded-circle p-2 me-3">
+                </div>
+                <div>
+                    <h2 class="mb-0 fw-bold">Catégories d'opérations</h2>
+                </div>
+            </div>
+        </div>
 
+        <div class="card-body p-0">
+            <!-- Filtres -->
+            <div class="bg-light p-3 border-bottom">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <select id="filter-annee-categorie" class="form-control" style="width: 160px;">
+                        <option value="">Toutes années</option>
+                        {% for annee in annees %}
+                            <option value="{{ annee.id_annee }}">{{ annee.annee }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <select id="filter-campus-categorie" class="form-control" style="width: 160px;">
+                        <option value="">Tous campus</option>
+                        {% for campus in campus_list %}
+                            <option value="{{ campus.id_campus }}">{{ campus.campus }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <select id="filter-type-categorie" class="form-control" style="width: 140px;">
+                        <option value="">Tous types</option>
+                        <option value="ENTREE">⬆️ Entrées</option>
+                        <option value="SORTIE">⬇️ Sorties</option>
+                    </select>
+                </div>
+            </div>
 
-        
+            <!-- Statistiques sur UNE SEULE LIGNE -->
+            <div class="p-3 border-bottom bg-white">
+                <div class="d-flex justify-content-around align-items-center">
+                    <div class="text-center px-4">
+                        <small class="text-muted d-block">Total</small>
+                        <span class="h5 mb-0 fw-bold" id="stat-total">0</span>
+                    </div>
+                    <div class="text-center px-4 border-start border-end">
+                        <small class="text-muted d-block">Entrées</small>
+                        <span class="h5 mb-0 fw-bold text-success" id="stat-entrees">0</span>
+                    </div>
+                    <div class="text-center px-4">
+                        <small class="text-muted d-block">Sorties</small>
+                        <span class="h5 mb-0 fw-bold text-danger" id="stat-sorties">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tableau -->
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto; overflow-x: hidden;">
+                <table class="table table-bordered table-hover text-center shadow-sm mb-0">
+                    <thead class="bg-primary text-white">
+                        <tr>
+                            <th class="py-2">Id</th>
+                            <th class="py-2">Nom</th>
+                            <th class="py-2">Type</th>
+                            <th class="py-2">Description</th>
+                            <th class="py-2">Année</th>
+                            <th class="py-2">Campus</th>
+                            <!-- <th class="py-2">Actions</th> -->
+                        </tr>
+                    </thead>
+                    <tbody id="categories-tbody">
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                <i class="fas fa-spinner fa-spin me-2"></i>Chargement...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+        </div>
+    </div>
+</div>
+{% endif %}
+<!-- ========== SECTION AFFICHAGE DES OPÉRATIONS FINANCIÈRES ========== -->
+{% if form_type == 'liste_operations_form' %}
+<div class="container-fluid mt-3" id="operations-section">
+    <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white py-3">
+            <div class="d-flex align-items-center">
+                <div class="bg-white bg-opacity-25 rounded-circle p-2 me-3">
+                    <i class="fas fa-exchange-alt fa-lg"></i>
+                </div>
+                <div>
+                    <h4 class="mb-0 fw-bold">Opérations financières</h4>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-body p-0">
+            <div class="bg-light p-3 border-bottom">
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <select id="filter-annee-operation" class="form-control" style="width: 160px;">
+                        <option value="">📅 Toutes années</option>
+                        {% for annee in annees %}
+                            <option value="{{ annee.id_annee }}">{{ annee.annee }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <select id="filter-campus-operation" class="form-control" style="width: 160px;">
+                        <option value="">🏫 Tous campus</option>
+                        {% for campus in campus_list %}
+                            <option value="{{ campus.id_campus }}">{{ campus.campus }}</option>
+                        {% endfor %}
+                    </select>
+                    
+                    <select id="filter-categorie-operation" class="form-control" style="width: 180px;">
+                        <option value="">📂 Toutes catégories</option>
+                    </select>
+                    
+                    <select id="filter-type-operation" class="form-control" style="width: 140px;">
+                        <option value="">📊 Tous types</option>
+                        <option value="ENTREE">⬆️ Entrées</option>
+                        <option value="SORTIE">⬇️ Sorties</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="p-3 border-bottom bg-white">
+                <div class="d-flex justify-content-around align-items-center">
+                    <div class="text-center px-4">
+                        <small class="text-muted d-block">Total opérations</small>
+                        <span class="h5 mb-0 fw-bold" id="stat-total">0</span>
+                    </div>
+                    <div class="text-center px-4 border-start border-end">
+                        <small class="text-muted d-block">Entrées</small>
+                        <span class="h5 mb-0 fw-bold text-success" id="stat-entrees">0</span>
+                    </div>
+                    <div class="text-center px-4">
+                        <small class="text-muted d-block">Sorties</small>
+                        <span class="h5 mb-0 fw-bold text-danger" id="stat-sorties">0</span>
+                    </div>
+                    <div class="text-center px-4 border-start">
+                        <small class="text-muted d-block">Montant total</small>
+                        <span class="h5 mb-0 fw-bold text-primary" id="stat-montant">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <table class="table table-bordered table-hover text-center shadow-sm mb-0">
+                    <thead class="bg-primary text-white">
+                        <tr>
+                            <th class="py-2">#</th>
+                            <th class="py-2">Date</th>
+                            <th class="py-2">Catégorie</th>
+                            <th class="py-2">Type</th>
+                            <th class="py-2">Montant</th>
+                            <th class="py-2">Source/Bénéficiaire</th>
+                            <th class="py-2">Mode</th>
+                            <th class="py-2">Description</th>
+                            <!-- <th class="py-2">Actions</th> -->
+                        </tr>
+                    </thead>
+                    <tbody id="operations-tbody">
+                        <tr>
+                            <td colspan="9" class="text-center py-4 text-muted">
+                                <i class="fas fa-spinner fa-spin me-2"></i>Chargement...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
     </div>
 
     <!-- Scripts -->
@@ -5049,8 +5286,6 @@ $(document).on('click', '.confirm-edit', function(){
 <script>
 $(document).ready(function(){
 
-    console.log("SCRIPT SITUATION OK");
-
     if(!window.location.pathname.includes('situation_journaliere')) return;
 
     const tbody = $("#tbody-paiements");
@@ -5208,18 +5443,7 @@ $(document).ready(function(){
 $(document).ready(function () {
     if (!window.location.pathname.includes('rapport_paiement')) return;
 
-    // ================================
-    // INITIALISATION : DATE MIN POUR FIN
-    // ================================
     const today = new Date().toISOString().split('T')[0];
-    
-    // Optionnel : mettre la date du jour par défaut
-    // $('#date_debut').val(today);
-    // $('#date_fin').val(today);
-
-    // ================================
-    // CONTRAINTE : DATE FIN >= DATE DEBUT
-    // ================================
     $('#date_debut').on('change', function() {
         const debut = $(this).val();
         const fin = $('#date_fin').val();
@@ -5388,9 +5612,681 @@ $(document).ready(function () {
 });
 
 </script>
+<!-- Script pour les catégories d'opérations -->
+<script>
+$(document).ready(function() {
+    if ($('#categories-operations-section').length === 0) return;
 
+    let categoriesData = [];
 
+    window.loadCategories = function() {
+        const annee = $('#filter-annee-categorie').val() || '';
+        const campus = $('#filter-campus-categorie').val() || '';
+        const type = $('#filter-type-categorie').val() || '';
 
+        $('#categories-tbody').html(`
+            <tr>
+                <td colspan="7" class="text-center py-4 text-muted">
+                <i class="fas fa-spinner fa-spin me-2"></i>Chargement...
+                </td>
+            </tr>
+        `);
+
+        $.ajax({
+            url: '/get_categories_filtrees/',
+            type: 'GET',
+            data: { annee: annee, campus: campus },
+            success: function(response) {
+                if (response.success) {
+                    let categories = response.categories;
+                    if (type) {
+                        categories = categories.filter(c => c.type_operation === type);
+                    }
+                    categoriesData = categories;
+                    displayCategories(categories);
+                    updateStats(categories);
+                    $('#record-count, #record-count-footer').text(categories.length);
+                }
+            },
+            error: function() {
+                $('#categories-tbody').html(`
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Erreur de chargement
+                        </td>
+                    </tr>
+                `);
+            }
+        });
+    };
+
+    function displayCategories(categories) {
+        const tbody = $('#categories-tbody');
+        tbody.empty();
+
+        if (!categories || categories.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="7" class="text-center py-4 text-muted">
+                        <i class="fas fa-folder-open me-2"></i>
+                        Aucune catégorie trouvée
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        categories.forEach((cat, index) => {
+            const typeClass = cat.type_operation === 'ENTREE' ? 'text-success' : 'text-danger';
+            const typeIcon = cat.type_operation === 'ENTREE' ? '⬆️' : '⬇️';
+            const typeText = cat.type_operation === 'ENTREE' ? 'Entrée' : 'Sortie';
+
+            const row = `
+                <tr id="categorie-row-${cat.id}">
+                    <td>${index + 1}</td>
+                    <td class="fw-bold">${escapeHtml(cat.nom)}</td>
+                    <td class="${typeClass}">${typeIcon} ${typeText}</td>
+                    <td>${escapeHtml(cat.description) || '-'}</td>
+                    <td>${escapeHtml(cat.annee) || '-'}</td>
+                    <td>${escapeHtml(cat.campus) || '-'}</td>
+                    <!--<td>
+                        <a href="#" class="btn btn-sm btn-outline-primary edit-categorie me-1" data-id="${cat.id}">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="#" class="btn btn-sm btn-outline-danger delete-categorie" data-id="${cat.id}">
+                            <i class="fas fa-trash"></i> 
+                        </a>
+                    </td>-->
+                </tr>
+            `;
+            tbody.append(row);
+        });
+    }
+
+    function updateStats(categories) {
+        const total = categories.length;
+        const entrees = categories.filter(c => c.type_operation === 'ENTREE').length;
+        const sorties = categories.filter(c => c.type_operation === 'SORTIE').length;
+        
+        $('#stat-total').text(total);
+        $('#stat-entrees').text(entrees);
+        $('#stat-sorties').text(sorties);
+    }
+
+    function escapeHtml(text) {
+        if (!text) return text;
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    $('#filter-annee-categorie, #filter-campus-categorie, #filter-type-categorie').on('change', function() {
+        loadCategories();
+    });
+
+    $('#variablePrixForm').on('submit', function(e) {
+        const formType = '{{ form_type }}';
+        if (formType !== 'liste_categories_form') return;
+
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const submitBtn = $(this).find('button[type="submit"]');
+        const originalText = submitBtn.html();
+        
+        submitBtn.prop('disabled', true);
+        submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Enregistrement...');
+
+        $.ajax({
+            url: '/save_categorie_operation/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            success: function(response) {
+                if (response.success) {
+                    showMessage('success', response.message || 'Catégorie créée avec succès !');
+                    $('#modalContainer').fadeOut(300);
+                    $('#variablePrixForm')[0].reset();
+                    loadCategories();
+                    if (window.history.replaceState) {
+                        window.history.replaceState(null, null, window.location.href);
+                    }
+                } else {
+                    showMessage('danger', response.error || 'Erreur lors de la création');
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = 'Erreur lors de la création';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                showMessage('danger', errorMsg);
+            },
+            complete: function() {
+                submitBtn.prop('disabled', false);
+                submitBtn.html(originalText);
+            }
+        });
+    });
+
+    $(document).on('click', '.edit-categorie', function(e) {
+        e.preventDefault();
+        const id = $(this).data('id');
+        const cat = categoriesData.find(c => c.id == id);
+        
+        if (cat) {
+            showMessage('info', `Fonction de modification à implémenter pour: ${cat.nom}`);
+        }
+    });
+
+    $(document).on('click', '.delete-categorie', function(e) {
+        e.preventDefault();
+        const id = $(this).data('id');
+        const row = $(this).closest('tr');
+        const nom = row.find('td:eq(1)').text().trim();
+
+        if (!confirm(`Supprimer la catégorie "${nom}" ?`)) return;
+
+        $.ajax({
+            url: `/delete_categorie/${id}/`,
+            type: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    showMessage('success', 'Catégorie supprimée avec succès');
+                    loadCategories();
+                    if (window.history.replaceState) {
+                        window.history.replaceState(null, null, window.location.href);
+                    }
+                } else {
+                    showMessage('danger', response.error || 'Erreur lors de la suppression');
+                }
+            },
+            error: function() {
+                showMessage('danger', 'Erreur lors de la suppression');
+            }
+        });
+    });
+
+    function showMessage(type, message) {
+        const alertDiv = $(`
+            <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        `);
+        
+        $('#ajax-message').html(alertDiv);
+        
+        setTimeout(() => {
+            alertDiv.fadeOut(300, function() {
+                $(this).remove();
+            });
+        }, 3000);
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                const cookie = c.trim();
+                if (cookie.startsWith(name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                }
+            });
+        }
+        return cookieValue;
+    }
+
+    const modal = document.getElementById('modalContainer');
+    if (modal) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.attributeName === 'style' && modal.style.display === 'none') {
+                    loadCategories();
+                }
+            });
+        });
+        observer.observe(modal, { attributes: true });
+    }
+
+    loadCategories();
+
+    if ($('#id_id_annee').length && $('#id_id_annee option').length <= 1) {
+        $.ajax({
+            url: '/get_annees_actives/',
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#id_id_annee');
+                    select.html('<option value="">---------</option>');
+                    response.annees.forEach(a => {
+                        select.append(`<option value="${a.id_annee}">${a.annee}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    if ($('#id_id_campus').length && $('#id_id_campus option').length <= 1) {
+        $.ajax({
+            url: '/get_campus_actifs/',
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#id_id_campus');
+                    select.html('<option value="">---------</option>');
+                    response.campus.forEach(c => {
+                        select.append(`<option value="${c.id_campus}">${c.campus}</option>`);
+                    });
+                }
+            }
+        });
+    }
+});
+</script>
+<!-- Script pour les opérations financières -->
+<script>
+$(document).ready(function() {
+    if ($('#operations-section').length === 0) return;
+
+    let operationsData = [];
+
+    // ==========================
+    // CHARGEMENT DES CATÉGORIES
+    // ==========================
+    function loadCategories() {
+        const annee = $('#filter-annee-operation').val() || '';
+        const campus = $('#filter-campus-operation').val() || '';
+        
+        $.ajax({
+            url: '/get_categories_by_filters/',
+            type: 'GET',
+            data: { annee: annee, campus: campus },
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#filter-categorie-operation');
+                    select.html('<option value="">📂 Toutes catégories</option>');
+                    response.categories.forEach(c => {
+                        const icon = c.type_operation === 'ENTREE' ? '⬆️' : '⬇️';
+                        select.append(`<option value="${c.id}">${icon} ${c.nom}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    // ==========================
+    // CHARGEMENT DES OPÉRATIONS
+    // ==========================
+    function loadOperations() {
+        const annee = $('#filter-annee-operation').val() || '';
+        const campus = $('#filter-campus-operation').val() || '';
+        const categorie = $('#filter-categorie-operation').val() || '';
+        const type = $('#filter-type-operation').val() || '';
+
+        $('#operations-tbody').html(`
+            <tr>
+                <td colspan="9" class="text-center py-4 text-muted">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Chargement...
+                </td>
+            </tr>
+        `);
+
+        $.ajax({
+            url: '/get_operations_caisse/',
+            type: 'GET',
+            data: { annee: annee, campus: campus, categorie: categorie, type: type },
+            success: function(response) {
+                if (response.success) {
+                    operationsData = response.operations;
+                    displayOperations(response.operations);
+                    updateStats(response.stats);
+                }
+            },
+            error: function() {
+                $('#operations-tbody').html(`
+                    <tr>
+                        <td colspan="9" class="text-center py-4 text-danger">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Erreur de chargement
+                        </td>
+                    </tr>
+                `);
+            }
+        });
+    }
+
+    // ==========================
+    // AFFICHAGE DES OPÉRATIONS
+    // ==========================
+    function displayOperations(operations) {
+        const tbody = $('#operations-tbody');
+        tbody.empty();
+
+        if (!operations || operations.length === 0) {
+            tbody.html(`
+                <tr>
+                    <td colspan="9" class="text-center py-4 text-muted">
+                        <i class="fas fa-folder-open me-2"></i>
+                        Aucune opération trouvée
+                    </td>
+                </tr>
+            `);
+            return;
+        }
+
+        operations.forEach((op, index) => {
+            const typeClass = op.type_operation === 'ENTREE' ? 'text-success' : 'text-danger';
+            const typeIcon = op.type_operation === 'ENTREE' ? '⬆️' : '⬇️';
+            const montantClass = op.type_operation === 'ENTREE' ? 'text-success' : 'text-danger';
+
+            const row = `
+                <tr id="operation-row-${op.id}">
+                    <td>${index + 1}</td>
+                    <td>${op.date}</td>
+                    <td class="fw-bold">${escapeHtml(op.categorie)}</td>
+                    <td class="${typeClass}">${typeIcon} ${op.type_operation === 'ENTREE' ? 'Entrée' : 'Sortie'}</td>
+                    <td class="fw-bold ${montantClass}">${op.montant_formatted} FBu</td>
+                    <td>${escapeHtml(op.source_beneficiaire)}</td>
+                    <td>${escapeHtml(op.mode_paiement)}</td>
+                    <td class="text-truncate" style="max-width: 200px;" title="${escapeHtml(op.description)}">
+                        ${escapeHtml(op.description)}
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            ${op.justificatif ? `
+                                <a href="${op.justificatif}" target="_blank" class="btn btn-light" title="Voir justificatif">
+                                    <i class="fas fa-paperclip text-primary"></i>
+                                </a>
+                            ` : ''}
+                           <!-- <button class="btn btn-light delete-operation" data-id="${op.id}" title="Supprimer">
+                                <i class="fas fa-trash text-danger"></i>
+                            </button> -->
+                        </div>
+                    </td>
+                </tr>
+            `;
+            tbody.append(row);
+        });
+    }
+
+    // ==========================
+    // STATISTIQUES
+    // ==========================
+    function updateStats(stats) {
+        if (stats) {
+            $('#stat-total').text(stats.total || 0);
+            $('#stat-entrees').text(formatMoney(stats.entrees));
+            $('#stat-sorties').text(formatMoney(stats.sorties));
+            $('#stat-montant').text(formatMoney(stats.montant_total));
+        }
+    }
+
+    function formatMoney(amount) {
+        return new Intl.NumberFormat('fr-FR').format(amount) + ' FBu';
+    }
+
+    function escapeHtml(text) {
+        if (!text) return text;
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // ==========================
+    // FILTRES
+    // ==========================
+    $('#filter-annee-operation, #filter-campus-operation').on('change', function() {
+        loadCategories();
+        loadOperations();
+    });
+
+    $('#filter-categorie-operation, #filter-type-operation').on('change', function() {
+        loadOperations();
+    });
+
+    // ==========================
+    // CHARGEMENT DYNAMIQUE DES CATÉGORIES DANS LE FORMULAIRE
+    // ==========================
+    function loadFormCategories() {
+        const annee = $('#id_id_annee').val();
+        const campus = $('#id_id_campus').val();
+        
+        if (annee && campus) {
+            $.ajax({
+                url: '/get_categories_by_filters/',
+                type: 'GET',
+                data: { annee: annee, campus: campus },
+                success: function(response) {
+                    if (response.success) {
+                        const select = $('#id_categorie');
+                        select.html('<option value="">---------</option>');
+                        response.categories.forEach(c => {
+                            const icon = c.type_operation === 'ENTREE' ? '⬆️' : '⬇️';
+                            select.append(`<option value="${c.id}">${icon} ${c.nom}</option>`);
+                        });
+                        $('#field-categorie').show();
+                    }
+                }
+            });
+        } else {
+            $('#id_categorie').html('<option value="">---------</option>');
+        }
+    }
+
+    $('#id_id_annee, #id_id_campus').on('change', function() {
+        loadFormCategories();
+    });
+
+    // ==========================
+    // SOUMISSION DU FORMULAIRE
+    // ==========================
+    $('#variablePrixForm').on('submit', function(e) {
+        const formType = '{{ form_type }}';
+        if (formType !== 'liste_operations_form') return;
+
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const submitBtn = $(this).find('button[type="submit"]');
+        const originalText = submitBtn.html();
+        
+        submitBtn.prop('disabled', true);
+        submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Enregistrement...');
+
+        $.ajax({
+            url: '/save_operation_caisse/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            success: function(response) {
+                if (response.success) {
+                    showMessage('success', response.message || 'Opération enregistrée avec succès !');
+                    $('#modalContainer').fadeOut(300);
+                    $('#variablePrixForm')[0].reset();
+                    loadOperations();
+                    loadCategories();
+                    if (window.history.replaceState) {
+                        window.history.replaceState(null, null, window.location.href);
+                    }
+                } else {
+                    showMessage('danger', response.error || 'Erreur lors de l\'enregistrement');
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = 'Erreur lors de l\'enregistrement';
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    errorMsg = xhr.responseJSON.error;
+                }
+                showMessage('danger', errorMsg);
+            },
+            complete: function() {
+                submitBtn.prop('disabled', false);
+                submitBtn.html(originalText);
+            }
+        });
+    });
+
+    // ==========================
+    // SUPPRESSION
+    // ==========================
+    $(document).on('click', '.delete-operation', function(e) {
+        e.preventDefault();
+        const id = $(this).data('id');
+        const row = $(this).closest('tr');
+        const categorie = row.find('td:eq(2)').text().trim();
+
+        if (!confirm(`Supprimer cette opération (${categorie}) ?`)) return;
+
+        $.ajax({
+            url: `/delete_operation/${id}/`,
+            type: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            success: function(response) {
+                if (response.success) {
+                    showMessage('success', 'Opération supprimée avec succès');
+                    loadOperations();
+                    loadCategories();
+                    if (window.history.replaceState) {
+                        window.history.replaceState(null, null, window.location.href);
+                    }
+                } else {
+                    showMessage('danger', response.error || 'Erreur lors de la suppression');
+                }
+            },
+            error: function() {
+                showMessage('danger', 'Erreur lors de la suppression');
+            }
+        });
+    });
+
+    // ==========================
+    // NOTIFICATIONS
+    // ==========================
+    // ==========================
+// NOTIFICATIONS AMÉLIORÉES
+// ==========================
+function showMessage(type, message) {
+    // Supprimer les anciennes notifications
+    $('.alert').remove();
+    
+    // Créer la nouvelle notification
+    const alertDiv = $(`
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert" 
+             style="position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+            <div class="d-flex align-items-center">
+                ${type === 'success' ? '<i class="fas fa-check-circle me-2" style="font-size: 20px;"></i>' : ''}
+                ${type === 'danger' ? '<i class="fas fa-exclamation-circle me-2" style="font-size: 20px;"></i>' : ''}
+                ${type === 'warning' ? '<i class="fas fa-exclamation-triangle me-2" style="font-size: 20px;"></i>' : ''}
+                ${type === 'info' ? '<i class="fas fa-info-circle me-2" style="font-size: 20px;"></i>' : ''}
+                <span style="flex-grow: 1;">${message}</span>
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close" style="background: none; border: none; font-size: 20px;">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+        </div>
+    `);
+    
+    // Ajouter au body
+    $('body').append(alertDiv);
+    
+    // Animation d'entrée
+    alertDiv.hide().fadeIn(300);
+    
+    // Auto-disparition après 3 secondes
+    setTimeout(() => {
+        alertDiv.fadeOut(300, function() {
+            $(this).remove();
+        });
+    }, 3000);
+}
+
+    // ==========================
+    // CSRF TOKEN
+    // ==========================
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                const cookie = c.trim();
+                if (cookie.startsWith(name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                }
+            });
+        }
+        return cookieValue;
+    }
+
+    // ==========================
+    // OBSERVER LA MODALE
+    // ==========================
+    const modal = document.getElementById('modalContainer');
+    if (modal) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.attributeName === 'style' && modal.style.display === 'none') {
+                    loadOperations();
+                    loadCategories();
+                }
+            });
+        });
+        observer.observe(modal, { attributes: true });
+    }
+
+    // ==========================
+    // CHARGEMENT DES ANNÉES ET CAMPUS DANS LE FORMULAIRE
+    // ==========================
+    if ($('#id_id_annee').length && $('#id_id_annee option').length <= 1) {
+        $.ajax({
+            url: '/get_annees_actives/',
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#id_id_annee');
+                    select.html('<option value="">---------</option>');
+                    response.annees.forEach(a => {
+                        select.append(`<option value="${a.id_annee}">${a.annee}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    if ($('#id_id_campus').length && $('#id_id_campus option').length <= 1) {
+        $.ajax({
+            url: '/get_campus_actifs/',
+            type: 'GET',
+            success: function(response) {
+                if (response.success) {
+                    const select = $('#id_id_campus');
+                    select.html('<option value="">---------</option>');
+                    response.campus.forEach(c => {
+                        select.append(`<option value="${c.id_campus}">${c.campus}</option>`);
+                    });
+                }
+            }
+        });
+    }
+
+    // ==========================
+    // INITIALISATION
+    // ==========================
+    loadCategories();
+    loadOperations();
+});
+</script>
 
 
 

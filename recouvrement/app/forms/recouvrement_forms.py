@@ -4,7 +4,7 @@ from app.models.recouvrement import (VariableCategorie,VariablePrix,Variable,Ban
                                  Compte,VariableDatebutoire,VariableDerogation,
                                  Eleve_reduction_prix,Paiement)
 from app.models.annee import Annee_trimestre
-from app.models import PenaliteConfig
+from app.models import *
 
 class VariableForm(forms.ModelForm):
     class Meta:
@@ -101,7 +101,6 @@ class VariablePrixForm(forms.ModelForm):
         
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # 🔒 Vide par défaut
         self.fields['id_variable'].queryset = Variable.objects.all()
 
         self.fields['id_annee_trimestre'].queryset = Annee_trimestre.objects.all()
@@ -290,3 +289,90 @@ class PenaliteForm(forms.ModelForm):
             'valeur': forms.NumberInput(attrs={'class': 'form-control'}),
             'plafond': forms.NumberInput(attrs={'class': 'form-control'}),
         }
+
+# form entree et sortie d'argent
+class CategorieOperationForm(forms.ModelForm):
+    class Meta:
+        model = CategorieOperation
+        fields = ['id_annee', 'id_campus', 'type_operation', 'nom', 'description']
+        labels = {
+            'id_annee': "Année",
+            'id_campus': "Campus",
+            'type_operation': "Type d'opération",
+            'nom': "Nom de la catégorie",
+            'description': "Description",
+
+        }
+        widgets = {
+            'id_annee': forms.Select(attrs={'class': 'form-control'}),
+            'id_campus': forms.Select(attrs={'class': 'form-control'}),
+            'type_operation': forms.Select(attrs={'class': 'form-control'}),
+            'nom': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Ex: Fournitures scolaires'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Description de la catégorie...'
+            }),
+        }
+    
+    # def __init__(self, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+    #     self.fields['id_annee'].queryset = Annee.objects.filter(is_active=True)
+    #     self.fields['id_campus'].queryset = Campus.objects.filter(is_active=True)
+
+class OperationCaisseForm(forms.ModelForm):
+    class Meta:
+        model = OperationCaisse
+        fields = [
+            'id_annee', 'id_campus', 'categorie', 'montant',
+            'date_operation', 'description', 'source_beneficiaire',
+            'mode_paiement', 'reference', 'justificatif'
+        ]
+        labels = {
+            'id_annee': 'Année',
+            'id_campus': 'Campus',
+            'categorie': 'Catégorie',
+            'montant': 'Montant',
+            'date_operation': 'Date',
+            'description': 'Description',
+            'source_beneficiaire': 'Source / Bénéficiaire',
+            'mode_paiement': 'Mode de paiement',
+            'reference': 'Référence (ex: N° chèque, référence...)',
+            'justificatif': 'Justificatif (optionnel)', 
+        }
+        widgets = {
+            'id_annee': forms.Select(attrs={'class': 'form-control'}),
+            'id_campus': forms.Select(attrs={'class': 'form-control'}),
+            'categorie': forms.Select(attrs={'class': 'form-control'}),
+            'montant': forms.NumberInput(attrs={'class': 'form-control','placeholder': 'Ex: 50000'}),
+            'date_operation': forms.DateInput(attrs={'type': 'date','class': 'form-control'}),
+            'description': forms.Textarea(attrs={'class': 'form-control','rows': 2,'placeholder': 'Description de l\'opération...'}),
+            'source_beneficiaire': forms.TextInput(attrs={'class': 'form-control','placeholder': 'Ex: Banque, Donateur, Fournisseur...'}),
+            'mode_paiement': forms.Select(attrs={'class': 'form-control'}),
+            'reference': forms.TextInput(attrs={'class': 'form-control','placeholder': 'N° chèque, référence...'}),
+            'justificatif': forms.FileInput(attrs={'class': 'form-control'}),}
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'id_annee' in self.data and 'id_campus' in self.data:
+            try:
+                annee_id = int(self.data.get('id_annee'))
+                campus_id = int(self.data.get('id_campus'))
+                self.fields['categorie'].queryset = CategorieOperation.objects.filter(
+                    id_annee_id=annee_id,
+                    id_campus_id=campus_id,
+                    est_active=True
+                )
+            except (ValueError, TypeError):
+                pass
+        elif self.instance.pk:
+            self.fields['categorie'].queryset = CategorieOperation.objects.filter(
+                id_annee=self.instance.id_annee,
+                id_campus=self.instance.id_campus,
+                est_active=True
+            )
+        else:
+            self.fields['categorie'].queryset = CategorieOperation.objects.none()

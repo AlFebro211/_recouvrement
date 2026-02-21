@@ -2,15 +2,10 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render,redirect
 from django.contrib import messages
 from app import models
-from app.forms.recouvrement_forms import (VariableCategorieForm,VariableCategorie,Variable,
-                                VariableForm,BanqueForm,CompteForm,Compte,Banque,
-                                VariablePrixForm,VariablePrix,VariableDerogationForm,
-                                VariableDerogation,VariableReductionForm,Eleve_reduction_prix,
-                                VariableDatebutoire,VariableDateButoireForm,PaiementForm,Paiement,PenaliteForm)
+from app.forms.recouvrement_forms import *
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_protect,csrf_exempt
 from django.shortcuts import get_object_or_404
-from app.models import Classe_active,Annee
 
 import logging
 import datetime
@@ -130,11 +125,6 @@ def add_paiement_for_anyclass(request):
     if request.method == "POST":
         form = PaiementForm(request.POST)
         if form.is_valid():
-            print("Formulaire valide ✅")
-            print("Champs nettoyés (cleaned_data) :")
-            for key, value in form.cleaned_data.items():
-                print(f"{key} = {value}")
-
             paiement = form.save(commit=False) 
 
             compte = paiement.id_compte
@@ -282,8 +272,7 @@ def update_paiement(request):
     })
 
 def suivi_reduction_derogation(request):
-    # page HTML avec formulaire et tableau
-    annees = Annee.objects.all()  # exemple
+    annees = Annee.objects.all() 
     variables = Variable.objects.all()
     return render(request, 'recouvrement/index_recouvrement.html', {
         'suivi_reduction_derogation_form': True,
@@ -303,18 +292,38 @@ def situation_journaliere(request):
         'paiements': paiements,
     })
 
+def liste_categories(request):
+    form = CategorieOperationForm()
+    categories = CategorieOperation.objects.filter(est_active=True).select_related('id_annee', 'id_campus')
+    annees = Annee.objects.all()
+    campus_list = Campus.objects.all()
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'liste_categories_form': form,
+        'categories': categories,
+        'form_type': 'liste_categories_form',
+        'annees': annees,
+        'campus_list': campus_list,
+    })
+
+def liste_operations(request):
+    form = OperationCaisseForm()
+    annees = Annee.objects.all()
+    categories = CategorieOperation.objects.filter(est_active=True).select_related('id_annee', 'id_campus')
+    campus_list = Campus.objects.all()
+    return render(request, 'recouvrement/index_recouvrement.html', {
+        'liste_operations_form': form,
+        'form_type': 'liste_operations_form',
+        'categories': categories,
+        'annees': annees,
+        'campus_list': campus_list,
+    })
+
 @csrf_protect
 def save_paiement(request):
     if request.method == 'POST':
         try:
-            logger.info(f"Données reçues : {request.POST}, Fichiers : {request.FILES}")
-            print("POST brut :", request.POST)
             form = PaiementForm(request.POST, request.FILES)
             if form.is_valid():
-                print("Formulaire valide ✅")
-                print("Champs nettoyés (cleaned_data) :")
-                for key, value in form.cleaned_data.items():
-                    print(f"{key} = {value}")
 
                 logger.info(f"Données validées : {form.cleaned_data}")
                 id_annee = form.cleaned_data['id_annee'].id_annee

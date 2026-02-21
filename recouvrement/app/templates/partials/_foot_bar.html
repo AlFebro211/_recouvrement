@@ -319,6 +319,15 @@
   <button  id="openModal" class="bottom-nav-item">
     <span class="bottom-nav-icon">➕</span>Selectionner ici pour visualiser les inscrits
   </button>
+  <!-- categorie et operation -->
+   {% elif liste_categories_form %}
+  <button id="openModal" class="bottom-nav-item">
+    <span class="bottom-nav-icon">➕</span>Ajouter une catégorie d'opération
+  </button>
+  {% elif liste_operations_form %}
+  <button  id="openModal" class="bottom-nav-item">
+    <span class="bottom-nav-icon">➕</span>Ajouter une opération
+  </button>
   {%  else %}
   <!-- <nav class="bottom-navbar"> -->
     <p class="footer-text">&copy; <span id="year"></span> ICTGroup. Tous droits réservés.</p>
