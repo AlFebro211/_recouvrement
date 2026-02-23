@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 
 import logging
 import datetime
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q, F
 from app.models import *
 
 
@@ -28,7 +28,7 @@ def ajouter_categorie_variable(request):
             return redirect('categorie_variable')
     else:
         form = VariableCategorieForm()
-    variablesCategories = VariableCategorie.objects.all()
+    variablesCategories = VariableCategorie.objects.all().order_by('nom')
     return render(request, 'recouvrement/index_recouvrement.html', {
         'variable_categorie': variablesCategories,
         'form_variable_categorie': form,
@@ -49,7 +49,7 @@ def ajouter_variable(request):
             return redirect('create_variable_frais')
     else:
         form = VariableForm()
-    variablesList = Variable.objects.all()
+    variablesList = Variable.objects.select_related('id_variable_categorie').all().order_by('id_variable_categorie__nom', 'variable')
     return render(request, 'recouvrement/index_recouvrement.html', {
         'variableList': variablesList,
         'form_variable': form,
@@ -539,94 +539,95 @@ def dashboard_data(request):
         return JsonResponse({'success': False})
 
     # =======================
-    # Récupération classe si existante
+    # Récupération des IDs élèves (Filtres optimisés)
     # =======================
-    classe_active = None
-    campus_id = None
-    cycle_id = None
+    eleves_qs = Eleve_inscription.objects.filter(id_annee_id=annee, status=True)
     if classe_id and classe_id.isdigit():
-        classe_active = Classe_active.objects.filter(id_classe_active=int(classe_id)).first()
-        if classe_active:
-            campus_id = classe_active.id_campus
-            cycle_id = classe_active.cycle_id
-
-    # =======================
-    # Élèves actifs selon filtres
-    # =======================
-    eleves = Eleve_inscription.objects.filter(id_annee_id=annee, status=True)
-    if classe_active:
-        eleves = eleves.filter(
-            id_classe_id=classe_active.id_classe_active,
-            id_campus_id=campus_id,
-            id_classe_cycle_id=cycle_id
-        )
+        eleves_qs = eleves_qs.filter(id_classe_id=int(classe_id))
     if eleve_id and eleve_id.isdigit():
-        eleves = eleves.filter(id_eleve_id=int(eleve_id))
-
-    eleves_ids = list(eleves.values_list('id_eleve_id', flat=True))
+        eleves_qs = eleves_qs.filter(id_eleve_id=int(eleve_id))
+    
+    eleves_ids = list(eleves_qs.values_list('id_eleve_id', flat=True))
+    if not eleves_ids:
+        return JsonResponse({
+            'success': True,
+            'stats': {
+                'total_transactions': 0, 'total_paye': 0, 'total_attendu': 0,
+                'reste_a_payer': 0, 'eleves_en_dette': 0, 'total_rejete': 0
+            }
+        })
 
     # =======================
-    # Variables selon filtre
+    # Variables filtrées
     # =======================
-    variables_prix = VariablePrix.objects.filter(id_annee_id=annee)
-    if classe_active:
-        variables_prix = variables_prix.filter(id_classe_active_id=classe_active.id_classe_active)
+    v_prix_qs = VariablePrix.objects.filter(id_annee_id=annee)
+    if classe_id and classe_id.isdigit():
+        v_prix_qs = v_prix_qs.filter(id_classe_active_id=int(classe_id))
     if variable_id and variable_id.isdigit():
-        variables_prix = variables_prix.filter(id_variable_id=int(variable_id))
+        v_prix_qs = v_prix_qs.filter(id_variable_id=int(variable_id))
     if trimestre_id and trimestre_id.isdigit():
-        variables_prix = variables_prix.filter(id_annee_trimestre_id=int(trimestre_id))
+        v_prix_qs = v_prix_qs.filter(id_annee_trimestre_id=int(trimestre_id))
+    
+    variables_prix_list = list(v_prix_qs)
+    v_ids = [vp.id_variable_id for vp in variables_prix_list]
 
     # =======================
-    # Paiements filtrés
+    # Stats Paiements (Requêtes aggregées)
     # =======================
-    paiements = Paiement.objects.filter(
-        id_annee_id=annee,
-        status=True,
-        id_eleve_id__in=eleves_ids,
-        id_variable_id__in=variables_prix.values_list('id_variable', flat=True)
+    paiements_stats = Paiement.objects.filter(
+        id_annee_id=annee, 
+        id_eleve_id__in=eleves_ids, 
+        id_variable_id__in=v_ids
+    ).aggregate(
+        total_p=Sum('montant', filter=Q(status=True, is_rejected=False)),
+        total_t=Count('id_paiement', filter=Q(status=True)),
+        total_r=Count('id_paiement', filter=Q(is_rejected=True))
     )
 
-    total_paye = paiements.aggregate(total=Sum('montant'))['total'] or 0
-    total_transactions = paiements.count()
+    total_paye = paiements_stats['total_p'] or 0
+    total_transactions = paiements_stats['total_t'] or 0
+    total_rejete = paiements_stats['total_r'] or 0
 
-    # Paiements rejetés
-    paiements_rejetes = Paiement.objects.filter(
-        id_annee_id=annee,
-        is_rejected=True,
-        id_eleve_id__in=eleves_ids,
-        id_variable_id__in=variables_prix.values_list('id_variable', flat=True)
-    )
-    total_rejete = paiements_rejetes.count()
+    # =======================
+    # Reductions (Indexées pour accès rapide O(1))
+    # =======================
+    reductions = Eleve_reduction_prix.objects.filter(
+        id_annee_id=annee, id_eleve_id__in=eleves_ids, id_variable_id__in=v_ids
+    ).values('id_eleve_id', 'id_variable_id', 'pourcentage')
+    
+    red_map = {(r['id_eleve_id'], r['id_variable_id']): r['pourcentage'] for r in reductions}
 
-    # Montant attendu et dettes
+    # =======================
+    # Calcul Total Attendu
+    # =======================
     total_attendu = 0
-    eleves_en_dette_set = set()
+    num_eleves = len(eleves_ids)
+    for vp in variables_prix_list:
+        base_prix = vp.prix
+        # Calculer les réductions totales pour cette variable spécifique
+        somme_reduction_variable = sum((base_prix * red_map.get((eid, vp.id_variable_id), 0) / 100) for eid in eleves_ids)
+        total_attendu += (base_prix * num_eleves) - somme_reduction_variable
 
-    for vp in variables_prix:
-        prix = vp.prix
-        for e_id in eleves_ids:
-            reduction = Eleve_reduction_prix.objects.filter(
-                id_variable_id=vp.id_variable,
-                id_eleve_id=e_id,
-                id_annee_id=annee
-            ).first()
+    # =======================
+    # Calcul Élèves en Dette
+    # =======================
+    paid_map = {}
+    paid_qs = Paiement.objects.filter(
+        id_annee_id=annee, id_eleve_id__in=eleves_ids, id_variable_id__in=v_ids,
+        status=True, is_rejected=False
+    ).values('id_eleve_id', 'id_variable_id').annotate(total=Sum('montant'))
+    
+    for p in paid_qs:
+        paid_map[(p['id_eleve_id'], p['id_variable_id'])] = p['total']
 
-            attendu = prix
-            if reduction:
-                attendu -= (prix * reduction.pourcentage)/100
-
-            total_attendu += attendu
-
-            total_paye_eleve = Paiement.objects.filter(
-                id_variable_id=vp.id_variable,
-                id_eleve_id=e_id,
-                id_annee_id=annee,
-                status=True,
-                is_rejected=False
-            ).aggregate(total=Sum('montant'))['total'] or 0
-
-            if total_paye_eleve < attendu:
-                eleves_en_dette_set.add(e_id)
+    eleves_en_dette_count = 0
+    for eid in eleves_ids:
+        for vp in variables_prix_list:
+            expected = vp.prix * (1 - red_map.get((eid, vp.id_variable_id), 0) / 100)
+            paid = paid_map.get((eid, vp.id_variable_id), 0)
+            if paid < expected:
+                eleves_en_dette_count += 1
+                break # On passe à l'élève suivant dès qu'une dette est trouvée
 
     reste_a_payer = max(total_attendu - total_paye, 0)
 
@@ -637,7 +638,7 @@ def dashboard_data(request):
             'total_paye': total_paye,
             'total_attendu': total_attendu,
             'reste_a_payer': reste_a_payer,
-            'eleves_en_dette': len(eleves_en_dette_set),
+            'eleves_en_dette': eleves_en_dette_count,
             'total_rejete': total_rejete
         }
     })

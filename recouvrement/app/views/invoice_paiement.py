@@ -2363,3 +2363,321 @@ def export_dashboard_excel(request):
     response['Content-Disposition'] = f'attachment; filename=dashboard_{type_stat}.xlsx'
     wb.save(response)
     return response
+
+
+# ==========================================
+# CATEGORIES D'OPERATIONS - PDF
+# ==========================================
+def generate_categories_pdf(request):
+    try:
+        annee_id = request.GET.get('annee')
+        campus_id = request.GET.get('campus')
+        type_op = request.GET.get('type')
+
+        qs = CategorieOperation.objects.select_related('id_annee', 'id_campus').all()
+        if annee_id:
+            qs = qs.filter(id_annee_id=annee_id)
+        if campus_id:
+            qs = qs.filter(id_campus_id=campus_id)
+        if type_op:
+            qs = qs.filter(type_operation=type_op)
+
+        qs = qs.order_by('type_operation', 'nom')
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Categories_Operations.pdf"'
+
+        doc = SimpleDocTemplate(response, pagesize=A4, leftMargin=10*mm, rightMargin=10*mm, topMargin=10*mm, bottomMargin=10*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Header
+        header = build_pdf_header(
+            id_campus=int(campus_id) if campus_id else None,
+            id_annee=int(annee_id) if annee_id else None,
+            titre="LISTE DES CATÉGORIES D'OPÉRATIONS"
+        )
+        elements.append(header)
+        elements.append(Spacer(1, 8*mm))
+
+        small = ParagraphStyle('small', parent=styles['Normal'], fontSize=8, leading=10)
+
+        data = [["#", "Nom", "Type", "Description", "Année", "Campus"]]
+
+        for i, cat in enumerate(qs, 1):
+            data.append([
+                str(i),
+                Paragraph(cat.nom, small),
+                cat.type_operation,
+                Paragraph(cat.description or '-', small),
+                str(cat.id_annee.annee) if cat.id_annee else '-',
+                str(cat.id_campus.campus) if cat.id_campus else '-',
+            ])
+
+        data.append(["", f"TOTAL: {len(qs)} catégories", "", "", "", ""])
+
+        table = Table(data, colWidths=[12*mm, 45*mm, 22*mm, 50*mm, 28*mm, 33*mm])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#00b894')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ffc107')),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ]))
+
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur PDF catégories: {str(e)}", status=500)
+
+
+# ==========================================
+# CATEGORIES D'OPERATIONS - EXCEL
+# ==========================================
+def generate_categories_excel(request):
+    try:
+        annee_id = request.GET.get('annee')
+        campus_id = request.GET.get('campus')
+        type_op = request.GET.get('type')
+
+        qs = CategorieOperation.objects.select_related('id_annee', 'id_campus').all()
+        if annee_id:
+            qs = qs.filter(id_annee_id=annee_id)
+        if campus_id:
+            qs = qs.filter(id_campus_id=campus_id)
+        if type_op:
+            qs = qs.filter(type_operation=type_op)
+
+        qs = qs.order_by('type_operation', 'nom')
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Catégories d'opérations"
+
+        ws.merge_cells('A1:F1')
+        ws['A1'] = "LISTE DES CATÉGORIES D'OPÉRATIONS"
+        ws['A1'].font = Font(size=14, bold=True)
+        ws['A1'].alignment = Alignment(horizontal="center")
+
+        headers = ["#", "Nom", "Type", "Description", "Année", "Campus"]
+        ws.append(headers)
+        for cell in ws[2]:
+            cell.font = Font(bold=True)
+
+        for i, cat in enumerate(qs, 1):
+            ws.append([
+                i,
+                cat.nom,
+                cat.type_operation,
+                cat.description or '-',
+                str(cat.id_annee.annee) if cat.id_annee else '-',
+                str(cat.id_campus.campus) if cat.id_campus else '-',
+            ])
+
+        ws.append(["", f"TOTAL: {len(qs)} catégories", "", "", "", ""])
+        ws[f'B{ws.max_row}'].font = Font(bold=True)
+
+        for i, column_cells in enumerate(ws.columns, 1):
+            max_length = max((len(str(cell.value)) for cell in column_cells if cell.value), default=0)
+            ws.column_dimensions[get_column_letter(i)].width = min(max_length + 2, 50)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename=categories_operations.xlsx'
+        wb.save(response)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur Excel catégories: {str(e)}", status=500)
+
+
+# ==========================================
+# OPERATIONS DE CAISSE - PDF
+# ==========================================
+def generate_operations_pdf(request):
+    try:
+        annee_id = request.GET.get('annee')
+        campus_id = request.GET.get('campus')
+        categorie_id = request.GET.get('categorie')
+        type_op = request.GET.get('type')
+
+        qs = OperationCaisse.objects.select_related(
+            'id_annee', 'id_campus', 'categorie'
+        ).all().order_by('-date_operation', '-id_operation')
+
+        if annee_id:
+            qs = qs.filter(id_annee_id=annee_id)
+        if campus_id:
+            qs = qs.filter(id_campus_id=campus_id)
+        if categorie_id:
+            qs = qs.filter(categorie_id=categorie_id)
+        if type_op:
+            qs = qs.filter(categorie__type_operation=type_op)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'inline; filename="Operations_Financieres.pdf"'
+
+        doc = SimpleDocTemplate(response, pagesize=A4, leftMargin=8*mm, rightMargin=8*mm, topMargin=10*mm, bottomMargin=10*mm)
+        elements = []
+        styles = getSampleStyleSheet()
+
+        # Header
+        header = build_pdf_header(
+            id_campus=int(campus_id) if campus_id else None,
+            id_annee=int(annee_id) if annee_id else None,
+            titre="RAPPORT DES OPÉRATIONS FINANCIÈRES"
+        )
+        elements.append(header)
+        elements.append(Spacer(1, 8*mm))
+
+        small = ParagraphStyle('small', parent=styles['Normal'], fontSize=7, leading=9)
+
+        data = [["#", "Date", "Catégorie", "Type", "Montant", "Source/Bénéf.", "Mode", "Description"]]
+        total_entrees = 0
+        total_sorties = 0
+
+        for i, op in enumerate(qs, 1):
+            montant = float(op.montant)
+            if op.categorie.type_operation == 'ENTREE':
+                total_entrees += montant
+            else:
+                total_sorties += montant
+
+            data.append([
+                str(i),
+                op.date_operation.strftime('%d/%m/%Y'),
+                Paragraph(op.categorie.nom if op.categorie else '-', small),
+                op.categorie.type_operation if op.categorie else '-',
+                f"{montant:,.0f}".replace(',', ' '),
+                Paragraph(op.source_beneficiaire or '-', small),
+                op.get_mode_paiement_display() if op.mode_paiement else '-',
+                Paragraph(op.description or '-', small),
+            ])
+
+        total_general = total_entrees - total_sorties
+
+        # Lignes de totaux
+        data.append(["", "", "", "ENTRÉES", f"{total_entrees:,.0f}".replace(',', ' '), "", "", ""])
+        data.append(["", "", "", "SORTIES", f"{total_sorties:,.0f}".replace(',', ' '), "", "", ""])
+        data.append(["", "", "", "SOLDE", f"{total_general:,.0f}".replace(',', ' '), "", "", ""])
+
+        table = Table(data, colWidths=[10*mm, 20*mm, 30*mm, 18*mm, 25*mm, 30*mm, 20*mm, 37*mm])
+        nb_rows = len(data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#00b894')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 1), (-1, -4), 7),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -4), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (4, 1), (4, -1), 'RIGHT'),
+            # Entrées
+            ('BACKGROUND', (0, nb_rows - 3), (-1, nb_rows - 3), colors.HexColor('#d4edda')),
+            ('FONTNAME', (0, nb_rows - 3), (-1, nb_rows - 3), 'Helvetica-Bold'),
+            # Sorties
+            ('BACKGROUND', (0, nb_rows - 2), (-1, nb_rows - 2), colors.HexColor('#f8d7da')),
+            ('FONTNAME', (0, nb_rows - 2), (-1, nb_rows - 2), 'Helvetica-Bold'),
+            # Solde
+            ('BACKGROUND', (0, nb_rows - 1), (-1, nb_rows - 1), colors.HexColor('#ffc107')),
+            ('FONTNAME', (0, nb_rows - 1), (-1, nb_rows - 1), 'Helvetica-Bold'),
+        ]))
+
+        elements.append(table)
+        doc.build(elements)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur PDF opérations: {str(e)}", status=500)
+
+
+# ==========================================
+# OPERATIONS DE CAISSE - EXCEL
+# ==========================================
+def generate_operations_excel(request):
+    try:
+        annee_id = request.GET.get('annee')
+        campus_id = request.GET.get('campus')
+        categorie_id = request.GET.get('categorie')
+        type_op = request.GET.get('type')
+
+        qs = OperationCaisse.objects.select_related(
+            'id_annee', 'id_campus', 'categorie'
+        ).all().order_by('-date_operation', '-id_operation')
+
+        if annee_id:
+            qs = qs.filter(id_annee_id=annee_id)
+        if campus_id:
+            qs = qs.filter(id_campus_id=campus_id)
+        if categorie_id:
+            qs = qs.filter(categorie_id=categorie_id)
+        if type_op:
+            qs = qs.filter(categorie__type_operation=type_op)
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Opérations financières"
+
+        ws.merge_cells('A1:H1')
+        ws['A1'] = "RAPPORT DES OPÉRATIONS FINANCIÈRES"
+        ws['A1'].font = Font(size=14, bold=True)
+        ws['A1'].alignment = Alignment(horizontal="center")
+
+        headers = ["#", "Date", "Catégorie", "Type", "Montant", "Source/Bénéficiaire", "Mode", "Description"]
+        ws.append(headers)
+        for cell in ws[2]:
+            cell.font = Font(bold=True)
+
+        total_entrees = 0
+        total_sorties = 0
+
+        for i, op in enumerate(qs, 1):
+            montant = float(op.montant)
+            if op.categorie.type_operation == 'ENTREE':
+                total_entrees += montant
+            else:
+                total_sorties += montant
+
+            ws.append([
+                i,
+                op.date_operation.strftime('%d/%m/%Y'),
+                op.categorie.nom if op.categorie else '-',
+                op.categorie.type_operation if op.categorie else '-',
+                montant,
+                op.source_beneficiaire or '-',
+                op.get_mode_paiement_display() if op.mode_paiement else '-',
+                op.description or '-',
+            ])
+
+        # Totaux
+        ws.append(["", "", "", "TOTAL ENTRÉES", total_entrees, "", "", ""])
+        ws.append(["", "", "", "TOTAL SORTIES", total_sorties, "", "", ""])
+        ws.append(["", "", "", "SOLDE", total_entrees - total_sorties, "", "", ""])
+
+        for r in range(ws.max_row - 2, ws.max_row + 1):
+            ws[f'D{r}'].font = Font(bold=True)
+            ws[f'E{r}'].font = Font(bold=True)
+            ws[f'E{r}'].number_format = '#,##0'
+
+        # Format montants
+        for row in range(3, ws.max_row - 2):
+            ws[f'E{row}'].number_format = '#,##0'
+
+        for i, column_cells in enumerate(ws.columns, 1):
+            max_length = max((len(str(cell.value)) for cell in column_cells if cell.value), default=0)
+            ws.column_dimensions[get_column_letter(i)].width = min(max_length + 2, 50)
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename=operations_financieres.xlsx'
+        wb.save(response)
+        return response
+
+    except Exception as e:
+        return HttpResponse(f"Erreur Excel opérations: {str(e)}", status=500)
+

@@ -1,21 +1,42 @@
 from app.forms.recouvrement_forms import PaiementUpdateForm
-from.create_base import *
-from app.models import *
-from django.db.models import Q
-from django.http import JsonResponse
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from datetime import date
-from app.views.invoice_paiement import build_pdf_header
-import io
-from datetime import datetime, date
+
+# Imports depuis create_base (utilitaires Django + forms + logger)
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.views.decorators.csrf import csrf_protect, csrf_exempt
+import logging
+logger = logging.getLogger(__name__)
+from app.forms.recouvrement_forms import (
+    VariableDateButoireForm, PaiementForm, VariableCategorieForm,
+    VariableForm, BanqueForm, CompteForm, VariablePrixForm,
+    VariableDerogationForm, VariableReductionForm, PenaliteForm,
+    CategorieOperationForm, OperationCaisseForm,
+)
+
+# Imports des modèles
+from app.models import (
+    Banque, VariableCategorie, Annee, Classe_active, Paiement,
+    Compte, VariablePrix, Eleve_reduction_prix, Eleve_inscription,
+    Annee_trimestre, VariableDatebutoire, VariableDerogation,
+    PenaliteConfig, Variable, Campus, Classe, Classe_cycle_actif,
+    CategorieOperation, OperationCaisse, Eleve,
+)
+
+# Imports Django
 from django.db.models import Q, Sum
-from django.http import HttpResponse
-from django.shortcuts import render
+from django.db.models.functions import Coalesce
+from django.http import JsonResponse, HttpResponse
+
+# Imports Python standard
+from datetime import date, datetime
+import io
+from io import BytesIO
+
+# Imports pour le fichier Excel
+from app.views.invoice_paiement import build_pdf_header
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
-from io import BytesIO 
 
 # Imports pour PDF avec ReportLab
 from reportlab.lib.pagesizes import A4, landscape

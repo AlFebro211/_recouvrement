@@ -93,5 +93,10 @@ urlpatterns =[
    path('get_categories_by_filters/', views.get_categories_by_filters, name='get_categories_by_filters'),
    path('delete_operation/<int:id_operation>/', views.delete_operation, name='delete_operation'),
 
-   
+    # Exports catégories & opérations
+    path('generate_categories_pdf/', views.generate_categories_pdf, name='generate_categories_pdf'),
+    path('generate_categories_excel/', views.generate_categories_excel, name='generate_categories_excel'),
+    path('generate_operations_pdf/', views.generate_operations_pdf, name='generate_operations_pdf'),
+    path('generate_operations_excel/', views.generate_operations_excel, name='generate_operations_excel'),
+
 ]

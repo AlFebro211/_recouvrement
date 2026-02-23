@@ -1,0 +1,11 @@
+{
+    "venvPath": "e:/recovrement_app/_recouvrement",
+    "venv": "venv",
+    "pythonVersion": "3.13",
+    "extraPaths": [
+        "e:/recovrement_app/_recouvrement/recouvrement"
+    ],
+    "reportMissingImports": "warning",
+    "reportMissingModuleSource": "none",
+    "reportGeneralTypeIssues": "none"
+}
