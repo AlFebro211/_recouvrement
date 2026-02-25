@@ -22,93 +22,65 @@ from openpyxl.utils import get_column_letter
 
 def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None, titre=None, banque_info=None):
     """
-    Header professionnel pour PDF - Avec support de la banque
+    Header professionnel premium pour PDF
+    Design: Bannière bleu marine + ligne dorée + zone infos structurée + titre premium
     """
-    
-    # Styles professionnels (inchangés)
-    style_nom_ecole = ParagraphStyle(
-        'NomEcole',
-        fontSize=18,
-        fontName='Helvetica-Bold',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#1e3c72'),
-        leading=22
-    )
-    
-    style_devise = ParagraphStyle(
-        'Devise',
-        fontSize=11,
-        fontName='Helvetica-Oblique',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#666666'),
-        leading=14
-    )
-    
-    style_contact = ParagraphStyle(
-        'Contact',
-        fontSize=9,
-        fontName='Helvetica',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#666666'),
-        leading=14
-    )
-    
-    style_titre = ParagraphStyle(
-        'Titre',
-        fontSize=16,
-        fontName='Helvetica-Bold',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceAfter=10,
-        leading=20,
-        backColor=colors.HexColor('#f8fafc'),
-        borderPadding=8,
-        borderRadius=3
-    )
-    
-    style_info = ParagraphStyle(
-        'Info',
-        fontSize=10,
-        fontName='Helvetica',
-        alignment=TA_LEFT,
-        textColor=colors.HexColor('#333333'),
-        leading=18
-    )
-    
-    style_info_bold = ParagraphStyle(
-        'InfoBold',
-        fontSize=10,
-        fontName='Helvetica-Bold',
-        alignment=TA_LEFT,
-        textColor=colors.HexColor('#1e3c72'),
-        leading=18
-    )
-    
-    style_date = ParagraphStyle(
-        'Date',
-        fontSize=10,
-        fontName='Helvetica',
-        alignment=TA_RIGHT,
-        textColor=colors.HexColor('#333333'),
-        leading=18
-    )
-    
-    style_separator = ParagraphStyle(
-        'Separator',
-        fontSize=4,
-        fontName='Helvetica',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#cccccc')
-    )
+    from reportlab.graphics.shapes import Drawing, Rect, Line
+    from reportlab.graphics import renderPDF
 
-    # Récupération des informations de l'institution
+    # ── Couleurs du thème ──
+    NAVY_DARK = colors.HexColor('#1e3c72')
+    NAVY_LIGHT = colors.HexColor('#2a5298')
+    GOLD = colors.HexColor('#c9a84c')
+    DARK_TEXT = colors.HexColor('#2c3e50')
+    MEDIUM_TEXT = colors.HexColor('#555555')
+    LIGHT_BG = colors.HexColor('#f8fafc')
+    BORDER_COLOR = colors.HexColor('#e2e8f0')
+    WHITE = colors.white
+
+    # ── Styles typographiques ──
+    style_nom_ecole = ParagraphStyle(
+        'NomEcole', fontSize=16, fontName='Helvetica-Bold',
+        alignment=TA_CENTER, textColor=WHITE, leading=20
+    )
+    style_sigle = ParagraphStyle(
+        'Sigle', fontSize=10, fontName='Helvetica-Oblique',
+        alignment=TA_CENTER, textColor=colors.HexColor('#cfd8e8'), leading=13
+    )
+    style_contact_header = ParagraphStyle(
+        'ContactHeader', fontSize=8, fontName='Helvetica',
+        alignment=TA_CENTER, textColor=colors.HexColor('#b0bdd4'), leading=11
+    )
+    style_info_label = ParagraphStyle(
+        'InfoLabel', fontSize=9, fontName='Helvetica-Bold',
+        alignment=TA_LEFT, textColor=NAVY_DARK, leading=15
+    )
+    style_info_value = ParagraphStyle(
+        'InfoValue', fontSize=9, fontName='Helvetica',
+        alignment=TA_LEFT, textColor=MEDIUM_TEXT, leading=15
+    )
+    style_info_right = ParagraphStyle(
+        'InfoRight', fontSize=9, fontName='Helvetica',
+        alignment=TA_RIGHT, textColor=MEDIUM_TEXT, leading=15
+    )
+    style_info_right_bold = ParagraphStyle(
+        'InfoRightBold', fontSize=9, fontName='Helvetica-Bold',
+        alignment=TA_RIGHT, textColor=NAVY_DARK, leading=15
+    )
+    style_titre = ParagraphStyle(
+        'TitreDoc', fontSize=14, fontName='Helvetica-Bold',
+        alignment=TA_CENTER, textColor=NAVY_DARK, leading=18,
+        spaceBefore=2, spaceAfter=2
+    )
+    style_empty = ParagraphStyle('Empty', fontSize=1, leading=1)
+
+    # ── Récupération institution ──
     institution = None
     try:
         institution = Institution.objects.first()
-    except:
+    except Exception:
         pass
-    
-    # Initialisation des variables
+
     nom_ecole = "ECOLE INTERNATIONALE DE BUJUMBURA"
     sigle = ""
     telephone = ""
@@ -117,284 +89,262 @@ def build_pdf_header(eleve=None, classe_obj=None, id_campus=None, id_cycle=None,
     siege = ""
     b_postale = ""
     emplacement = ""
-    
-    if institution:
-        if institution.nom_ecole:
-            nom_ecole = institution.nom_ecole.upper()
-        if institution.sigle:
-            sigle = f" - {institution.sigle}"
-        if institution.telephone:
-            telephone = institution.telephone
-        if institution.email:
-            email = institution.email
-        if institution.site:
-            site = institution.site
-        if institution.siege:
-            siege = institution.siege
-        if institution.b_postale:
-            b_postale = f"BP {institution.b_postale}"
-        if institution.emplacement:
-            emplacement = institution.emplacement
 
-    # Construction de l'adresse complète
-    adresse_parts = []
-    if siege:
-        adresse_parts.append(siege)
-    if emplacement:
-        adresse_parts.append(emplacement)
-    if b_postale:
-        adresse_parts.append(b_postale)
-    
-    adresse = " | ".join(filter(None, adresse_parts)) if adresse_parts else "Bujumbura, Burundi"
-    
-    # Construction des coordonnées complètes
-    contact_parts = []
-    if telephone:
-        contact_parts.append(telephone)
-    if email:
-        contact_parts.append(email)
-    if site:
-        contact_parts.append(site)
-    
+    if institution:
+        nom_ecole = (institution.nom_ecole or nom_ecole).upper()
+        if institution.sigle:
+            sigle = institution.sigle
+        telephone = institution.telephone or ""
+        email = institution.email or ""
+        site = institution.site or ""
+        siege = institution.siege or ""
+        b_postale = institution.b_postale or ""
+        emplacement = institution.emplacement or ""
+
+    # ── Adresse et contact ──
+    adresse_parts = [p for p in [siege, emplacement, f"BP {b_postale}" if b_postale else ""] if p]
+    adresse = " | ".join(adresse_parts) if adresse_parts else ""
+    contact_parts = [p for p in [telephone, email, site] if p]
     contact = " | ".join(contact_parts) if contact_parts else ""
 
-    # Logo
-    logo_element = Paragraph("", ParagraphStyle('Logo', fontSize=1, alignment=TA_CENTER))
-    
+    # ── Logos ──
+    logo_ecole_el = None
+    logo_ministere_el = None
+    logo_size = 1.8 * cm
+
     if institution and institution.logo_ecole:
         try:
-            logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
+            logo_path = os.path.join(str(settings.MEDIA_ROOT), institution.logo_ecole.name)
             if os.path.exists(logo_path):
-                logo_element = Image(logo_path, width=2*cm, height=2*cm)
-        except:
+                logo_ecole_el = Image(logo_path, width=logo_size, height=logo_size)
+        except Exception:
             pass
 
-    # Informations institution
-    institution_text = [
-        Paragraph(f"{nom_ecole}{sigle}", style_nom_ecole),
-        Spacer(1, 2),
-    ]
-    
-    if adresse:
-        institution_text.append(Paragraph(adresse, style_contact))
-    if contact:
-        institution_text.append(Paragraph(contact, style_contact))
+    if institution and institution.logo_ministere:
+        try:
+            logo_path = os.path.join(str(settings.MEDIA_ROOT), institution.logo_ministere.name)
+            if os.path.exists(logo_path):
+                logo_ministere_el = Image(logo_path, width=logo_size, height=logo_size)
+        except Exception:
+            pass
 
-    # Colonne de gauche (Campus et Classe)
+    # ══════════════════════════════════════════════
+    #  SECTION 1 : BANNIÈRE INSTITUTION (fond bleu)
+    # ══════════════════════════════════════════════
+    elements = []
+
+    # Contenu central de la bannière
+    banner_center = [Paragraph(nom_ecole, style_nom_ecole)]
+    if sigle:
+        banner_center.append(Paragraph(sigle, style_sigle))
+    if adresse:
+        banner_center.append(Spacer(1, 3))
+        banner_center.append(Paragraph(adresse, style_contact_header))
+    if contact:
+        banner_center.append(Paragraph(contact, style_contact_header))
+
+    # Cellules logo
+    left_logo = logo_ecole_el if logo_ecole_el else Paragraph("", style_empty)
+    right_logo = logo_ministere_el if logo_ministere_el else Paragraph("", style_empty)
+
+    banner_data = [[left_logo, banner_center, right_logo]]
+    banner_table = Table(banner_data, colWidths=[2.5 * cm, 12 * cm, 2.5 * cm])
+    banner_table.setStyle(TableStyle([
+        # Fond bleu marine sur toute la bannière
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY_DARK),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('ALIGN', (2, 0), (2, 0), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        # Coins arrondis simulés via le fond étendu
+        ('ROUNDEDCORNERS', [6, 6, 0, 0]),
+    ]))
+    elements.append(banner_table)
+
+    # ══════════════════════════════════════════════
+    #  SECTION 2 : LIGNE D'ACCENT DORÉE
+    # ══════════════════════════════════════════════
+    gold_line_data = [[""]]
+    gold_line = Table(gold_line_data, colWidths=[17 * cm], rowHeights=[3])
+    gold_line.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), GOLD),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(gold_line)
+
+    elements.append(Spacer(1, 8))
+
+    # ══════════════════════════════════════════════
+    #  SECTION 3 : ZONE D'INFORMATIONS CONTEXTUELLES
+    # ══════════════════════════════════════════════
     left_info = []
-    
-    campus_text = "Tous"
+    right_info = []
+
+    # Campus
+    campus_text = "Tous les campus"
     if id_campus:
         try:
             campus = Campus.objects.get(id_campus=id_campus)
             campus_text = campus.campus
-        except:
+        except Exception:
             pass
-    left_info.append(Paragraph(f"<b>Campus:</b> {campus_text}", style_info_bold))
-    
-    classe_text = "Toutes"
+    left_info.append(Paragraph(f"<b>📍 Campus :</b>  {campus_text}", style_info_label))
+
+    # Classe
+    classe_text = "Toutes les classes"
     if classe_obj:
         try:
             classe_text = classe_obj.classe_id.classe
             if classe_obj.groupe:
                 classe_text += f" ({classe_obj.groupe})"
-        except:
+        except Exception:
             pass
-    left_info.append(Paragraph(f"<b>Classe:</b> {classe_text}", style_info_bold))
-    
+    left_info.append(Paragraph(f"<b>🎓 Classe :</b>  {classe_text}", style_info_label))
+
+    # Élève
     if eleve:
         nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
-        left_info.append(Spacer(1, 3))
-        left_info.append(Paragraph(f"<b>Élève:</b> {nom_complet}", style_info_bold))
+        left_info.append(Paragraph(f"<b>👤 Élève :</b>  {nom_complet}", style_info_label))
         if hasattr(eleve, 'matricule') and eleve.matricule:
-            left_info.append(Paragraph(f"<b>Matricule:</b> {eleve.matricule}", style_info))
+            left_info.append(Paragraph(f"<b>🆔 Matricule :</b>  {eleve.matricule}", style_info_value))
 
-    # Colonne de droite (Année scolaire et Date)
-    right_info = []
-    
+    # Année scolaire
     annee_text = "Non spécifiée"
     if id_annee:
         try:
             annee = Annee.objects.get(id_annee=id_annee)
             annee_text = annee.annee
-        except:
+        except Exception:
             pass
-    right_info.append(Paragraph(f"<b>Année scolaire:</b> {annee_text}", style_date))
-    right_info.append(Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_date))
+    right_info.append(Paragraph(f"<b>Année scolaire :</b>  {annee_text}", style_info_right_bold))
 
-    # Construction du tableau
-    data = []
-    
-    # LIGNE 1: Logo et informations institution
-    data.append([logo_element, institution_text, Paragraph("", style_info)])
-    
-    # LIGNE 2: Séparateur
-    data.append([Paragraph("", style_info), Paragraph("─" * 90, style_separator), Paragraph("", style_info)])
-    
-    # LIGNE 3: Informations contextuelles (Campus, Classe à gauche / Année, Date à droite)
-    data.append([Paragraph("", style_info), left_info, right_info])
-    
-    # LIGNE 4: Banque (si fournie) - AJOUTÉ ICI, APRÈS LES INFOS CONTEXTUELLES
+    # Date
+    right_info.append(Paragraph(f"<b>Date :</b>  {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_info_right))
+
+    # Banque (si fournie)
     if banque_info:
-        banque_paragraph = Paragraph(f"<b>Banque sélectionnée :</b> {banque_info}", style_info_bold)
-        data.append([Paragraph("", style_info), banque_paragraph, Paragraph("", style_info)])
-        # Petit espace après la banque
-        data.append([Paragraph("", style_info), Spacer(1, 3), Paragraph("", style_info)])
-    
-    # LIGNE 5: Espace avant le titre
-    data.append([Paragraph("", style_info), Spacer(1, 5), Paragraph("", style_info)])
-    
-    # LIGNE 6: Titre
-    if titre:
-        data.append([Paragraph("", style_info), Paragraph(f"<b>{titre.upper()}</b>", style_titre), Paragraph("", style_info)])
-    
-    # Largeurs des colonnes
-    col_widths = [2.5*cm, 12*cm, 4.5*cm]
-    
-    table = Table(data, colWidths=col_widths)
-    
-    style_commands = [
+        right_info.append(Spacer(1, 4))
+        right_info.append(Paragraph(f"<b>🏦 Banque :</b>  {banque_info}", style_info_right_bold))
+
+    # Tableau infos
+    info_data = [[left_info, right_info]]
+    info_table = Table(info_data, colWidths=[9.5 * cm, 7.5 * cm])
+    info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), LIGHT_BG),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Aligné à gauche pour la banque
-        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ('TOPPADDING', (0, 0), (-1, -1), 3),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-    ]
-    
-    # Déterminer l'index de la ligne de titre
-    titre_index = 5  # Par défaut, si pas de banque
-    if banque_info:
-        titre_index = 6  # Si banque présente, le titre recule d'une ligne
-    
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('BOX', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+        ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+    ]))
+    elements.append(info_table)
+
+    elements.append(Spacer(1, 8))
+
+    # ══════════════════════════════════════════════
+    #  SECTION 4 : BARRE DE TITRE
+    # ══════════════════════════════════════════════
     if titre:
-        style_commands.append(('BACKGROUND', (1, titre_index), (1, titre_index), colors.HexColor('#f8fafc')))
-    
-    table.setStyle(TableStyle(style_commands))
-    
-    return table
+        titre_data = [[Paragraph(f"<b>{titre.upper()}</b>", style_titre)]]
+        titre_table = Table(titre_data, colWidths=[17 * cm])
+        titre_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), LIGHT_BG),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('BOX', (0, 0), (-1, -1), 1, NAVY_DARK),
+            ('LINEBELOW', (0, 0), (-1, -1), 2, GOLD),
+            ('ROUNDEDCORNERS', [4, 4, 4, 4]),
+        ]))
+        elements.append(titre_table)
+        elements.append(Spacer(1, 5))
+
+    # ══════════════════════════════════════════════
+    #  WRAPPER : Tout regrouper dans un seul élément
+    # ══════════════════════════════════════════════
+    wrapper_data = [[elements]]
+    wrapper = Table(wrapper_data, colWidths=[17 * cm])
+    wrapper.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+
+    return wrapper
 
 
 def build_pdf_header_pos(eleve=None, classe_obj=None, id_campus=None, id_cycle=None, id_annee=None, titre=None):
     """
-    Version POS du header professionnel - Chaque info sur sa propre ligne
+    Version POS (compacte) du header professionnel premium
+    Design: Mini bannière bleu marine + ligne dorée + infos compactes + titre
     """
-    
-    # Tailles pour POS
-    font_size_normal = 8
-    font_size_bold = 10
-    font_size_small = 7
-    logo_size = 12*mm
-    col_widths = [2*cm, 5*cm, 2*cm]
-    
-    # Styles
-    style_nom_ecole = ParagraphStyle(
-        'NomEcole',
-        fontSize=font_size_bold,
-        fontName='Helvetica-Bold',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#1e3c72'),
-        leading=12
-    )
-    
-    style_contact = ParagraphStyle(
-        'Contact',
-        fontSize=font_size_small,
-        fontName='Helvetica',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#666666'),
-        leading=9
-    )
-    
-    style_titre = ParagraphStyle(
-        'Titre',
-        fontSize=font_size_bold,
-        fontName='Helvetica-Bold',
-        alignment=TA_CENTER,
-        textColor=colors.HexColor('#2c3e50'),
-        leading=12,
-        backColor=colors.HexColor('#f8fafc'),
-        borderPadding=4,
-        borderRadius=2
-    )
-    
-    style_info = ParagraphStyle(
-        'Info',
-        fontSize=font_size_normal,
-        fontName='Helvetica',
-        alignment=TA_LEFT,
-        textColor=colors.HexColor('#333333'),
-        leading=10
-    )
-    
-    style_info_bold = ParagraphStyle(
-        'InfoBold',
-        fontSize=font_size_normal,
-        fontName='Helvetica-Bold',
-        alignment=TA_LEFT,
-        textColor=colors.HexColor('#1e3c72'),
-        leading=10
-    )
-    
-    style_label = ParagraphStyle(
-        'Label',
-        fontSize=font_size_normal,
-        fontName='Helvetica-Bold',
-        alignment=TA_LEFT,
-        textColor=colors.HexColor('#1e3c72'),
-        leading=10
-    )
-    
-    style_valeur = ParagraphStyle(
-        'Valeur',
-        fontSize=font_size_normal,
-        fontName='Helvetica',
-        alignment=TA_LEFT,
-        textColor=colors.HexColor('#333333'),
-        leading=10
-    )
-    
-    style_date = ParagraphStyle(
-        'Date',
-        fontSize=font_size_small,
-        fontName='Helvetica',
-        alignment=TA_LEFT,
-        textColor=colors.HexColor('#333333'),
-        leading=9
-    )
 
-    # Récupération institution
+    # ── Couleurs du thème ──
+    NAVY_DARK = colors.HexColor('#1e3c72')
+    GOLD = colors.HexColor('#c9a84c')
+    DARK_TEXT = colors.HexColor('#2c3e50')
+    MEDIUM_TEXT = colors.HexColor('#555555')
+    LIGHT_BG = colors.HexColor('#f8fafc')
+    BORDER_COLOR = colors.HexColor('#e2e8f0')
+    WHITE = colors.white
+
+    # Tailles POS
+    pos_width = 9 * cm
+    logo_size = 12 * mm
+
+    # ── Styles compacts ──
+    style_nom_ecole = ParagraphStyle(
+        'NomEcolePOS', fontSize=9, fontName='Helvetica-Bold',
+        alignment=TA_CENTER, textColor=WHITE, leading=11
+    )
+    style_contact = ParagraphStyle(
+        'ContactPOS', fontSize=6, fontName='Helvetica',
+        alignment=TA_CENTER, textColor=colors.HexColor('#b0bdd4'), leading=8
+    )
+    style_label = ParagraphStyle(
+        'LabelPOS', fontSize=7, fontName='Helvetica-Bold',
+        alignment=TA_LEFT, textColor=NAVY_DARK, leading=10
+    )
+    style_info = ParagraphStyle(
+        'InfoPOS', fontSize=7, fontName='Helvetica',
+        alignment=TA_LEFT, textColor=MEDIUM_TEXT, leading=10
+    )
+    style_titre = ParagraphStyle(
+        'TitrePOS', fontSize=9, fontName='Helvetica-Bold',
+        alignment=TA_CENTER, textColor=NAVY_DARK, leading=11
+    )
+    style_empty = ParagraphStyle('EmptyPOS', fontSize=1, leading=1)
+
+    # ── Récupération institution ──
     institution = None
     try:
         institution = Institution.objects.first()
-    except:
+    except Exception:
         pass
-    
-    # Logo
-    logo_element = Paragraph("", ParagraphStyle('Logo', fontSize=1))
-    if institution and institution.logo_ecole:
-        try:
-            logo_path = os.path.join(settings.MEDIA_ROOT, institution.logo_ecole.name)
-            if os.path.exists(logo_path):
-                logo_element = Image(logo_path, width=logo_size, height=logo_size)
-        except:
-            pass
-    
-    # Infos institution
-    nom_ecole = institution.nom_ecole.upper() if institution and institution.nom_ecole else "ECOLE INTERNATIONALE"
-    sigle = f" - {institution.sigle}" if institution and institution.sigle else ""
-    
-    # Coordonnées
+
+    nom_ecole = (institution.nom_ecole.upper() if institution and institution.nom_ecole else "ECOLE INTERNATIONALE").upper()
+    sigle = institution.sigle if institution and institution.sigle else ""
+
+    # Contact & adresse
     contact_parts = []
     if institution and institution.telephone:
         contact_parts.append(institution.telephone)
     if institution and institution.email:
         contact_parts.append(institution.email)
     contact = " | ".join(contact_parts) if contact_parts else ""
-    
-    # Adresse
+
     adresse_parts = []
     if institution and institution.siege:
         adresse_parts.append(institution.siege)
@@ -403,147 +353,135 @@ def build_pdf_header_pos(eleve=None, classe_obj=None, id_campus=None, id_cycle=N
     if institution and institution.b_postale:
         adresse_parts.append(f"BP {institution.b_postale}")
     adresse = " | ".join(adresse_parts) if adresse_parts else ""
-    
-    # Construction des données du tableau
-    data = []
-    
-    # LIGNE 1: Logo et nom école
-    data.append([
-        logo_element,
-        Paragraph(f"{nom_ecole}{sigle}", style_nom_ecole),
-        Paragraph("", style_info)
-    ])
-    
-    # LIGNE 2: Contact
+
+    # ── Logo ──
+    logo_el = Paragraph("", style_empty)
+    if institution and institution.logo_ecole:
+        try:
+            logo_path = os.path.join(str(settings.MEDIA_ROOT), institution.logo_ecole.name)
+            if os.path.exists(logo_path):
+                logo_el = Image(logo_path, width=logo_size, height=logo_size)
+        except Exception:
+            pass
+
+    # ══════════════════════════════════════════════
+    #  ASSEMBLAGE DES SECTIONS
+    # ══════════════════════════════════════════════
+    elements = []
+
+    # ── SECTION 1 : Mini bannière ──
+    banner_center = [Paragraph(nom_ecole, style_nom_ecole)]
+    if sigle:
+        banner_center.append(Paragraph(sigle, ParagraphStyle(
+            'SiglePOS', fontSize=7, fontName='Helvetica-Oblique',
+            alignment=TA_CENTER, textColor=colors.HexColor('#cfd8e8'), leading=9
+        )))
     if contact:
-        data.append([
-            Paragraph("", style_info),
-            Paragraph(contact, style_contact),
-            Paragraph("", style_info)
-        ])
-    
-    # LIGNE 3: Adresse
-    if adresse:
-        data.append([
-            Paragraph("", style_info),
-            Paragraph(adresse, style_contact),
-            Paragraph("", style_info)
-        ])
-    
-    # LIGNE 4: Séparateur
-    data.append([
-        Paragraph("", style_info),
-        Paragraph("─" * 35, ParagraphStyle('Sep', fontSize=4, alignment=TA_CENTER, textColor=colors.HexColor('#cccccc'))),
-        Paragraph("", style_info)
-    ])
-    
-    # LIGNE 5: Campus (sur sa propre ligne)
+        banner_center.append(Paragraph(contact, style_contact))
+
+    banner_data = [[logo_el, banner_center]]
+    banner_table = Table(banner_data, colWidths=[1.8 * cm, pos_width - 1.8 * cm])
+    banner_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), NAVY_DARK),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('ROUNDEDCORNERS', [4, 4, 0, 0]),
+    ]))
+    elements.append(banner_table)
+
+    # ── SECTION 2 : Ligne dorée ──
+    gold_line = Table([[""]], colWidths=[pos_width], rowHeights=[2])
+    gold_line.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), GOLD),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    elements.append(gold_line)
+
+    elements.append(Spacer(1, 4))
+
+    # ── SECTION 3 : Infos contextuelles (compactes) ──
+    info_lines = []
+
     if id_campus:
         try:
             campus = Campus.objects.get(id_campus=id_campus)
-            data.append([
-                Paragraph("", style_info),
-                Paragraph(f"<b>Campus:</b> {campus.campus}", style_label),
-                Paragraph("", style_info)
-            ])
-        except:
+            info_lines.append(Paragraph(f"<b>📍 Campus :</b>  {campus.campus}", style_label))
+        except Exception:
             pass
-    
-    # LIGNE 6: Classe (sur sa propre ligne)
+
     if classe_obj:
         try:
             classe_info = classe_obj.classe_id.classe
             if classe_obj.groupe:
                 classe_info += f" ({classe_obj.groupe})"
-            data.append([
-                Paragraph("", style_info),
-                Paragraph(f"<b>Classe:</b> {classe_info}", style_label),
-                Paragraph("", style_info)
-            ])
-        except:
+            info_lines.append(Paragraph(f"<b>🎓 Classe :</b>  {classe_info}", style_label))
+        except Exception:
             pass
-    
-    # LIGNE 7: Année (sur sa propre ligne)
+
     if id_annee:
         try:
             annee = Annee.objects.get(id_annee=id_annee)
-            data.append([
-                Paragraph("", style_info),
-                Paragraph(f"<b>Année scolaire:</b> {annee.annee}", style_label),
-                Paragraph("", style_info)
-            ])
-        except:
+            info_lines.append(Paragraph(f"<b>📅 Année :</b>  {annee.annee}", style_label))
+        except Exception:
             pass
-    
-    # LIGNE 8: Date (sur sa propre ligne)
-    data.append([
-        Paragraph("", style_info),
-        Paragraph(f"<b>Date:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_label),
-        Paragraph("", style_info)
-    ])
-    
-    # LIGNE 9: Séparateur avant élève
-    data.append([
-        Paragraph("", style_info),
-        Paragraph("─" * 35, ParagraphStyle('Sep', fontSize=4, alignment=TA_CENTER, textColor=colors.HexColor('#cccccc'))),
-        Paragraph("", style_info)
-    ])
-    
-    # LIGNE 10: Élève si présent
+
+    info_lines.append(Paragraph(f"<b>🕐 Date :</b>  {datetime.now().strftime('%d/%m/%Y %H:%M')}", style_info))
+
     if eleve:
+        info_lines.append(Spacer(1, 2))
         nom_complet = f"{eleve.nom} {eleve.prenom}".strip()
-        data.append([
-            Paragraph("", style_info),
-            Paragraph(f"👤 <b>{nom_complet}</b>", style_info_bold),
-            Paragraph("", style_info)
-        ])
-        
-        # LIGNE 11: Matricule
+        info_lines.append(Paragraph(f"<b>👤 Élève :</b>  {nom_complet}", style_label))
         if hasattr(eleve, 'matricule') and eleve.matricule:
-            data.append([
-                Paragraph("", style_info),
-                Paragraph(f"🆔 {eleve.matricule}", style_info),
-                Paragraph("", style_info)
-            ])
-        
-        # LIGNE 12: Séparateur
-        data.append([
-            Paragraph("", style_info),
-            Paragraph("─" * 35, ParagraphStyle('Sep', fontSize=4, alignment=TA_CENTER, textColor=colors.HexColor('#cccccc'))),
-            Paragraph("", style_info)
-        ])
-    
-    # LIGNE 13: Titre (si fourni)
+            info_lines.append(Paragraph(f"<b>🆔 Matricule :</b>  {eleve.matricule}", style_info))
+
+    if info_lines:
+        info_table = Table([[info_lines]], colWidths=[pos_width])
+        info_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), LIGHT_BG),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 6),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('BOX', (0, 0), (-1, -1), 0.5, BORDER_COLOR),
+            ('ROUNDEDCORNERS', [3, 3, 3, 3]),
+        ]))
+        elements.append(info_table)
+        elements.append(Spacer(1, 4))
+
+    # ── SECTION 4 : Titre ──
     if titre:
-        data.append([
-            Paragraph("", style_info),
-            Paragraph(f"<b>{titre.upper()}</b>", style_titre),
-            Paragraph("", style_info)
-        ])
-    
-    # Création du tableau
-    table = Table(data, colWidths=col_widths)
-    
-    # Style du tableau
-    style_commands = [
+        titre_table = Table([[Paragraph(f"<b>{titre.upper()}</b>", style_titre)]], colWidths=[pos_width])
+        titre_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), LIGHT_BG),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('BOX', (0, 0), (-1, -1), 0.5, NAVY_DARK),
+            ('LINEBELOW', (0, 0), (-1, -1), 1.5, GOLD),
+            ('ROUNDEDCORNERS', [3, 3, 3, 3]),
+        ]))
+        elements.append(titre_table)
+        elements.append(Spacer(1, 3))
+
+    # ── WRAPPER ──
+    wrapper = Table([[elements]], colWidths=[pos_width])
+    wrapper.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-        ('ALIGN', (1, 0), (1, -1), 'LEFT'),  # Aligné à gauche pour meilleure lisibilité
-        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-        ('TOPPADDING', (0, 0), (-1, -1), 2),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
-    ]
-    
-    # Fond pour la ligne de titre
-    if titre:
-        # Trouver l'index de la ligne de titre (dernière ligne)
-        style_commands.append(('BACKGROUND', (1, -1), (1, -1), colors.HexColor('#f8fafc')))
-    
-    table.setStyle(TableStyle(style_commands))
-    
-    return table
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+    ]))
+
+    return wrapper
 
 def generate_invoice(request, id_paiement):
     try:

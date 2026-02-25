@@ -1237,7 +1237,8 @@
                     <div class="form-row">
                         {% for field in form_variable_categorie %}
                         <div class="form-group col-md-4">
-                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label }}</label>
+                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label
+                                }}</label>
                             {% render_field field class="form-control" placeholder=field.label %}
                         </div>
                         {% endfor %}
@@ -1261,7 +1262,8 @@
                     <div class="form-row">
                         {% for field in form_variable %}
                         <div class="form-group col-md-4">
-                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label }}</label>
+                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label
+                                }}</label>
                             {% render_field field class="form-control" placeholder=field.label %}
                         </div>
                         {% endfor %}
@@ -1718,69 +1720,70 @@
                                 <i class="fas fa-file-excel"></i> Télécharger Excel
                             </button>
                         </div>
-                        <!-- entre sortie prtie categorie  -->
-                        <!-- entre sortie partie categorie  -->
-                        {% elif form_type == 'liste_categories_form' %}
-                        <h2 class="section-title">Ajouter une catégorie d'opération</h2>
+                    </div>
+                    <!-- entre sortie prtie categorie  -->
+                    <!-- entre sortie partie categorie  -->
+                    {% elif form_type == 'liste_categories_form' %}
+                    <h2 class="section-title">Ajouter une catégorie d'opération</h2>
 
-                        {% if liste_categories_form.non_field_errors %}
-                        <div class="alert alert-danger">
-                            {{ liste_categories_form.non_field_errors }}
-                        </div>
-                        {% endif %}
+                    {% if liste_categories_form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {{ liste_categories_form.non_field_errors }}
+                    </div>
+                    {% endif %}
 
-                        <div class="form-row">
-                            {% for field in liste_categories_form %}
-                            <div class="form-group col-md-6">
-                                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                                {% render_field field class="form-control" %}
-                                {% if field.errors %}
-                                <small class="text-danger">{{ field.errors.0 }}</small>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
+                    <div class="form-row">
+                        {% for field in liste_categories_form %}
+                        <div class="form-group col-md-6">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {% render_field field class="form-control" %}
+                            {% if field.errors %}
+                            <small class="text-danger">{{ field.errors.0 }}</small>
+                            {% endif %}
                         </div>
+                        {% endfor %}
+                    </div>
 
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-cancel" id="cancelBtn">
-                                <span class="emoji-icon">❌</span> Annuler
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-plus-circle"></i> Ajouter
-                            </button>
-                        </div>
-                        <!-- entre sortie partie OPERATION  -->
-                        <!-- entre sortie partie OPERATION -->
-                        {% elif form_type == 'liste_operations_form' %}
-                        <h2 class="section-title">Ajouter une opération financière</h2>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancelBtn">
+                            <span class="emoji-icon">❌</span> Annuler
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus-circle"></i> Ajouter
+                        </button>
+                    </div>
+                    <!-- entre sortie partie OPERATION  -->
+                    <!-- entre sortie partie OPERATION -->
+                    {% elif form_type == 'liste_operations_form' %}
+                    <h2 class="section-title">Ajouter une opération financière</h2>
 
-                        {% if liste_operations_form.non_field_errors %}
-                        <div class="alert alert-danger">
-                            {{ liste_operations_form.non_field_errors }}
-                        </div>
-                        {% endif %}
+                    {% if liste_operations_form.non_field_errors %}
+                    <div class="alert alert-danger">
+                        {{ liste_operations_form.non_field_errors }}
+                    </div>
+                    {% endif %}
 
-                        <div class="form-row">
-                            {% for field in liste_operations_form %}
-                            <div class="form-group col-md-6" id="field-{{ field.name }}">
-                                <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                                {% render_field field class="form-control" %}
-                                {% if field.errors %}
-                                <small class="text-danger">{{ field.errors.0 }}</small>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
+                    <div class="form-row">
+                        {% for field in liste_operations_form %}
+                        <div class="form-group col-md-6" id="field-{{ field.name }}">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {% render_field field class="form-control" %}
+                            {% if field.errors %}
+                            <small class="text-danger">{{ field.errors.0 }}</small>
+                            {% endif %}
                         </div>
+                        {% endfor %}
+                    </div>
 
-                        <div class="form-actions">
-                            <button type="button" class="btn btn-cancel" id="cancelBtn">
-                                <span class="emoji-icon">❌</span> Annuler
-                            </button>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-plus-circle"></i> Ajouter l'opération
-                            </button>
-                        </div>
-                        {% endif %}
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancelBtn">
+                            <span class="emoji-icon">❌</span> Annuler
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-plus-circle"></i> Ajouter l'opération
+                        </button>
+                    </div>
+                    {% endif %}
                 </form>
 
 
@@ -1810,7 +1813,7 @@
                                 <tbody>
                                     {% for categorie in variable_categorie %}
                                     <tr id="row-categorie-{{ categorie.id_variable_categorie }}">
-                                        <td>
+                                        <td id="categorie-name-{{ categorie.id_variable_categorie }}">
                                             <div class="d-flex align-items-center">
                                                 <div class="symbol symbol-40px me-3">
                                                     <span class="symbol-label bg-light-primary">
@@ -1868,16 +1871,15 @@
                                 <tbody>
                                     {% for variable in variableList %}
                                     <tr id="row-variable-{{ variable.id_variable }}">
-                                        <td>
+                                        <td id="categorie-name-{{ variable.id_variable }}">
                                             <span class="badge badge-info-soft">{{ variable.id_variable_categorie.nom }}</span>
                                         </td>
-                                        <td>
+                                        <td id="variable-name-{{ variable.id_variable }}">
                                             <span class="text-dark fw-bold d-block fs-6">{{ variable.variable }}</span>
                                         </td>
                                         <td class="text-center">
                                             <label class="toggle-switch">
-                                                <input type="checkbox" class="est-obligatoire"
-                                                    data-id="{{ variable.id_variable }}" {% if variable.estObligatoire %}checked{% endif %}>
+                                                <input type="checkbox" class="est-obligatoire" data-id="{{ variable.id_variable }}" {% if variable.estObligatoire %}checked{% endif %}>
                                                 <span class="toggle-slider"></span>
                                             </label>
                                         </td>
@@ -1937,7 +1939,8 @@
                                                         <i class="fas fa-university text-success"></i>
                                                     </span>
                                                 </div>
-                                                <span class="text-dark fw-bold text-hover-primary mb-1 fs-6">{{ banque.banque }}</span>
+                                                <span class="text-dark fw-bold text-hover-primary mb-1 fs-6">{{
+                                                    banque.banque }}</span>
                                             </div>
                                         </td>
                                         <td>
@@ -1996,7 +1999,8 @@
                                         <td>
                                             <div class="d-flex align-items-center">
                                                 <i class="fas fa-university text-muted me-2"></i>
-                                                <span class="text-muted fw-semibold">{{ compte.id_banque.banque }}</span>
+                                                <span class="text-muted fw-semibold">{{ compte.id_banque.banque
+                                                    }}</span>
                                             </div>
                                         </td>
                                         <td class="text-end">
