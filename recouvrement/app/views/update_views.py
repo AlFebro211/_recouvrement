@@ -6,7 +6,6 @@ from django.views.decorators.http import require_POST
 
 
 
-@login_required
 @csrf_protect
 def update_paiement_field(request):
     if request.method == 'POST':
@@ -59,7 +58,6 @@ def update_paiement_field(request):
     }, status=405)
 
 
-@login_required
 @csrf_protect
 def update_categorie(request, categorie_id):
     if request.method == 'POST':
@@ -76,7 +74,6 @@ def update_categorie(request, categorie_id):
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée.'})
 
 
-@login_required
 @csrf_protect
 def update_compte(request, compte_id):
     if request.method == 'POST':
@@ -108,7 +105,6 @@ def update_compte(request, compte_id):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée.'})
 
-@login_required
 @csrf_protect
 def update_banque(request, banque_id):
     if request.method == 'POST':
@@ -134,7 +130,6 @@ def update_banque(request, banque_id):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée.'})
 
-@login_required
 @csrf_protect
 def update_variable(request, variable_id):
     if request.method == 'POST':

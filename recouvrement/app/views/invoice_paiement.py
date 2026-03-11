@@ -1135,7 +1135,6 @@ def generate_facture_paiement(request):
         return HttpResponse("Paiement introuvable", status=404)
     except Exception as e:
         import traceback
-        print(traceback.format_exc())
         return HttpResponse(f"Erreur technique : {str(e)}", status=500)
 
 # logos/ecole/eibu_yxQIjf2.PNG
@@ -1311,7 +1310,6 @@ def generate_historique_pdf(request):
 
     except Exception as e:
         import traceback
-        print(traceback.format_exc())
         return HttpResponse(f"Erreur PDF : {str(e)}", status=500)
 
 def generate_dette_pdf(request):
@@ -1838,7 +1836,6 @@ def generate_historique_excel(request):
 
     except Exception as e:
         import traceback
-        print(traceback.format_exc())
         return JsonResponse({
             "success": False,
             "message": str(e)

@@ -5,9 +5,6 @@
             <h1>Tableau de Bord Financier</h1>
             <p class="subtitle">Suivi en temps réel de la situation de recouvrement</p>
         </div>
-        <div class="header-date">
-            <span id="currentDate"></span>
-        </div>
     </div>
 
     <!-- FILTERS TOOLBAR -->
@@ -557,9 +554,6 @@
 
 <script>
     $(document).ready(function () {
-        // Date actuelle
-        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        $('#currentDate').text(new Date().toLocaleDateString('fr-FR', options));
 
         // ==========================
         // INITIALISATION CHART

@@ -150,7 +150,6 @@ def add_paiement_for_anyclass(request):
     else:
         form = PaiementForm()
     annees = Annee.objects.all()
-    print("Années disponibles:", annees)
 
     paiementList = Paiement.objects.all()
     return render(request, 'recouvrement/index_recouvrement.html', {
@@ -351,7 +350,6 @@ def save_paiement(request):
                     return JsonResponse({'success': False, 'error': 'Compte non trouvé.'}, status=404)
 
                 id_banque = compte.id_banque.id_banque if compte.id_banque else None
-                print(f"Compte choisi : {compte}, Banque : {id_banque}")
 
                 # if Paiement.objects.filter(
                 #     id_eleve_id=id_eleve,
@@ -373,21 +371,15 @@ def save_paiement(request):
                         'error': 'Classe active non trouvée.'
                     }, status=404)
                 
-                try:
-                    variable_date_butoire = VariableDatebutoire.objects.get(
-                        id_variable_id=id_variable,
-                        id_annee_id=id_annee,
-                        id_campus_id=id_campus,
-                        id_cycle_actif_id=id_cycle_actif,
-                        id_classe_active_id=id_classe_active
-                    )
-                except VariableDatebutoire.DoesNotExist:
-                    return JsonResponse({
-                        'success': False,
-                        'error': "Aucune date butoire définie pour cette variable."
-                    }, status=400)
+                variable_date_butoire = VariableDatebutoire.objects.filter(
+                    id_variable_id=id_variable,
+                    id_annee_id=id_annee,
+                    id_campus_id=id_campus,
+                    id_cycle_actif_id=id_cycle_actif,
+                    id_classe_active_id=id_classe_active
+                ).first()
 
-                date_limite = variable_date_butoire.date_butoire
+                date_limite = variable_date_butoire.date_butoire if variable_date_butoire else None
 
                 derogation = VariableDerogation.objects.filter(
                     id_eleve_id=id_eleve,
@@ -401,15 +393,15 @@ def save_paiement(request):
                 if derogation:
                     date_limite = derogation.date_derogation
 
-                try:
-                    variable_prix = VariablePrix.objects.get(
-                        id_variable_id=id_variable,
-                        id_annee_id=id_annee,
-                        id_campus_id=id_campus,
-                        id_cycle_actif_id=id_cycle_actif,
-                        id_classe_active_id=id_classe_active
-                    )
-                except VariablePrix.DoesNotExist:
+                variable_prix = VariablePrix.objects.filter(
+                    id_variable_id=id_variable,
+                    id_annee_id=id_annee,
+                    id_campus_id=id_campus,
+                    id_cycle_actif_id=id_cycle_actif,
+                    id_classe_active_id=id_classe_active
+                ).first()
+
+                if not variable_prix:
                     return JsonResponse({
                         'success': False,
                         'error': 'Aucun prix défini pour cette variable.'
@@ -433,9 +425,7 @@ def save_paiement(request):
                     montant_reduction = (prix_max * pourcentage) / 100
                     montant_autorise = prix_max - montant_reduction
 
-                    print(f"Réduction appliquée: {pourcentage}%")
-                    print(f"Prix normal: {prix_max}")
-                    print(f"Montant autorisé après réduction: {montant_autorise}")
+
 
                 # ========================== Vérification cumul ==========================
                 total_deja_paye = Paiement.objects.filter(

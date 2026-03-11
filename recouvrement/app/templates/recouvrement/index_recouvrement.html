@@ -1237,8 +1237,7 @@
                     <div class="form-row">
                         {% for field in form_variable_categorie %}
                         <div class="form-group col-md-4">
-                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label
-                                }}</label>
+                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label }}</label>
                             {% render_field field class="form-control" placeholder=field.label %}
                         </div>
                         {% endfor %}
@@ -1262,8 +1261,7 @@
                     <div class="form-row">
                         {% for field in form_variable %}
                         <div class="form-group col-md-4">
-                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label
-                                }}</label>
+                            <label for="{{ field.id_for_label }}" class="form-label hidden-label">{{ field.label }}</label>
                             {% render_field field class="form-control" placeholder=field.label %}
                         </div>
                         {% endfor %}
@@ -1350,7 +1348,7 @@
                         <button type="button" class="btn btn-cancel" id="cancelBtn">
                             <span class="emoji-icon">❌</span> Annuler
                         </button>
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="saveBtn" style="display:none;">
                             <i class="fas fa-plus-circle"></i> Ajouter
                         </button>
                     </div>
@@ -1495,18 +1493,28 @@
                             {% render_field field class="form-control" %}
                         </div>
                         {% else %}
-                        <div class="form-group col-md-4">
-                            <label for="{{ field.id_for_label }}" class="form-label ">{{ field.label }}</label>
+                        <div class="form-group col-md-4" id="field-{{ field.name }}"
+                            {% if field.name != 'id_annee' %}style="display:none;"{% endif %}>
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
                             {% render_field field class="form-control" placeholder=field.label %}
                         </div>
+                        {% if field.name == 'id_classe_active' %}
+                        <!-- Trimestre select (inserted between classe and élève) -->
+                        <div class="form-group col-md-4" id="field-trimestre" style="display:none;">
+                            <label class="form-label">Trimestre</label>
+                            <select id="id_trimestre_paiement" class="form-control">
+                                <option value="">------</option>
+                            </select>
+                        </div>
+                        {% endif %}
                         {% endif %}
                         {% endfor %}
                     </div>
-                    <div class="form-actions">
+                    <div class="form-actions" id="paiement-form-actions" style="display:none;">
                         <button type="button" class="btn btn-cancel" id="cancelBtn">
                             <span class="emoji-icon">❌</span> Annuler
                         </button>
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="saveBtn">
                             <i class="fas fa-plus-circle"></i> Ajouter
                         </button>
                     </div>
@@ -1932,18 +1940,17 @@
                                 <tbody>
                                     {% for banque in banque_list %}
                                     <tr id="row-banque-{{ banque.id_banque }}">
-                                        <td>
+                                        <td id="banque-name-{{ banque.id_banque }}">
                                             <div class="d-flex align-items-center">
                                                 <div class="symbol symbol-40px me-3">
                                                     <span class="symbol-label bg-light-success">
                                                         <i class="fas fa-university text-success"></i>
                                                     </span>
                                                 </div>
-                                                <span class="text-dark fw-bold text-hover-primary mb-1 fs-6">{{
-                                                    banque.banque }}</span>
+                                                <span class="text-dark fw-bold text-hover-primary mb-1 fs-6">{{ banque.banque }}</span>
                                             </div>
                                         </td>
-                                        <td>
+                                        <td id="sigle-name-{{ banque.id_banque }}">
                                             <span class="badge badge-secondary">{{ banque.sigle }}</span>
                                         </td>
                                         <td class="text-end">
@@ -1993,14 +2000,13 @@
                                 <tbody>
                                     {% for compte in compte_list %}
                                     <tr id="row-compte-{{ compte.id_compte }}">
-                                        <td>
+                                        <td id="compte-num-{{ compte.id_compte }}">
                                             <span class="text-dark fw-bold fs-6">{{ compte.compte }}</span>
                                         </td>
-                                        <td>
+                                        <td id="banque-name-{{ compte.id_compte }}">
                                             <div class="d-flex align-items-center">
                                                 <i class="fas fa-university text-muted me-2"></i>
-                                                <span class="text-muted fw-semibold">{{ compte.id_banque.banque
-                                                    }}</span>
+                                                <span class="text-muted fw-semibold">{{ compte.id_banque.banque }}</span>
                                             </div>
                                         </td>
                                         <td class="text-end">
@@ -3376,7 +3382,7 @@
 
                             // Reset trimestres et variables
                             $('#id_id_annee_trimestre').html('<option value="">------</option>');
-                            $('#field-id_annee_trimestre,, #field-prix, #saveBtn').hide();
+                            $('#field-id_annee_trimestre, #field-id_variable, #field-prix, #saveBtn').hide();
                             selectedCampusId = null;
                             selectedCycleId = null;
                         })
@@ -3825,6 +3831,8 @@
                         if (window.location.pathname.includes("ajouter_date_butoire")) {
                             modal.style.display = 'none';
                             $('#tab_variable_list').show();
+                            // Pre-fill existing date_butoire values
+                            loadExistingValues();
                             return;
                         }
 
@@ -3926,10 +3934,41 @@
                     if (selectedEleveId) {
                         modal.style.display = 'none';
                         $('#tab_variable_list').show();
+                        // Pre-fill existing derogation/date_butoire values
+                        loadExistingValues();
                     } else {
                         $('#tab_variable_list').hide();
                     }
                 });
+
+                // Load existing derogation/date_butoire values from the API
+                function loadExistingValues() {
+                    if (!selectedAnneeId || !selectedClasseId) return;
+                    let url = `/get_existing_derogation_reduction/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
+                    if (selectedEleveId) url += `&id_eleve=${selectedEleveId}`;
+                    fetch(url).then(r => r.json()).then(resp => {
+                        if (!resp.success) return;
+                        const data = resp.data;
+                        // For each variable row, pre-fill the date or percentage
+                        $('tr[id^="row-variable-"]').each(function() {
+                            const varId = $(this).attr('id').replace('row-variable-', '');
+                            const info = data[varId];
+                            if (info) {
+                                const dateInput = $(this).find('input[type="date"]');
+                                const numInput = $(this).find('input[type="number"]');
+                                if (window.location.pathname.includes('create_derogation_classe') && info.date_derogation && dateInput.length) {
+                                    dateInput.val(info.date_derogation);
+                                }
+                                if (window.location.pathname.includes('ajouter_date_butoire') && info.date_butoire && dateInput.length) {
+                                    dateInput.val(info.date_butoire);
+                                }
+                                if (info.pourcentage !== undefined && numInput.length) {
+                                    numInput.val(info.pourcentage);
+                                }
+                            }
+                        });
+                    }).catch(err => console.error('Error loading existing values:', err));
+                }
 
                 $(document).on('click', '.validate-btn', function (e) {
                     e.preventDefault();
@@ -3940,6 +3979,13 @@
 
                     if (!dateButoire) {
                         alert("Veuillez saisir une date. C'est obligatoire !");
+                        return;
+                    }
+
+                    // Validation : date ne peut pas être inférieure à aujourd'hui
+                    var today = new Date().toISOString().split('T')[0];
+                    if (dateButoire < today) {
+                        alert("La date ne peut pas être inférieure à la date du jour (" + today + ").");
                         return;
                     }
 
@@ -3968,19 +4014,23 @@
                         data: formData,
                         success: function (response) {
                             if (response.success) {
+                                var msg = response.message || (response.updated ? 'Mise à jour effectuée !' : 'Enregistrement réussi !');
+                                alert(msg);
                                 if (window.location.pathname.includes("create_derogation_classe")) {
-                                    alert('Dérogation enregistrée avec succès !');
                                     window.location.href = "{% url 'create_derogation_classe' %}";
                                 } else if (window.location.pathname.includes("ajouter_date_butoire")) {
-                                    alert('Date butoire enregistrée avec succès !');
                                     window.location.href = "{% url 'ajouter_date_butoire' %}";
                                 }
                             } else {
-                                alert('Erreur : ' + response.error);
+                                alert('Erreur : ' + (response.error || 'Erreur inconnue'));
                             }
                         },
                         error: function (xhr, status, error) {
-                            alert('Une erreur est survenue lors de l\'enregistrement.');
+                            var errMsg = 'Une erreur est survenue lors de l\'enregistrement.';
+                            if (xhr.responseJSON && xhr.responseJSON.error) {
+                                errMsg = xhr.responseJSON.error;
+                            }
+                            alert('Erreur : ' + errMsg);
                         }
                     });
                 });
@@ -4149,10 +4199,29 @@
                     if (selectedEleveId) {
                         modal.style.display = 'none';
                         $('#tab_variable_list').show();
+                        // Pre-fill existing reduction values
+                        loadExistingReductions();
                     } else {
                         $('#tab_variable_list').hide();
                     }
                 });
+
+                // Load existing reduction values from the API
+                function loadExistingReductions() {
+                    if (!selectedAnneeId || !selectedClasseId || !selectedEleveId) return;
+                    let url = `/get_existing_derogation_reduction/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}&id_eleve=${selectedEleveId}`;
+                    fetch(url).then(r => r.json()).then(resp => {
+                        if (!resp.success) return;
+                        const data = resp.data;
+                        $('tr[id^="row-variable-"]').each(function() {
+                            const varId = $(this).attr('id').replace('row-variable-', '');
+                            const info = data[varId];
+                            if (info && info.pourcentage !== undefined) {
+                                $(this).find('input[type="number"]').val(info.pourcentage);
+                            }
+                        });
+                    }).catch(err => console.error('Error loading existing reductions:', err));
+                }
 
                 $(document).on('click', '.validate-btn', function (e) {
                     e.preventDefault();
@@ -4182,19 +4251,19 @@
                         data: formData,
                         success: function (response) {
                             if (response.success) {
-                                alert('Réduction parametrée avec succès !');
-                                window.location.href = "{% url 'create_derogation_classe' %}";
-
+                                var msg = response.message || (response.updated ? 'Réduction mise à jour !' : 'Réduction enregistrée !');
+                                alert(msg);
+                                window.location.href = "{% url 'create_variable_reduction' %}";
                             } else {
-                                alert('Erreur : ' + response.error);
-                                window.location.href = "{% url 'create_derogation_classe' %}";
-
+                                alert('Erreur : ' + (response.error || 'Erreur inconnue'));
                             }
                         },
                         error: function (xhr, status, error) {
-                            alert('Une erreur est survenue lors de l\'enregistrement.');
-                            // window.location.href = "{% url 'create_derogation_classe' %}";
-
+                            var errMsg = 'Une erreur est survenue lors de l\'enregistrement.';
+                            if (xhr.responseJSON && xhr.responseJSON.error) {
+                                errMsg = xhr.responseJSON.error;
+                            }
+                            alert('Erreur : ' + errMsg);
                         }
                     });
                 });
@@ -4211,40 +4280,34 @@
     <script>
         $(document).ready(function () {
             if (window.location.pathname === "/ajouter_paiement/") {
-                $('#field-id_classe_active').hide();
-                $('#field-id_eleve').hide();
-                $('#field-id_variable').hide();
-                // $('#field-id_banque').hide();
-                $('#field-id_compte').hide();
-                $('#field-montant').hide();
-                $('#field-bordereau').hide();
-                $('#field-date_paie').hide();
-                $('#saveBtn').hide();
+
+                // =============================================================
+                // PROGRESSIVE DISCLOSURE: only year visible at start
+                // =============================================================
+                function hideFrom(startField) {
+                    const fields = ['id_classe_active', 'trimestre', 'id_eleve', 'id_variable', 'id_compte', 'montant', 'bordereau', 'date_paie'];
+                    const idx = fields.indexOf(startField);
+                    for (let i = idx; i < fields.length; i++) {
+                        $('#field-' + fields[i]).hide();
+                    }
+                    $('#paiement-form-actions').hide();
+                }
 
                 let selectedAnneeId = null;
                 let selectedCampusId = null;
                 let selectedCycleId = null;
                 let selectedClasseId = null;
+                let selectedTrimestreId = null;
                 let selectedEleveId = null;
 
+                // =============================================================
+                // 1️⃣ ANNÉE → load Classes
+                // =============================================================
                 $('#id_id_annee').on('change', function () {
                     selectedAnneeId = $(this).val();
-                    if (!selectedAnneeId) {
-                        $('#field-id_classe_active').hide();
-                        $('#field-id_eleve').hide();
-                        $('#field-id_variable').hide();
-                        // $('#field-id_banque').hide();
-                        $('#field-id_compte').hide();
-                        $('#field-montant').hide();
-                        $('#field-bordereau').hide();
-                        $('#field-date_paie').hide();
-                        $('#saveBtn').hide();
-                        selectedCampusId = null;
-                        selectedCycleId = null;
-                        selectedClasseId = null;
-                        selectedEleveId = null;
-                        return;
-                    }
+                    hideFrom('id_classe_active');
+
+                    if (!selectedAnneeId) return;
 
                     $.ajax({
                         url: '/store_annee_session/',
@@ -4261,8 +4324,8 @@
                                 alert('Erreur : ' + response.error);
                             }
                         },
-                        error: function (xhr, status, error) {
-                            alert('Une erreur est survenue lors de l\'enregistrement de l\'année.');
+                        error: function () {
+                            alert("Une erreur est survenue lors de l'enregistrement de l'année.");
                         }
                     });
                 });
@@ -4289,83 +4352,83 @@
                                 });
                                 $('#field-id_classe_active').show();
                             } else {
-                                alert(responseData.message || 'Aucune classe active trouvée pour cette année scolaire.');
-                                $('#field-id_classe_active').hide();
+                                alert(responseData.message || 'Aucune classe active trouvée pour cette année.');
                             }
-                            $('#field-id_eleve').hide();
-                            $('#field-id_variable').hide();
-                            // $('#field-id_banque').hide();
-                            $('#field-id_compte').hide();
-                            $('#field-montant').hide();
-                            $('#field-bordereau').hide();
-                            $('#field-date_paie').hide();
-                            $('#saveBtn').hide();
                         })
-                        .catch(error => {
-                            alert('Erreur lors du chargement des classes.');
-                        });
+                        .catch(() => alert('Erreur lors du chargement des classes.'));
                 }
 
+                // =============================================================
+                // 2️⃣ CLASSE → load Trimestres
+                // =============================================================
                 $('#id_id_classe_active').on('change', function () {
                     selectedClasseId = $(this).val();
-                    if (selectedClasseId) {
-                        const selectedOption = $(this).find('option:selected');
-                        selectedCampusId = selectedOption.data('campusId');
-                        selectedCycleId = selectedOption.data('cycleId');
+                    hideFrom('trimestre');
 
-                        updateEleveDropdown();
-                    } else {
-                        $('#field-id_eleve').hide();
-                        $('#field-id_variable').hide();
-                        // $('#field-id_banque').hide();
-                        $('#field-id_compte').hide();
-                        $('#field-montant').hide();
-                        $('#field-bordereau').hide();
-                        $('#field-date_paie').hide();
-                        $('#saveBtn').hide();
-                        selectedCampusId = null;
-                        selectedCycleId = null;
-                        selectedClasseId = null;
-                        selectedEleveId = null;
-                    }
+                    if (!selectedClasseId) return;
+
+                    const selectedOption = $(this).find('option:selected');
+                    selectedCampusId = selectedOption.data('campusId');
+                    selectedCycleId = selectedOption.data('cycleId');
+
+                    fetch(`/get_trimestres_by_classe_active/?id_classe_active=${selectedClasseId}&id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (!data.success) return;
+                            const dropdown = $('#id_trimestre_paiement')[0];
+                            dropdown.innerHTML = '<option value="">------</option>';
+                            if (data.trimestres.length > 0) {
+                                data.trimestres.forEach(t => {
+                                    let option = document.createElement("option");
+                                    option.value = t.id;
+                                    option.textContent = `${t.nom} (${t.etat})`;
+                                    dropdown.appendChild(option);
+                                });
+                                $('#field-trimestre').show();
+                            } else {
+                                alert('Aucun trimestre trouvé pour cette classe.');
+                            }
+                        })
+                        .catch(() => alert('Erreur lors du chargement des trimestres.'));
                 });
 
-                function updateEleveDropdown() {
-                    var dropdown = $('#id_id_eleve')[0];
-                    const pupilsUrl = `/get_pupils_registred_classe/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}`;
-                    fetch(pupilsUrl)
-                        .then(response => response.json())
-                        .then(responseData => {
-                            if (!responseData.success) {
-                                alert(responseData.error || "Erreur lors du chargement des élèves.");
-                                $('#field-id_eleve').hide();
-                                return;
-                            }
-                            const data = responseData.data || [];
+                // =============================================================
+                // 3️⃣ TRIMESTRE → load Élèves (only those with unpaid)
+                // =============================================================
+                $('#id_trimestre_paiement').on('change', function () {
+                    selectedTrimestreId = $(this).val();
+                    hideFrom('id_eleve');
+
+                    if (!selectedTrimestreId) return;
+
+                    fetch(`/get_pupils_with_unpaid/?id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe_active=${selectedClasseId}&id_trimestre=${selectedTrimestreId}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const dropdown = $('#id_id_eleve')[0];
                             dropdown.innerHTML = '<option value="">------</option>';
-                            if (data.length > 0) {
-                                data.forEach(item => {
+                            if (data.success && data.data.length > 0) {
+                                data.data.forEach(item => {
                                     let option = document.createElement("option");
                                     option.value = item.id_eleve;
-                                    option.textContent = item.nom_complet;
+                                    option.textContent = `${item.nom_complet} — Reste: ${item.reste_a_payer.toLocaleString()} FBu`;
                                     dropdown.appendChild(option);
                                 });
                                 $('#field-id_eleve').show();
                             } else {
-                                alert('Aucun élève trouvé pour cette classe.');
-                                $('#field-id_eleve').hide();
+                                alert(data.message || 'Tous les élèves ont payé pour ce trimestre.');
                             }
                         })
-                        .catch(error => {
-                            alert('Erreur lors du chargement des élèves.');
-                        });
-                }
+                        .catch(() => alert('Erreur lors du chargement des élèves.'));
+                });
+
+                // =============================================================
+                // 4️⃣ ÉLÈVE → load Variables (only unpaid ones)
+                // =============================================================
                 $('#id_id_eleve').on('change', function () {
                     selectedEleveId = $(this).val();
-                    if (!selectedEleveId) {
-                        $('#field-id_variable').hide();
-                        return;
-                    }
+                    hideFrom('id_variable');
+
+                    if (!selectedEleveId) return;
 
                     fetch(`/get_variables_restant_a_payer/?id_eleve=${selectedEleveId}&id_annee=${selectedAnneeId}&id_campus=${selectedCampusId}&id_cycle=${selectedCycleId}&id_classe=${selectedClasseId}`)
                         .then(res => res.json())
@@ -4377,62 +4440,35 @@
                                 data.variables.forEach(v => {
                                     const option = document.createElement('option');
                                     option.value = v.id_variable;
-                                    option.textContent = `${v.nom_variable} - ${v.reste_a_payer.toLocaleString()}`;
+                                    option.textContent = `${v.nom_variable} - Reste: ${v.reste_a_payer.toLocaleString()} FBu`;
                                     dropdown.appendChild(option);
                                 });
                                 $('#field-id_variable').show();
                             } else {
-                                $('#field-id_variable').hide();
-                                alert('Aucune variable avec solde restant pour cet élève.');
+                                alert('Cet élève a tout payé.');
                             }
                         })
-                        .catch(err => {
-                            console.error(err);
-                            alert('Erreur lors de la récupération des variables.');
-                        });
+                        .catch(() => alert('Erreur lors de la récupération des variables.'));
                 });
 
-
-                // $('#id_id_eleve').on('change', function() {
-                //     selectedEleveId = $(this).val();
-                //     if (selectedEleveId) {
-                //         $('#field-id_variable').show();
-                //     } else {
-                //         $('#field-id_variable').hide();
-                //         // $('#field-id_banque').hide();
-                //         $('#field-id_compte').hide();
-                //         $('#field-montant').hide();
-                //         $('#field-bordereau').hide();
-                //         $('#field-date_paie').hide();
-                //         $('#saveBtn').hide();
-                //     }
-                // });
-
+                // =============================================================
+                // 5️⃣ VARIABLE → show remaining fields + save button
+                // =============================================================
                 $('#id_id_variable').on('change', function () {
                     if ($(this).val()) {
-                        $('#field-id_banque').show();
+                        $('#field-id_compte').show();
+                        $('#field-montant').show();
+                        $('#field-bordereau').show();
+                        $('#field-date_paie').show();
+                        $('#paiement-form-actions').show();
                     } else {
-                        // $('#field-id_banque').hide();
-                        $('#field-id_compte').hide();
-                        $('#field-montant').hide();
-                        $('#field-bordereau').hide();
-                        $('#field-date_paie').hide();
-                        $('#saveBtn').hide();
+                        hideFrom('id_compte');
                     }
                 });
 
-                // $('#id_id_banque').on('change', function() {
-                //     var banqueId = $(this).val();
-                //     if (banqueId) {
-                //         updateCompteDropdown(banqueId);
-                //     } else {
-                //         $('#field-id_compte').hide();
-                //         $('#field-montant').hide();
-                //         $('#field-bordereau').hide();
-                //         $('#field-date_paie').hide();
-                //         $('#saveBtn').hide();
-                //     }
-                // });
+                // =============================================================
+                // Compte dropdown by banque
+                // =============================================================
                 function updateCompteDropdown(banqueId) {
                     var dropdown = $('#id_id_compte')[0];
                     fetch('/get_comptes_banque/' + banqueId + '/')
@@ -4444,48 +4480,22 @@
                             }
                             const data = responseData.comptes || [];
                             dropdown.innerHTML = '<option value="">------</option>';
-                            if (data.length > 0) {
-                                data.forEach(item => {
-                                    let option = document.createElement("option");
-                                    option.value = item.id_compte;
-                                    option.textContent = item.compte;
-                                    dropdown.appendChild(option);
-                                });
-                                $('#field-id_compte').show();
-                            } else {
-                                alert('Aucun compte trouvé pour cette banque.');
-                                $('#field-id_compte').hide();
-                            }
-                            $('#field-montant').show();
-                            $('#field-bordereau').show();
-                            $('#field-date_paie').show();
+                            data.forEach(item => {
+                                let option = document.createElement("option");
+                                option.value = item.id_compte;
+                                option.textContent = item.compte;
+                                dropdown.appendChild(option);
+                            });
                         })
-                        .catch(error => {
-                            alert('Erreur lors du chargement des comptes.');
-                        });
+                        .catch(() => alert('Erreur lors du chargement des comptes.'));
                 }
 
-                function checkFormValidity() {
-                    var montant = $('#id_montant').val().trim();
-                    var datePaie = $('#id_date_paie').val().trim();
-                    var banque = $('#id_id_banque').val();
-                    var compte = $('#id_id_compte').val();
-                    var variable = $('#id_id_variable').val();
-                    var bordereau = $('#id_bordereau')[0].files.length > 0;
-
-                    if (montant && parseFloat(montant) > 0 && datePaie && banque && compte && variable) {
-                        $('#saveBtn').show();
-                    } else {
-                        $('#saveBtn').hide();
-                    }
-                }
-
-                $('#id_montant, #id_date_paie, #id_id_banque, #id_id_compte, #id_id_variable, #id_bordereau').on('input change', checkFormValidity);
-
+                // =============================================================
+                // FORM SUBMIT
+                // =============================================================
                 $('#variablePrixForm').on('submit', function (e) {
                     e.preventDefault();
                     var formData = new FormData(this);
-
 
                     $.ajax({
                         url: '/save_paiement/',
@@ -4495,9 +4505,9 @@
                         contentType: false,
                         success: function (response) {
                             if (response.success) {
-                                alert('Paiement enregistré avec succès !');
                                 $('#modalContainer').modal('hide');
                                 loadPaiements();
+                                alert('Paiement enregistré avec succès !');
                             } else {
                                 let errorMsg = response.error;
                                 if (response.details) {
@@ -4505,26 +4515,14 @@
                                         const errors = JSON.parse(response.details);
                                         errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
                                     } catch (e) {
-                                        console.error('Erreur lors du parsing des erreurs :', e);
+                                        console.error('Erreur parsing:', e);
                                     }
                                 }
                                 alert('Erreur : ' + errorMsg);
-                                // let errorMsg = response.error;
-                                // if (response.details) {
-                                //     try {
-                                //         const errors = JSON.parse(response.details);
-                                //         errorMsg += '\nDétails : ' + Object.values(errors).map(field => field.message).join('\n');
-                                //     } catch (e) {
-                                //         console.error('Erreur lors du parsing des erreurs :', e);
-                                //     }
-                                // }
-                                // alert('Erreur : ' + errorMsg);
-                                // window.location.href = "{% url 'ajouter_paiement' %}";
                             }
                         },
-                        error: function (xhr, status, error) {
-
-                            alert('Une erreur est survenue lors de l\'enregistrement.');
+                        error: function () {
+                            alert("Une erreur est survenue lors de l'enregistrement.");
                         }
                     });
                 });
@@ -4535,6 +4533,7 @@
             }
         });
     </script>
+
     <!-- get paiments  + modification + suppression-->
     <script>
         $(document).ready(function () {
@@ -5099,7 +5098,7 @@
 
                     if (!anneeId) return;
 
-                    fetch(`/get_classes_actives_with_paie/${anneeId}/`)
+                    fetch(`/get_classes_with_penalite/?id_annee=${anneeId}`)
                         .then(res => res.json())
                         .then(data => {
 
@@ -5139,7 +5138,7 @@
 
                     if (!classeId) return;
 
-                    fetch(`/get_trimestres_by_classe_active/?id_classe_active=${classeId}&id_annee=${anneeId}&id_campus=${currentCampusId}&id_cycle=${currentCycleId}`)
+                    fetch(`/get_trimestres_with_penalite/?id_classe_active=${classeId}&id_annee=${anneeId}`)
                         .then(res => res.json())
                         .then(data => {
 
@@ -5171,7 +5170,7 @@
 
                     if (!trimestreId) return;
 
-                    fetch(`/get-variables-by-trimestre/?id_trimestre=${trimestreId}&id_classe=${classeId}&id_annee=${anneeId}&id_campus=${currentCampusId}&id_cycle=${currentCycleId}`)
+                    fetch(`/get_variables_with_penalite/?id_annee=${anneeId}&id_classe_active=${classeId}&id_trimestre=${trimestreId}`)
                         .then(res => res.json())
                         .then(data => {
 
@@ -5180,7 +5179,7 @@
                             data.variables.forEach(v => {
                                 $('#hf-variable').append(`
                         <option value="${v.id_variable}">
-                            ${v.nom_variable}
+                            ${v.variable}
                         </option>
                     `);
                             });

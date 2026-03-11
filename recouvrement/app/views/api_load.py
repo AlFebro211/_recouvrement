@@ -48,6 +48,65 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 
 
+def get_existing_derogation_reduction(request):
+    """
+    Returns existing derogation dates, reduction percentages, and date_butoire values
+    for a student in a given class/year. Used to pre-fill form fields.
+    """
+    id_annee = request.GET.get('id_annee')
+    id_campus = request.GET.get('id_campus')
+    id_cycle = request.GET.get('id_cycle')
+    id_classe_active = request.GET.get('id_classe_active')
+    id_eleve = request.GET.get('id_eleve')
+
+    if not all([id_annee, id_classe_active]):
+        return JsonResponse({'success': False, 'error': 'Paramètres manquants'}, status=400)
+
+    try:
+        result = {}
+
+        # Date butoire par variable (pour toute la classe)
+        dates_butoire = VariableDatebutoire.objects.filter(
+            id_annee_id=id_annee,
+            id_classe_active_id=id_classe_active,
+        )
+        for db in dates_butoire:
+            var_id = str(db.id_variable_id)
+            if var_id not in result:
+                result[var_id] = {}
+            result[var_id]['date_butoire'] = db.date_butoire.strftime('%Y-%m-%d') if db.date_butoire else None
+
+        # Derogation par élève + variable
+        if id_eleve:
+            derogations = VariableDerogation.objects.filter(
+                id_annee_id=id_annee,
+                id_classe_active_id=id_classe_active,
+                id_eleve_id=id_eleve,
+            )
+            for d in derogations:
+                var_id = str(d.id_variable_id)
+                if var_id not in result:
+                    result[var_id] = {}
+                result[var_id]['date_derogation'] = d.date_derogation.strftime('%Y-%m-%d') if d.date_derogation else None
+
+            # Reduction par élève + variable
+            reductions = Eleve_reduction_prix.objects.filter(
+                id_annee_id=id_annee,
+                id_classe_active_id=id_classe_active,
+                id_eleve_id=id_eleve,
+            )
+            for r in reductions:
+                var_id = str(r.id_variable_id)
+                if var_id not in result:
+                    result[var_id] = {}
+                result[var_id]['pourcentage'] = float(r.pourcentage)
+
+        return JsonResponse({'success': True, 'data': result})
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 def get_banques(request):
     banques = Banque.objects.all().values('id_banque', 'banque')
     return JsonResponse({'banques': list(banques)})
@@ -361,6 +420,98 @@ def get_paiements_for_add_page(request):
     return JsonResponse({"success": True, "data": data})
 
 
+def get_pupils_with_unpaid(request):
+    """
+    Returns only students who have unpaid variables for the given trimester.
+    Takes trimestre (id_annee_trimestre) as a parameter.
+    Excludes students who have fully paid all variables.
+    """
+    id_annee = request.GET.get('id_annee')
+    id_campus = request.GET.get('id_campus')
+    id_cycle = request.GET.get('id_cycle')
+    id_classe = request.GET.get('id_classe_active')
+    id_trimestre = request.GET.get('id_trimestre')
+
+    if not all([id_annee, id_campus, id_cycle, id_classe, id_trimestre]):
+        return JsonResponse({'success': False, 'error': 'Paramètres manquants'}, status=400)
+
+    try:
+        # Variables prix pour ce trimestre + classe
+        variables_prix = VariablePrix.objects.filter(
+            id_annee_trimestre_id=id_trimestre,
+            id_annee_id=id_annee,
+            id_campus_id=id_campus,
+            id_cycle_actif_id=id_cycle,
+            id_classe_active_id=id_classe
+        ).select_related('id_variable')
+
+        if not variables_prix.exists():
+            return JsonResponse({'success': True, 'data': [], 'count': 0,
+                                 'message': 'Aucune variable définie pour ce trimestre.'})
+
+        # Élèves inscrits dans cette classe
+        inscriptions = Eleve_inscription.objects.filter(
+            id_annee_id=id_annee,
+            id_campus_id=id_campus,
+            id_classe_cycle_id=id_cycle,
+            id_classe_id=id_classe,
+            status=1
+        ).select_related('id_eleve').distinct()
+
+        pupils_data = []
+
+        for ins in inscriptions:
+            eleve = ins.id_eleve
+            has_unpaid = False
+            total_reste = 0
+
+            for vp in variables_prix:
+                montant = vp.prix
+
+                # Réduction éventuelle
+                reduction = Eleve_reduction_prix.objects.filter(
+                    id_eleve=eleve,
+                    id_variable=vp.id_variable,
+                    id_annee_id=id_annee,
+                    id_campus_id=id_campus,
+                    id_cycle_actif_id=id_cycle,
+                    id_classe_active_id=id_classe
+                ).first()
+
+                if reduction:
+                    montant -= montant * reduction.pourcentage / 100
+
+                # Somme déjà payée
+                paye = Paiement.objects.filter(
+                    id_eleve=eleve,
+                    id_variable=vp.id_variable,
+                    id_annee_id=id_annee,
+                    status=True
+                ).aggregate(total=Sum('montant'))['total'] or 0
+
+                reste = max(0, montant - paye)
+                if reste > 0:
+                    has_unpaid = True
+                    total_reste += reste
+
+            # Only include students with unpaid balances
+            if has_unpaid:
+                pupils_data.append({
+                    'id_eleve': eleve.id_eleve,
+                    'nom_complet': f"{eleve.nom} {eleve.prenom}",
+                    'reste_a_payer': total_reste,
+                })
+
+        return JsonResponse({
+            'success': True,
+            'data': pupils_data,
+            'count': len(pupils_data)
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
 @csrf_exempt
 def get_pupils_registred_classe(request):
     id_annee = request.GET.get('id_annee')
@@ -577,22 +728,6 @@ def get_variables_restant_a_payer(request):
         etat_trimestre="En attente"
     ).select_related('trimestre').first()
 
-    # 🔹 DEBUG : afficher tous les trimestres existants pour cette classe
-    print("=== DEBUG trimestres disponibles ===")
-    trimestres = Annee_trimestre.objects.filter(
-        id_annee_id=annee_id,
-        id_campus_id=campus_id,
-        id_cycle_id=cycle_id,
-        id_classe_id=classe_id,
-    )
-    for t in trimestres:
-        print(
-            t.trimestre.trimestre,
-            t.debut,
-            t.fin,
-            t.etat_trimestre
-        )
-
     if not annee_trimestre:
         return JsonResponse({
             'success': False,
@@ -603,8 +738,6 @@ def get_variables_restant_a_payer(request):
     variables_prix = VariablePrix.objects.filter(
         id_annee_trimestre=annee_trimestre
     ).select_related('id_variable', 'id_variable__id_variable_categorie')
-    print("====variables prix trouvées====")
-    print(list(variables_prix.values()))
 
 
     result = []
@@ -635,15 +768,9 @@ def get_variables_restant_a_payer(request):
             id_cycle_actif_id=cycle_id,
             id_classe_active_id=classe_id
         ).aggregate(total=Sum('montant'))['total'] or 0
-        print ("DEBUG total_paye for variable", variable.variable, ":", total_paye)
-        print ("DEBUG montant_max for variable", variable.variable, ":", montant_max)
-        print ("-----------------------------")
 
         # 🔹 Calculer le reste à payer
         reste = max(0, montant_max - total_paye)
-        print(f"Variable: {variable.variable}, Montant max: {montant_max}, Total payé: {total_paye}, Reste: {reste}")
-        print ("DEBUG reste for variable", variable.variable, ":", reste)
-        print(variable.variable, montant_max, total_paye, reste)
 
         if reste > 0:
             result.append({
@@ -951,7 +1078,6 @@ def eleves_en_dette(request):
                 ).aggregate(total=Sum('valeur'))['total'] or 0
 
             total_variable = reste + penalite
-            print("DEBUG dette for variable", variable.variable, ":", total_variable)
 
             if total_variable > 0:
                 details.append({
@@ -1023,6 +1149,100 @@ def toggle_penalite_actif(request):
         except PenaliteConfig.DoesNotExist:
             return JsonResponse({'success': False, 'error': 'Pénalité non trouvée'})
     return JsonResponse({'success': False, 'error': 'Méthode non autorisée'})
+
+def get_classes_with_penalite(request):
+    """Retourne uniquement les classes actives qui ont au moins une PenaliteConfig."""
+    id_annee = request.GET.get('id_annee')
+    if not id_annee:
+        return JsonResponse({'success': False, 'error': 'Année requise'}, status=400)
+
+    try:
+        # Classes qui ont une pénalité configurée
+        classe_ids = PenaliteConfig.objects.filter(
+            id_annee_id=id_annee,
+            actif=True,
+            id_classe_active__isnull=False
+        ).values_list('id_classe_active_id', flat=True).distinct()
+
+        classes = Classe_active.objects.filter(
+            id_classe_active__in=classe_ids
+        ).select_related('id_campus', 'cycle_id__cycle_id', 'classe_id')
+
+        data = [{
+            'id_classe_active': c.id_classe_active,
+            'campus_nom': c.id_campus.campus,
+            'cycle_nom': c.cycle_id.cycle_id.cycle,
+            'classe_nom': c.classe_id.classe,
+            'groupe': c.groupe or '',
+            'id_campus': c.id_campus.id_campus,
+            'id_cycle': c.cycle_id.id_cycle_actif,
+        } for c in classes]
+
+        return JsonResponse({'success': True, 'classes': data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def get_trimestres_with_penalite(request):
+    """Retourne uniquement les trimestres ayant une PenaliteConfig pour la classe sélectionnée."""
+    id_annee = request.GET.get('id_annee')
+    id_classe_active = request.GET.get('id_classe_active')
+
+    if not all([id_annee, id_classe_active]):
+        return JsonResponse({'success': False, 'error': 'Paramètres manquants'}, status=400)
+
+    try:
+        trimestre_ids = PenaliteConfig.objects.filter(
+            id_annee_id=id_annee,
+            id_classe_active_id=id_classe_active,
+            actif=True,
+            id_annee_trimestre__isnull=False
+        ).values_list('id_annee_trimestre_id', flat=True).distinct()
+
+        trimestres = Annee_trimestre.objects.filter(
+            id_trimestre__in=trimestre_ids
+        ).select_related('trimestre')
+
+        data = [{
+            'id': t.id_trimestre,
+            'nom': t.trimestre.trimestre,
+            'etat': t.etat_trimestre,
+        } for t in trimestres]
+
+        return JsonResponse({'success': True, 'trimestres': data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+def get_variables_with_penalite(request):
+    """Retourne uniquement les variables ayant une PenaliteConfig pour les filtres sélectionnés."""
+    id_annee = request.GET.get('id_annee')
+    id_classe_active = request.GET.get('id_classe_active')
+    id_trimestre = request.GET.get('id_trimestre')
+
+    if not id_annee:
+        return JsonResponse({'success': False, 'error': 'Année requise'}, status=400)
+
+    try:
+        filtre = Q(id_annee_id=id_annee, actif=True, id_variable__isnull=False)
+        if id_classe_active:
+            filtre &= Q(id_classe_active_id=id_classe_active)
+        if id_trimestre:
+            filtre &= Q(id_annee_trimestre_id=id_trimestre)
+
+        variable_ids = PenaliteConfig.objects.filter(filtre).values_list('id_variable_id', flat=True).distinct()
+
+        variables = Variable.objects.filter(id_variable__in=variable_ids)
+
+        data = [{
+            'id_variable': v.id_variable,
+            'variable': v.variable,
+        } for v in variables]
+
+        return JsonResponse({'success': True, 'variables': data})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
 
 def eleves_en_penalite(request):
 

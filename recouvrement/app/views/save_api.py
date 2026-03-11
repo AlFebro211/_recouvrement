@@ -1,5 +1,5 @@
 from .create_base import *
-from datetime import datetime
+from datetime import datetime, date
 from app.models import *
 
 @csrf_protect
@@ -103,23 +103,24 @@ def save_variable_derogation(request):
             
             date_derogation = datetime.strptime(date_butoire, '%Y-%m-%d').date()
 
-            # 🔍 récupérer la date butoire officielle
-            try:
-                variable_date_butoire = VariableDatebutoire.objects.get(
-                    id_variable_id=id_variable,
-                    id_annee_id=id_annee,
-                    id_campus_id=id_campus,
-                    id_cycle_actif_id=id_cycle_actif,
-                    id_classe_active_id=id_classe_active
-                )
-            except VariableDatebutoire.DoesNotExist:
+            # Interdire les dates inférieures à aujourd'hui
+            if date_derogation < date.today():
                 return JsonResponse({
                     'success': False,
-                    'error': "Aucune date butoire définie pour cette variable dans cette classe."
+                    'error': f"La date de dérogation ({date_derogation}) ne peut pas être inférieure à la date du jour ({date.today()})."
                 }, status=400)
 
-            # ❌ Vérification de la règle métier
-            if date_derogation < variable_date_butoire.date_butoire:
+            # Récupérer la date butoire officielle (optionnel)
+            variable_date_butoire = VariableDatebutoire.objects.filter(
+                id_variable_id=id_variable,
+                id_annee_id=id_annee,
+                id_campus_id=id_campus,
+                id_cycle_actif_id=id_cycle_actif,
+                id_classe_active_id=id_classe_active
+            ).first()
+
+            # Vérification de la règle métier (seulement si date butoire existe)
+            if variable_date_butoire and date_derogation < variable_date_butoire.date_butoire:
                 return JsonResponse({
                     'success': False,
                     'error': (
@@ -129,30 +130,21 @@ def save_variable_derogation(request):
                     )
                 })
 
-
-            if VariableDerogation.objects.filter(
-                id_eleve=id_eleve,
-                id_annee = id_annee,
-                id_classe_active=id_classe_active,
-                id_variable = id_variable,
-            ).exists():
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Cette derogation existe déjà.'
-                }, status=400)
-
-            derogation = VariableDerogation(
+            # update_or_create : si existe déjà, on met à jour la date
+            obj, created = VariableDerogation.objects.update_or_create(
                 id_eleve_id=id_eleve,
-                id_campus_id=id_campus,
                 id_annee_id=id_annee,
-                id_cycle_actif_id=id_cycle_actif,
                 id_classe_active_id=id_classe_active,
-                date_derogation=date_butoire,
-                id_variable_id= id_variable
+                id_variable_id=id_variable,
+                defaults={
+                    'id_campus_id': id_campus,
+                    'id_cycle_actif_id': id_cycle_actif,
+                    'date_derogation': date_butoire,
+                }
             )
-            derogation.save()
 
-            return JsonResponse({'success': True})
+            msg = 'Dérogation mise à jour avec succès !' if not created else 'Dérogation enregistrée avec succès !'
+            return JsonResponse({'success': True, 'message': msg, 'updated': not created})
         except Exception as e:
             return JsonResponse({
                 'success': False,
@@ -181,28 +173,28 @@ def save_variable_date_butoire(request):
                     'error': 'Tous les champs sont requis.'
                 }, status=400)
 
-            if VariableDatebutoire.objects.filter(
-                id_annee = id_annee,
-                id_classe_active=id_classe_active,
-                id_variable= id_variable,
-            ).exists():
+            # Interdire les dates inférieures à aujourd'hui
+            date_butoire_parsed = datetime.strptime(date_butoire, '%Y-%m-%d').date()
+            if date_butoire_parsed < date.today():
                 return JsonResponse({
                     'success': False,
-                    'error': 'Cette date butoire  existe déjà.'
+                    'error': f"La date butoire ({date_butoire_parsed}) ne peut pas être inférieure à la date du jour ({date.today()})."
                 }, status=400)
 
-            derogation = VariableDatebutoire(
-                id_campus_id=id_campus,
+            # update_or_create : si existe déjà, on met à jour la date
+            obj, created = VariableDatebutoire.objects.update_or_create(
                 id_annee_id=id_annee,
-                id_cycle_actif_id=id_cycle_actif,
                 id_classe_active_id=id_classe_active,
-                date_butoire=date_butoire,
-                id_variable_id=id_variable
-                
+                id_variable_id=id_variable,
+                defaults={
+                    'id_campus_id': id_campus,
+                    'id_cycle_actif_id': id_cycle_actif,
+                    'date_butoire': date_butoire,
+                }
             )
-            derogation.save()
 
-            return JsonResponse({'success': True})
+            msg = 'Date butoire mise à jour avec succès !' if not created else 'Date butoire enregistrée avec succès !'
+            return JsonResponse({'success': True, 'message': msg, 'updated': not created})
         except Exception as e:
             return JsonResponse({
                 'success': False,
@@ -229,35 +221,27 @@ def save_variable_reduction(request):
             pourcentage = request.POST.get('pourcentage')
     
 
-            if not all([id_annee, id_campus, id_cycle_actif, id_classe_active, id_eleve,pourcentage]):
+            if not all([id_annee, id_campus, id_cycle_actif, id_classe_active, id_eleve, pourcentage]):
                 return JsonResponse({
                     'success': False,
                     'error': 'Tous les champs sont requis.'
                 }, status=400)
 
-            if Eleve_reduction_prix.objects.filter(
-                id_eleve=id_eleve,
-                id_annee = id_annee,
-                id_classe_active=id_classe_active,
-                id_variable=id_variable
-            ).exists():
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Cette reduction existe déjà pour le même élève.'
-                }, status=400)
-
-            reduction = Eleve_reduction_prix(
+            # update_or_create : si existe déjà, on met à jour le pourcentage
+            obj, created = Eleve_reduction_prix.objects.update_or_create(
                 id_eleve_id=id_eleve,
-                id_campus_id=id_campus,
                 id_annee_id=id_annee,
-                id_cycle_actif_id=id_cycle_actif,
                 id_classe_active_id=id_classe_active,
-                pourcentage=pourcentage,
-                id_variable_id= id_variable
+                id_variable_id=id_variable,
+                defaults={
+                    'id_campus_id': id_campus,
+                    'id_cycle_actif_id': id_cycle_actif,
+                    'pourcentage': pourcentage,
+                }
             )
-            reduction.save()
 
-            return JsonResponse({'success': True})
+            msg = 'Réduction mise à jour avec succès !' if not created else 'Réduction enregistrée avec succès !'
+            return JsonResponse({'success': True, 'message': msg, 'updated': not created})
         except Exception as e:
             logger.error(f"Erreur dans save_variable_reduction: {str(e)}")
             return JsonResponse({
