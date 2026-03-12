@@ -161,6 +161,16 @@
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+    /* Quand le dashboard est affiché, masquer la barre du bas et empêcher le scroll excessif */
+    body:has(#dashboard-section) {
+        overflow: hidden;
+        height: 100vh;
+    }
+
+    body:has(#dashboard-section) .bottom-navbar {
+        display: none !important;
+    }
+
     :root {
         --primary: #4f46e5;
         --primary-dark: #3730a3;
@@ -179,12 +189,14 @@
     }
 
     .dashboard-wrapper {
-        margin-left: 280px;
-        padding: 30px;
+        margin-left: 300px;
+        padding: 90px 30px 30px 30px;
         background-color: var(--slate-50);
-        min-height: 100vh;
         font-family: 'Inter', sans-serif;
         color: var(--slate-900);
+        box-sizing: border-box;
+        height: 100vh;
+        overflow-y: auto;
     }
 
     /* HEADER */
@@ -523,10 +535,10 @@
         overflow: auto;
     }
 
-    /* Responsive */
+    /* Responsive - sidebar toujours visible, on garde le margin-left */
     @media (max-width: 1200px) {
         .dashboard-wrapper {
-            margin-left: 0;
+            padding: 20px;
         }
 
         .kpi-grid {
