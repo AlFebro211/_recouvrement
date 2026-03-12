@@ -2579,6 +2579,7 @@
                                     <i class="fas fa-file-excel me-1"></i> Excel
                                 </button>
                             </div>
+
                         </div>
                     </div>
 
@@ -6668,6 +6669,23 @@
                 loadCategories();
             });
 
+            // --- Téléchargement PDF / Excel des catégories ---
+            $('#btn-download-categories-pdf').on('click', function () {
+                const annee = $('#filter-annee-categorie').val() || '';
+                const campus = $('#filter-campus-categorie').val() || '';
+                const type = $('#filter-type-categorie').val() || '';
+                const params = new URLSearchParams({ annee, campus, type }).toString();
+                window.open('/generate_categories_pdf/?' + params, '_blank');
+            });
+
+            $('#btn-download-categories-excel').on('click', function () {
+                const annee = $('#filter-annee-categorie').val() || '';
+                const campus = $('#filter-campus-categorie').val() || '';
+                const type = $('#filter-type-categorie').val() || '';
+                const params = new URLSearchParams({ annee, campus, type }).toString();
+                window.location.href = '/generate_categories_excel/?' + params;
+            });
+
             $('#variablePrixForm').on('submit', function (e) {
                 const formType = '{{ form_type }}';
                 if (formType !== 'liste_categories_form') return;
@@ -6971,6 +6989,22 @@
                     $('#stat-entrees').text(formatMoney(stats.entrees));
                     $('#stat-sorties').text(formatMoney(stats.sorties));
                     $('#stat-montant').text(formatMoney(stats.montant_total));
+
+                    // Masquer la stat Entrées si sa valeur est 0
+                    const entreesBox = $('#stat-entrees').closest('div[style*="flex: 1"]');
+                    if (stats.entrees === 0 || stats.entrees === '0') {
+                        entreesBox.hide();
+                    } else {
+                        entreesBox.show();
+                    }
+
+                    // Masquer la stat Sorties si sa valeur est 0
+                    const sortiesBox = $('#stat-sorties').closest('div[style*="flex: 1"]');
+                    if (stats.sorties === 0 || stats.sorties === '0') {
+                        sortiesBox.hide();
+                    } else {
+                        sortiesBox.show();
+                    }
                 }
             }
 
@@ -7001,22 +7035,7 @@
             // TÉLÉCHARGEMENT PDF / EXCEL
             // ==========================
 
-            // --- Catégories ---
-            $('#btn-download-categories-pdf').on('click', function () {
-                const annee = $('#filter-annee-categorie').val() || '';
-                const campus = $('#filter-campus-categorie').val() || '';
-                const type = $('#filter-type-categorie').val() || '';
-                const params = new URLSearchParams({ annee, campus, type }).toString();
-                window.open('/generate_categories_pdf/?' + params, '_blank');
-            });
 
-            $('#btn-download-categories-excel').on('click', function () {
-                const annee = $('#filter-annee-categorie').val() || '';
-                const campus = $('#filter-campus-categorie').val() || '';
-                const type = $('#filter-type-categorie').val() || '';
-                const params = new URLSearchParams({ annee, campus, type }).toString();
-                window.location.href = '/generate_categories_excel/?' + params;
-            });
 
             // --- Opérations ---
             $('#btn-download-operations-pdf').on('click', function () {

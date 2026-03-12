@@ -2496,33 +2496,48 @@ def generate_operations_pdf(request):
 
         total_general = total_entrees - total_sorties
 
-        # Lignes de totaux
-        data.append(["", "", "", "ENTRÉES", f"{total_entrees:,.0f}".replace(',', ' '), "", "", ""])
-        data.append(["", "", "", "SORTIES", f"{total_sorties:,.0f}".replace(',', ' '), "", "", ""])
-        data.append(["", "", "", "SOLDE", f"{total_general:,.0f}".replace(',', ' '), "", "", ""])
+        # Lignes de totaux (masquer si valeur = 0)
+        summary_rows = []
+        if total_entrees > 0:
+            summary_rows.append(["", "", "", "ENTRÉES", f"{total_entrees:,.0f}".replace(',', ' '), "", "", ""])
+        if total_sorties > 0:
+            summary_rows.append(["", "", "", "SORTIES", f"{total_sorties:,.0f}".replace(',', ' '), "", "", ""])
+        if total_entrees > 0 and total_sorties > 0:
+            summary_rows.append(["", "", "", "SOLDE", f"{total_general:,.0f}".replace(',', ' '), "", "", ""])
+
+        data.extend(summary_rows)
 
         table = Table(data, colWidths=[10*mm, 20*mm, 30*mm, 18*mm, 25*mm, 30*mm, 20*mm, 37*mm])
         nb_rows = len(data)
-        table.setStyle(TableStyle([
+        nb_summary = len(summary_rows)
+
+        style_cmds = [
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#00b894')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
             ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTSIZE', (0, 1), (-1, -4), 7),
+            ('FONTSIZE', (0, 1), (-1, max(1, nb_rows - nb_summary - 1)), 7),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -4), [colors.white, colors.HexColor('#f8f9fa')]),
+            ('ROWBACKGROUNDS', (0, 1), (-1, max(1, nb_rows - nb_summary - 1)), [colors.white, colors.HexColor('#f8f9fa')]),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('ALIGN', (4, 1), (4, -1), 'RIGHT'),
-            # Entrées
-            ('BACKGROUND', (0, nb_rows - 3), (-1, nb_rows - 3), colors.HexColor('#d4edda')),
-            ('FONTNAME', (0, nb_rows - 3), (-1, nb_rows - 3), 'Helvetica-Bold'),
-            # Sorties
-            ('BACKGROUND', (0, nb_rows - 2), (-1, nb_rows - 2), colors.HexColor('#f8d7da')),
-            ('FONTNAME', (0, nb_rows - 2), (-1, nb_rows - 2), 'Helvetica-Bold'),
-            # Solde
-            ('BACKGROUND', (0, nb_rows - 1), (-1, nb_rows - 1), colors.HexColor('#ffc107')),
-            ('FONTNAME', (0, nb_rows - 1), (-1, nb_rows - 1), 'Helvetica-Bold'),
-        ]))
+        ]
+
+        # Colorer les lignes de résumé dynamiquement
+        summary_colors = []
+        if total_entrees > 0:
+            summary_colors.append(colors.HexColor('#d4edda'))
+        if total_sorties > 0:
+            summary_colors.append(colors.HexColor('#f8d7da'))
+        if total_entrees > 0 and total_sorties > 0:
+            summary_colors.append(colors.HexColor('#ffc107'))
+
+        for idx, color in enumerate(summary_colors):
+            row_idx = nb_rows - nb_summary + idx
+            style_cmds.append(('BACKGROUND', (0, row_idx), (-1, row_idx), color))
+            style_cmds.append(('FONTNAME', (0, row_idx), (-1, row_idx), 'Helvetica-Bold'))
+
+        table.setStyle(TableStyle(style_cmds))
 
         elements.append(table)
         doc.build(elements)
@@ -2590,15 +2605,23 @@ def generate_operations_excel(request):
                 op.description or '-',
             ])
 
-        # Totaux
-        ws.append(["", "", "", "TOTAL ENTRÉES", total_entrees, "", "", ""])
-        ws.append(["", "", "", "TOTAL SORTIES", total_sorties, "", "", ""])
-        ws.append(["", "", "", "SOLDE", total_entrees - total_sorties, "", "", ""])
+        # Totaux (masquer si valeur = 0)
+        if total_entrees > 0:
+            ws.append(["", "", "", "TOTAL ENTRÉES", total_entrees, "", "", ""])
+            ws[f'D{ws.max_row}'].font = Font(bold=True)
+            ws[f'E{ws.max_row}'].font = Font(bold=True)
+            ws[f'E{ws.max_row}'].number_format = '#,##0'
+        if total_sorties > 0:
+            ws.append(["", "", "", "TOTAL SORTIES", total_sorties, "", "", ""])
+            ws[f'D{ws.max_row}'].font = Font(bold=True)
+            ws[f'E{ws.max_row}'].font = Font(bold=True)
+            ws[f'E{ws.max_row}'].number_format = '#,##0'
+        if total_entrees > 0 and total_sorties > 0:
+            ws.append(["", "", "", "SOLDE", total_entrees - total_sorties, "", "", ""])
+            ws[f'D{ws.max_row}'].font = Font(bold=True)
+            ws[f'E{ws.max_row}'].font = Font(bold=True)
+            ws[f'E{ws.max_row}'].number_format = '#,##0'
 
-        for r in range(ws.max_row - 2, ws.max_row + 1):
-            ws[f'D{r}'].font = Font(bold=True)
-            ws[f'E{r}'].font = Font(bold=True)
-            ws[f'E{r}'].number_format = '#,##0'
 
         # Format montants
         for row in range(3, ws.max_row - 2):
