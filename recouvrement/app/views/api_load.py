@@ -42,7 +42,7 @@ from openpyxl.utils import get_column_letter
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
@@ -2274,7 +2274,7 @@ def section_pdf(elements, titre, data, headers):
     col_widths = calculate_dynamic_widths(table_data, headers)
     
     # Créer le tableau
-    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table = Table(table_data, colWidths=col_widths, repeatRows=1, splitInRow=False)
     
     # Style de base du tableau
     style = [
@@ -2420,7 +2420,7 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
             table_data = [headers] + data
             col_widths = calculate_dynamic_widths(table_data, headers)
             
-            table = Table(table_data, colWidths=col_widths, repeatRows=1)
+            table = Table(table_data, colWidths=col_widths, repeatRows=1, splitInRow=False)
             
             style = [
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F528F')),
@@ -2460,8 +2460,9 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
     # ============================================
     # RÉCAPITULATIF
     # ============================================
-    elements.append(Paragraph("RÉCAPITULATIF", styles['Heading3']))
-    elements.append(Spacer(1, 0.2*cm))
+    recap_elements = []
+    recap_elements.append(Paragraph("RÉCAPITULATIF", styles['Heading3']))
+    recap_elements.append(Spacer(1, 0.2*cm))
     
     total_eleves_classe = Eleve_inscription.objects.filter(id_classe=classe.id_classe_active).count()
     
@@ -2475,7 +2476,7 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
         ["TOTAL", total_eleves_classe, "100%"]
     ]
     
-    recap_table = Table(recap_data, colWidths=[5*cm, 3*cm, 3*cm])
+    recap_table = Table(recap_data, colWidths=[5*cm, 3*cm, 3*cm], splitInRow=False)
     recap_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2F528F')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -2491,7 +2492,8 @@ def export_pdf_multi(tableau_complet, tableau_reduction, tableau_derogation,
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
     
-    elements.append(recap_table)
+    recap_elements.append(recap_table)
+    elements.append(KeepTogether(recap_elements))
 
     doc.build(elements)
 

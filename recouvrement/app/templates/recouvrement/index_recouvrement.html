@@ -1174,26 +1174,78 @@
             background: rgba(0, 184, 148, 0.2);
             color: var(--ep-dark);
         }
+        /* ================= TOAST NOTIFICATIONS ================= */
+        @keyframes epToastIn {
+            from { transform: translateX(100px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes epToastOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100px); opacity: 0; }
+        }
     </style>
 </head>
 
 <body>
     {% if messages %}
-    <div id="message-container" class="container">
-        <div class="message-box">
-            {% for message in messages %}
-            <div class="alert {{ message.tags }} alert-dismissible" role="alert">
-                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                    <span aria-hidden="true">×</span>
-                </button>
-                {{ message|safe }}
-            </div>
-            {% endfor %}
-        </div>
+    {% for message in messages %}
+    <div class="ep-toast ep-toast-{{ message.tags }}" style="position:fixed;top:20px;right:20px;z-index:9999;min-width:320px;max-width:450px;padding:16px 20px;border-radius:12px;color:#333;font-size:0.9rem;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,0.15);display:flex;align-items:center;gap:10px;animation:epToastIn .4s ease;font-family:'Inter',sans-serif;
+    {% if message.tags == 'success' %}background:linear-gradient(135deg,#00b894,#00cec9);{% elif message.tags == 'error' or message.tags == 'danger' %}background:linear-gradient(135deg,#d63031,#e17055);{% elif message.tags == 'warning' %}background:linear-gradient(135deg,#f39c12,#fdcb6e);color:#333;{% else %}background:linear-gradient(135deg,#0984e3,#74b9ff);{% endif %}">
+        <i class="fas {% if message.tags == 'success' %}fa-check-circle{% elif message.tags == 'error' or message.tags == 'danger' %}fa-times-circle{% elif message.tags == 'warning' %}fa-exclamation-triangle{% else %}fa-info-circle{% endif %}"></i>
+        <span style="flex:1;">{{ message|safe }}</span>
+        <span onclick="this.parentElement.remove()" style="cursor:pointer;font-size:18px;opacity:0.8;">×</span>
     </div>
+    {% endfor %}
     {% endif %}
 
-    <div id="ajax-message" class="container mt-3"></div>
+    <!-- Toast container for JS-generated messages -->
+    <div id="ajax-message" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+    <!-- Global toast function + auto-dismiss Django toasts -->
+    <script>
+        function epToast(type, msg) {
+            var colors = {
+                'success': 'linear-gradient(135deg,#00b894,#00cec9)',
+                'error': 'linear-gradient(135deg,#d63031,#e17055)',
+                'danger': 'linear-gradient(135deg,#d63031,#e17055)',
+                'warning': 'linear-gradient(135deg,#f39c12,#fdcb6e)',
+                'info': 'linear-gradient(135deg,#0984e3,#74b9ff)'
+            };
+            var icons = {
+                'success': 'fa-check-circle', 'error': 'fa-times-circle',
+                'danger': 'fa-times-circle', 'warning': 'fa-exclamation-triangle',
+                'info': 'fa-info-circle'
+            };
+            var toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;min-width:320px;max-width:450px;padding:16px 20px;border-radius:12px;color:#333;font-size:0.9rem;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,0.15);display:flex;align-items:center;gap:10px;animation:epToastIn .4s ease;font-family:Inter,sans-serif;background:' + (colors[type] || colors['info']);
+            if (type === 'warning') toast.style.color = '#333';
+            toast.innerHTML = '<i class="fas ' + (icons[type] || icons['info']) + '"></i><span style="flex:1;">' + msg.replace(/\n/g, '<br>') + '</span><span onclick="this.parentElement.remove()" style="cursor:pointer;font-size:18px;opacity:0.8;">×</span>';
+            document.body.appendChild(toast);
+            setTimeout(function () {
+                toast.style.animation = 'epToastOut .4s ease forwards';
+                setTimeout(function () { toast.remove(); }, 400);
+            }, 5000);
+        }
+        // Auto-dismiss Django template toasts
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.ep-toast').forEach(function (t) {
+                setTimeout(function () {
+                    t.style.animation = 'epToastOut .4s ease forwards';
+                    setTimeout(function () { t.remove(); }, 400);
+                }, 5000);
+            });
+        });
+    </script>
+
+    <!-- Set min date = today on all date-future-only inputs -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var today = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('.date-future-only').forEach(function (el) {
+                el.setAttribute('min', today);
+            });
+        });
+    </script>
 
     <!-- Mobile Toggle Button -->
     <div class="mobile-nav-toggle">
@@ -1872,7 +1924,7 @@
                                         <th>Catégorie</th>
                                         <th>Variable</th>
                                         <th>Obligatoire</th>
-                                        <th>Actions</th>
+                                        <th style="display:none;">Actions</th>
                                     </tr>
                                 </thead>
                                 {% if variableList %}
@@ -1886,12 +1938,13 @@
                                             <span class="text-dark fw-bold d-block fs-6">{{ variable.variable }}</span>
                                         </td>
                                         <td class="text-center">
-                                            <label class="toggle-switch">
-                                                <input type="checkbox" class="est-obligatoire" data-id="{{ variable.id_variable }}" {% if variable.estObligatoire %}checked{% endif %}>
-                                                <span class="toggle-slider"></span>
-                                            </label>
+                                            <button type="button" class="btn btn-icon est-obligatoire" data-id="{{ variable.id_variable }}" 
+                                                style="width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;transition:all .3s;{% if variable.estObligatoire %}background:rgba(0,200,150,0.12);color:#00c896;{% else %}background:rgba(200,200,200,0.15);color:#ccc;{% endif %}" 
+                                                data-active="{{ variable.estObligatoire|yesno:'true,false' }}" title="{% if variable.estObligatoire %}Obligatoire{% else %}Non obligatoire{% endif %}">
+                                                <i class="fas fa-check-circle" style="font-size:1.25rem;"></i>
+                                            </button>
                                         </td>
-                                        <td class="text-end">
+                                        <td class="text-end" style="display:none;">
                                             <a href="#" class="btn btn-icon btn-light-primary btn-sm edit-btn-variable"
                                                 data-id="{{ variable.id_variable }}" title="Modifier">
                                                 <i class="fas fa-edit"></i>
@@ -2051,7 +2104,7 @@
                                         <th>Cycle</th>
                                         <th>Classe</th>
                                         <th>Prix</th>
-                                        <th>Actions</th>
+                                        <!-- <th>Actions</th> -->
                                     </tr>
                                 </thead>
                                 {% if variable_prix_list %}
@@ -2063,16 +2116,16 @@
                                         <td>{{ item.id_cycle_actif.cycle_id.cycle }}</td>
                                         <td>{{ item.id_classe_active.classe_id.classe }}</td>
                                         <td><span class="text-primary fw-bold">{{ item.prix }} FBu</span></td>
-                                        <td class="text-end">
+                                        <!-- <td class="text-end">
                                             <a href="#" class="btn btn-icon btn-light-primary btn-sm"
                                                 data-id="{{ item.id_prix }}">
                                                 <i class="fas fa-edit"></i>
                                             </a>
-                                        </td>
+                                        </td> -->
                                     </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="6" class="text-center text-muted py-4">Aucun prix n'est disponible.
+                                        <td colspan="5" class="text-center text-muted py-4">Aucun prix n'est disponible.
                                         </td>
                                     </tr>
                                     {% endfor %}
@@ -2127,7 +2180,7 @@
                                         {% if derogationField or butoireField %}
                                         <td>
                                             <input type="date"
-                                                class="form-control form-control-sm border-0 bg-light-primary px-3 rounded-pill"
+                                                class="form-control form-control-sm border-0 bg-light-primary px-3 rounded-pill date-future-only"
                                                 style="height: 38px;">
                                         </td>
                                         {% endif %}
@@ -2570,14 +2623,14 @@
                             </select>
 
                             <div class="ms-auto d-flex gap-2">
-                                <button id="btn-download-categories-pdf" class="btn btn-sm"
+                                <!-- <button id="btn-download-categories-pdf" class="btn btn-sm"
                                     style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; border: none; border-radius: 8px; padding: 6px 14px; font-size: 0.8rem; white-space: nowrap;">
                                     <i class="fas fa-file-pdf me-1"></i> PDF
                                 </button>
                                 <button id="btn-download-categories-excel" class="btn btn-sm"
                                     style="background: linear-gradient(135deg, #27ae60, #2ecc71); color: white; border: none; border-radius: 8px; padding: 6px 14px; font-size: 0.8rem; white-space: nowrap;">
                                     <i class="fas fa-file-excel me-1"></i> Excel
-                                </button>
+                                </button> -->
                             </div>
 
                         </div>
@@ -3014,11 +3067,18 @@
                     }
                 });
             }
-            // --- Gérer la case à cocher estObligatoire ---
-            $(document).on('change', '.est-obligatoire', function () {
-                var checkbox = $(this);
-                var variableId = checkbox.data('id');
-                var estObligatoire = checkbox.is(':checked');
+            // --- Gérer le bouton estObligatoire avec confirmation ---
+            $(document).on('click', '.est-obligatoire', function (e) {
+                e.preventDefault();
+                var btn = $(this);
+                var variableId = btn.data('id');
+                var currentActive = btn.data('active') === true || btn.data('active') === 'true';
+                var newActive = !currentActive;
+                var actionText = newActive ? 'rendre obligatoire' : 'rendre non-obligatoire';
+
+                if (!confirm('Êtes-vous sûr de vouloir ' + actionText + ' cette variable ?')) {
+                    return;
+                }
 
                 $.ajax({
                     url: '/update-variable-obligatoire/',
@@ -3028,20 +3088,24 @@
                     },
                     data: JSON.stringify({
                         'id_variable': variableId,
-                        'estObligatoire': estObligatoire
+                        'estObligatoire': newActive
                     }),
                     contentType: 'application/json',
                     success: function (response) {
                         if (response.success) {
-                            console.log('Est obligatoire mis à jour :', estObligatoire);
+                            btn.data('active', newActive);
+                            if (newActive) {
+                                btn.css({ 'background': 'rgba(0,200,150,0.12)', 'color': '#00c896' });
+                            } else {
+                                btn.css({ 'background': 'rgba(200,200,200,0.15)', 'color': '#ccc' });
+                            }
+                            epToast('success', 'Variable mise à jour avec succès !');
                         } else {
                             alert('Erreur lors de la mise à jour : ' + response.error);
-                            checkbox.prop('checked', !estObligatoire); // revert si erreur
                         }
                     },
                     error: function () {
                         alert('Erreur serveur lors de la mise à jour.');
-                        checkbox.prop('checked', !estObligatoire); // revert si erreur
                     }
                 });
             });
@@ -3452,8 +3516,8 @@
 
                     $.post('/save_variable_prix/', formData, function (response) {
                         if (response.success) {
-                            alert('Frais scolaire enregistré avec succès !');
-                            $('#modalContainer').modal('hide');
+                            epToast('success', 'Frais scolaire enregistré avec succès !');
+                            $('#modalContainer').hide();
                             window.location.href = "{% url 'create_variable_prix' %}";
                         } else {
                             let errorMsg = response.error || '';
@@ -3469,7 +3533,8 @@
                 });
 
                 $('#cancelBtn, #cancelBtnForm').on('click', function () {
-                    $('#modalContainer').modal('hide');
+                    $('#variablePrixForm')[0].reset();
+                    $('#modalContainer').hide();
                 });
             }
         });
@@ -3612,16 +3677,16 @@
                                                     </a>` : '<span class="text-muted">Aucun</span>'}
                                             </td>
                                             <td class="text-center">
-                                                <label class="toggle-switch">
-                                                    <input type="checkbox" class="update-checkbox" data-id="${p.id_paiement}" data-field="status" ${p.status ? 'checked' : ''}>
-                                                    <span class="toggle-slider"></span>
-                                                </label>
+                                                <button type="button" class="btn btn-icon update-checkbox" data-id="${p.id_paiement}" data-field="status" data-active="${p.status ? 'true' : 'false'}" 
+                                                    style="width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;transition:all .3s;${p.status ? 'background:rgba(0,200,150,0.12);color:#00c896;' : 'background:rgba(200,200,200,0.15);color:#ccc;'}" title="Valider">
+                                                    <i class="fas fa-check-circle" style="font-size:1.25rem;"></i>
+                                                </button>
                                             </td>
                                             <td class="text-center">
-                                                <label class="toggle-switch">
-                                                    <input type="checkbox" class="update-checkbox" data-id="${p.id_paiement}" data-field="is_rejected" ${p.is_rejected ? 'checked' : ''}>
-                                                    <span class="toggle-slider reject-slider"></span>
-                                                </label>
+                                                <button type="button" class="btn btn-icon update-checkbox" data-id="${p.id_paiement}" data-field="is_rejected" data-active="${p.is_rejected ? 'true' : 'false'}" 
+                                                    style="width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;transition:all .3s;${p.is_rejected ? 'background:rgba(231,76,60,0.12);color:#e74c3c;' : 'background:rgba(200,200,200,0.15);color:#ccc;'}" title="Rejeter">
+                                                    <i class="fas fa-times-circle" style="font-size:1.25rem;"></i>
+                                                </button>
                                             </td>
                                         </tr>
                                     `);
@@ -3786,14 +3851,15 @@
                 });
 
                 function attachCheckboxEvents() {
-                    $(document).off('change', '.update-checkbox').on('change', '.update-checkbox', function () {
-                        var checkbox = $(this);
-                        var id_paiement = checkbox.data('id');
-                        var field = checkbox.data('field');
-                        var value = checkbox.is(':checked');
+                    $(document).off('click', '.update-checkbox').on('click', '.update-checkbox', function (e) {
+                        e.preventDefault();
+                        var btn = $(this);
+                        var id_paiement = btn.data('id');
+                        var field = btn.data('field');
+                        var currentActive = btn.data('active') === true || btn.data('active') === 'true';
+                        var newActive = !currentActive;
 
-
-                        checkbox.prop('disabled', true);
+                        btn.prop('disabled', true);
 
                         $.ajax({
                             url: '/update_paiement_field/',
@@ -3801,7 +3867,7 @@
                             data: {
                                 'id_paiement': id_paiement,
                                 'field': field,
-                                'value': value,
+                                'value': newActive,
                                 'csrfmiddlewaretoken': $('input[name=csrfmiddlewaretoken]').val()
                             },
                             success: function (response) {
@@ -3809,14 +3875,12 @@
                                     refreshPaiementTable();
                                 } else {
                                     alert('Erreur : ' + response.error);
-                                    checkbox.prop('checked', !value);
-                                    checkbox.prop('disabled', false);
+                                    btn.prop('disabled', false);
                                 }
                             },
                             error: function (xhr, status, error) {
                                 alert('Une erreur est survenue lors de la mise à jour.');
-                                checkbox.prop('checked', !value);
-                                checkbox.prop('disabled', false);
+                                btn.prop('disabled', false);
                             }
                         });
                     });
@@ -4036,7 +4100,8 @@
                     });
                 });
                 $('#cancelBtn, #cancelBtnForm').on('click', function () {
-                    $('#modalContainer').modal('hide');
+                    $('#variablePrixForm')[0].reset();
+                    $('#modalContainer').hide();
                 });
             }
         });
@@ -4272,7 +4337,8 @@
 
 
                 $('#cancelBtn, #cancelBtnForm').on('click', function () {
-                    $('#modalContainer').modal('hide');
+                    $('#variablePrixForm')[0].reset();
+                    $('#modalContainer').hide();
                 });
             }
         });
@@ -4506,9 +4572,12 @@
                         contentType: false,
                         success: function (response) {
                             if (response.success) {
-                                $('#modalContainer').modal('hide');
+                                alert('\u2705 Paiement enregistré avec succès !');
+                                $('#modalContainer').hide();
+                                $('body').removeClass('modal-open');
+                                $('.modal-backdrop').remove();
+                                try { $('#variablePrixForm')[0].reset(); } catch(ex) {}
                                 loadPaiements();
-                                alert('Paiement enregistré avec succès !');
                             } else {
                                 let errorMsg = response.error;
                                 if (response.details) {
@@ -4519,17 +4588,18 @@
                                         console.error('Erreur parsing:', e);
                                     }
                                 }
-                                alert('Erreur : ' + errorMsg);
+                                epToast('error', errorMsg);
                             }
                         },
                         error: function () {
-                            alert("Une erreur est survenue lors de l'enregistrement.");
+                            epToast('error', "Une erreur est survenue lors de l'enregistrement.");
                         }
                     });
                 });
 
                 $('#cancelBtn, #cancelBtnForm').on('click', function () {
-                    $('#modalContainer').modal('hide');
+                    $('#variablePrixForm')[0].reset();
+                    $('#modalContainer').hide();
                 });
             }
         });
@@ -4998,16 +5068,12 @@
                             <td class="fw-bold text-danger">${p.valeur || ''}</td>
                             <td class="text-muted">${p.plafond || '-'}</td>
                             <td>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" class="toggle-actif" data-id="${p.id_penalite_regle}" ${p.actif ? 'checked' : ''}>
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </td>
-                            <td class="text-end">
-                                <button class="btn btn-icon btn-light-primary edit-penalite btn-sm" data-id="${p.id_penalite_regle}" title="Modifier">
-                                    <i class="fas fa-edit"></i>
+                                <button type="button" class="btn btn-icon toggle-actif" data-id="${p.id_penalite_regle}" data-active="${p.actif ? 'true' : 'false'}" 
+                                    style="width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;transition:all .3s;${p.actif ? 'background:rgba(0,200,150,0.12);color:#00c896;' : 'background:rgba(200,200,200,0.15);color:#ccc;'}" title="${p.actif ? 'Actif' : 'Inactif'}">
+                                    <i class="fas fa-check-circle" style="font-size:1.25rem;"></i>
                                 </button>
                             </td>
+
                         </tr>
                     `).join('');
 
@@ -5028,7 +5094,7 @@
                                             <th>Valeur</th>
                                             <th>Plafond</th>
                                             <th>Actif</th>
-                                            <th>Actions</th>
+
                                         </tr>
                                     </thead>
                                     <tbody>${rows}</tbody>
@@ -5042,20 +5108,32 @@
                             // ==========================
                             // Gestion du toggle actif
                             // ==========================
-                            $('.toggle-actif').off('change').on('change', function () {
-                                const id = $(this).data('id');
-                                const actif = $(this).is(':checked');
+                            $('.toggle-actif').off('click').on('click', function (e) {
+                                e.preventDefault();
+                                var btn = $(this);
+                                var id = btn.data('id');
+                                var currentActive = btn.data('active') === true || btn.data('active') === 'true';
+                                var newActive = !currentActive;
 
                                 $.ajax({
                                     url: '/toggle_penalite_actif/',
                                     type: 'POST',
                                     data: {
                                         id_penalite: id,
-                                        actif: actif,
+                                        actif: newActive,
                                         csrfmiddlewaretoken: $('input[name=csrfmiddlewaretoken]').val()
                                     },
                                     success: function (res) {
-                                        if (!res.success) alert('Erreur lors de la mise à jour de la pénalité.');
+                                        if (res.success) {
+                                            btn.data('active', newActive);
+                                            if (newActive) {
+                                                btn.css({ 'background': 'rgba(0,200,150,0.12)', 'color': '#00c896' });
+                                            } else {
+                                                btn.css({ 'background': 'rgba(200,200,200,0.15)', 'color': '#ccc' });
+                                            }
+                                        } else {
+                                            alert('Erreur lors de la mise à jour de la pénalité.');
+                                        }
                                     },
                                     error: function () {
                                         alert('Erreur serveur, impossible de changer le statut.');
@@ -5784,7 +5862,6 @@
                                 <th class="text-end">Payé</th>
                                 <th class="text-end">Reste</th>
                                 <th class="text-end">Pénalité</th>
-                                <th class="text-end">Total</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -5793,11 +5870,11 @@
                     rapport.forEach(eleve => {
                         const details = Array.isArray(eleve.details) ? eleve.details : [];
                         if (details.length === 0) {
-                            html += `<tr><td class="fw-bold text-dark">${eleve.eleve}</td><td colspan="6" class="text-center text-muted py-3">Aucun détail</td></tr>`;
+                            html += `<tr><td class="fw-bold text-dark">${eleve.eleve}</td><td colspan="5" class="text-center text-muted py-3">Aucun détail</td></tr>`;
                             return;
                         }
                         // Calculer le montant total de dette pour cet élève
-                        const totalDette = details.reduce((sum, d) => sum + (d.total || 0), 0);
+                        const totalDette = details.reduce((sum, d) => sum + (d.reste || 0) + (d.penalite || 0), 0);
                         details.forEach((d, index) => {
                             html += `<tr>
                         ${index === 0 ? `<td rowspan="${details.length}" style="vertical-align: middle;"><div class="fw-bold text-dark" style="margin-bottom: 6px;">${eleve.eleve}</div><div style="display: inline-flex; align-items: center; gap: 4px; background: rgba(214,48,49,0.08); color: #d63031; padding: 4px 10px; border-radius: 8px; font-size: 0.78rem; font-weight: 700; border: 1px solid rgba(214,48,49,0.15);"><i class="fas fa-coins" style="font-size: 0.7rem;"></i> ${totalDette.toLocaleString()} FC</div></td>` : ``}
@@ -5806,7 +5883,6 @@
                         <td class="text-end text-success fw-semibold">${(d.montant_paye || 0).toLocaleString()}</td>
                         <td class="text-end text-warning fw-semibold">${(d.reste || 0).toLocaleString()}</td>
                         <td class="text-end text-danger">${(d.penalite || 0).toLocaleString()}</td>
-                        <td class="text-end fw-bold text-primary">${(d.total || 0).toLocaleString()}</td>
                     </tr>`;
                         });
                     });
@@ -6461,28 +6537,23 @@
             // ================================
             // TELECHARGER RAPPORT
             // ================================
-            $('#btn-telecharger-rapport').on('click', function () {
+            $('#btn-telecharger-pdf, #btn-telecharger-excel').on('click', function () {
                 const annee = $('#hf-annee').val();
                 const classe = $('#hf-classe').val();
                 const date_debut = $('#date_debut').val();
                 const date_fin = $('#date_fin').val();
-                const type_fichier = $('#hf-type-fichier').val();
+                const type_fichier = $(this).attr('id') === 'btn-telecharger-pdf' ? 'pdf' : 'excel';
 
                 // ============================
                 // VALIDATION
                 // ============================
                 if (!annee) {
-                    alert("Veuillez choisir une année");
+                    epToast('warning', "Veuillez choisir une année");
                     return;
                 }
 
                 if (!classe) {
-                    alert("Veuillez choisir une classe");
-                    return;
-                }
-
-                if (!type_fichier) {
-                    alert("Veuillez choisir le type de fichier");
+                    epToast('warning', "Veuillez choisir une classe");
                     return;
                 }
 
@@ -6491,14 +6562,14 @@
                 // ============================
                 if (date_debut && date_fin) {
                     if (date_fin < date_debut) {
-                        alert("⛔ Erreur : La date de fin doit être supérieure ou égale à la date de début");
+                        epToast('error', "La date de fin doit être supérieure ou égale à la date de début");
                         return;
                     }
                 } else if (date_debut && !date_fin) {
-                    alert("Veuillez choisir une date de fin");
+                    epToast('warning', "Veuillez choisir une date de fin");
                     return;
                 } else if (!date_debut && date_fin) {
-                    alert("Veuillez choisir une date de début");
+                    epToast('warning', "Veuillez choisir une date de début");
                     return;
                 }
 

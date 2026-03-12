@@ -1449,7 +1449,7 @@ def generate_dette_pdf(request):
         # elements.append(Spacer(1,3*mm))
 
         # Tableau
-        data = [["Élève","Variable","À payer","Payé","Reste","Pénalité","Total"]]
+        data = [["Élève","Variable","À payer","Payé","Reste","Pénalité"]]
         for eleve in rapport:
             details = eleve['details']
             for i, d in enumerate(details):
@@ -1463,10 +1463,9 @@ def generate_dette_pdf(request):
                 row.append(f"{d['montant_paye']:,}")
                 row.append(f"{d['reste']:,}")
                 row.append(f"{d['penalite']:,}")
-                row.append(f"{d['total']:,}")
                 data.append(row)
 
-        table = Table(data, colWidths=[40*mm,35*mm,20*mm,20*mm,20*mm,20*mm,25*mm], repeatRows=1)
+        table = Table(data, colWidths=[45*mm,40*mm,23*mm,23*mm,23*mm,23*mm], repeatRows=1)
         table.setStyle(TableStyle([
             ('BACKGROUND',(0,0),(-1,0),colors.HexColor('#0d6efd')),
             ('TEXTCOLOR',(0,0),(-1,0),colors.white),
@@ -1872,7 +1871,7 @@ def generate_dette_excel(request):
     ws.title = "Rapport Dettes"
 
     # Titre
-    ws.merge_cells('A1:G1')
+    ws.merge_cells('A1:F1')
     ws['A1'] = "RAPPORT DES DETTES"
     ws['A1'].font = Font(size=14, bold=True)
     ws['A1'].alignment = Alignment(horizontal="center")
@@ -1883,8 +1882,7 @@ def generate_dette_excel(request):
         "À payer",
         "Payé",
         "Reste",
-        "Pénalité",
-        "Total"
+        "Pénalité"
     ]
 
     ws.append(headers)
@@ -1941,8 +1939,7 @@ def generate_dette_excel(request):
                     montant_a_payer,
                     montant_paye,
                     reste,
-                    penalite,
-                    total
+                    penalite
                 ])
 
                 total_dette_eleve += total
@@ -1955,12 +1952,11 @@ def generate_dette_excel(request):
                 "",
                 "",
                 "",
-                "",
                 total_dette_eleve
             ])
 
             ws[f'B{ws.max_row}'].font = Font(bold=True)
-            ws[f'G{ws.max_row}'].font = Font(bold=True)
+            ws[f'F{ws.max_row}'].font = Font(bold=True)
 
     # Ajuster largeur colonnes (safe merged)
     for i, column_cells in enumerate(ws.columns, 1):
